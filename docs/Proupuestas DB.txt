@@ -1,0 +1,40 @@
+DDSM (Digital databas for Screening Mammography). 
+
+Esta base de datos se organiza en:
+
+- casos: colección de imagenes (entre 6 y 10) e información referentes a un exámen de un paciente. 
+	 Esta colección contiene:
+		- archivo 'ics'. Proporciona información del caso (paciente) referente a 
+		  la edad, el tipo de digitalización utilizada y una lista con el tipo de 
+ 		  digitalización utilizado. 
+		  IMPORTANTE: Este archivo tambien da información de la densidad
+			      ACR del tejido. Este valor (ACR) determina la calidad de 
+			      imagen que tiene una mamografia debido a la densidad del tejido
+			      del pecho. https://pubs.rsna.org/doi/10.1148/rg.352140134
+
+		- un resumen "16-bit PGM". Creo que es la imagen completa. Es un concatenado de las imagenes almacenadas
+		  en 16 bit PGM (portable grey map). 
+
+		- 4 imagenes sin pérdidas, en formato LJPEG. (Lossless jpeg). Estas 
+		  imagenes presentan una elevadísima resolución de entre 42 - 100 microns.
+		  para descomprimir las imagenes: ftp://figment.csee.usf.edu/pub/DDSM/software/bin/jpeg
+
+		- 0 a 4 imagenes superpuestas (OVERLAY files). Los casos anormales tienen entre
+		  1 y 4 imagenes superpuestas dependiendo del número de imagenes en qué el radiologista
+		  haya marcado como anormalidades. Cada imagen con overlap, tiene una hoja de especificaciones
+	          la cual especifica características de esta imagen (por ejemplo, el numero de anormalidades,
+		  información de las anormalidades, tipo de lesión.
+
+		  En esta hoja de especificaciones, el tipo de lesión está codificado con un número que va 
+		  del 1 al 5 siguiendo el estándard ACR Bi-RADS. El codificado para sutileza tambien es un
+		  número que va del 1-5 indicando el zoom de la imagen (x1, x2, .., x5).
+		  La lesión, el asesoramiento y la sutileza son descritas por un experto.
+		  El número de fronteras para detectar las zonas sospechosas son creadas por
+		  médicos especializados. A veces puede existir más de una frontera para una misma anormalidad.
+		  En este caso, al parámetro 'total_outlines' de la hoja de especificaciones será mayor a 1.
+	          La hoja de especificaciones contendrá información de como se distribuyen las fronteras mediante
+		  coordenadas.
+
+'volumenes' (colección de casos agrupados por enfermedades). Los volumenes están disponibles
+en cintas de 8 mm.
+
