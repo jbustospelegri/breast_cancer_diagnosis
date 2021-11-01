@@ -38,3 +38,15 @@ Esta base de datos se organiza en:
 'volumenes' (colección de casos agrupados por enfermedades). Los volumenes están disponibles
 en cintas de 8 mm.
 
+¿Como se clasifican los casos?
+	- Normal: pacientes sin patologias
+	- Cancer (almenos una patología por paciente es identificada).
+		- Benigno: existe algo sospechoso que no es clasificado como maligno. Si no tiene el callback, significa que no se han hecho pruebas adicionales como biopsias. Sin 
+			   embargo, existe algo que ha hecho que los medicos lo clasifiquen como benigno.
+		- Maligno: Pueden contener de una a varias regiones con cancer maligno. Además, pueden contener otras regiones sospechosas. 
+
+** Existe una clasificación BI-RADS para codificar las descripciones de las imagenes de DDSM. 
+
+¿Cómo procesar las imagenes?
+
+

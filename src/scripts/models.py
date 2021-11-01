@@ -7,12 +7,12 @@ from keras import Model, Sequential
 from time import time
 
 from src.utils.functions import create_dir, log_cmd_to_file, f1_score
-from src.utils.config import LOGGING_DATA_PATH, MODEL_SUMMARY_DATA_PATH, SEED
+from src.utils.config import LOGGING_DATA_PATH, SEED
 
-from keras.preprocessing.image import DataFrameIterator
+from keras_preprocessing.image import DataFrameIterator
 from keras.callbacks import EarlyStopping, CSVLogger, History
-from keras.optimizers.adam_v2 import Adam
-from keras.api.keras.applications import resnet50, densenet, vgg16, inception_v3
+from keras.optimizers import Adam
+from keras.applications import resnet50, densenet, vgg16, inception_v3
 from keras.layers import Conv2D, BatchNormalization, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D
 
 from sklearn.ensemble import GradientBoostingClassifier

@@ -1,0 +1,50 @@
+1) Revisar literatura dataset CBIS-DDSM para:
+	- Determinar los casos Bening - No callback
+	- Analizar significado de las columnas -> ver si se puede meter algo en el Model ensambling
+	- Existen 19 fotografías que presentan dos clases distintas.
+	-		studio									pathology
+			Calc-Test_P_00353_LEFT_CC				BENIGN
+			Calc-Test_P_00353_LEFT_CC				MALIGNANT
+			Calc-Test_P_00353_LEFT_MLO				BENIGN
+			Calc-Test_P_00353_LEFT_MLO				MALIGNANT
+			Calc-Training_P_00600_LEFT_CC			BENIGN
+			Calc-Training_P_00600_LEFT_CC			MALIGNANT
+			Calc-Training_P_00600_LEFT_MLO			BENIGN
+			Calc-Training_P_00600_LEFT_MLO			MALIGNANT
+			Calc-Training_P_00858_RIGHT_CC			BENIGN
+			Calc-Training_P_00858_RIGHT_CC			BENIGN_WITHOUT_CALLBACK
+			Calc-Training_P_00858_RIGHT_MLO			BENIGN_WITHOUT_CALLBACK
+			Calc-Training_P_00858_RIGHT_MLO			BENIGN
+			Calc-Training_P_00937_RIGHT_CC			MALIGNANT
+			Calc-Training_P_00937_RIGHT_CC			BENIGN
+			Calc-Training_P_00937_RIGHT_MLO			MALIGNANT
+			Calc-Training_P_00937_RIGHT_MLO			BENIGN
+			Calc-Training_P_01284_RIGHT_MLO			MALIGNANT
+			Calc-Training_P_01284_RIGHT_MLO			BENIGN
+			Calc-Training_P_01819_LEFT_CC			MALIGNANT
+			Calc-Training_P_01819_LEFT_CC			BENIGN_WITHOUT_CALLBACK
+			Calc-Training_P_01819_LEFT_MLO			MALIGNANT
+			Calc-Training_P_01819_LEFT_MLO			BENIGN_WITHOUT_CALLBACK
+			Mass-Test_P_00969_LEFT_CC				BENIGN
+			Mass-Test_P_00969_LEFT_CC				MALIGNANT
+			Mass-Test_P_00969_LEFT_MLO				BENIGN
+			Mass-Test_P_00969_LEFT_MLO				MALIGNANT
+			Mass-Training_P_00419_LEFT_CC			BENIGN
+			Mass-Training_P_00419_LEFT_CC			MALIGNANT
+			Mass-Training_P_00419_LEFT_MLO			MALIGNANT
+			Mass-Training_P_00419_LEFT_MLO			BENIGN
+			Mass-Training_P_00797_LEFT_CC			BENIGN
+			Mass-Training_P_00797_LEFT_CC			MALIGNANT
+			Mass-Training_P_00797_LEFT_MLO			BENIGN
+			Mass-Training_P_00797_LEFT_MLO			MALIGNANT
+			Mass-Training_P_01103_RIGHT_CC			BENIGN
+			Mass-Training_P_01103_RIGHT_CC			MALIGNANT
+			Mass-Training_P_01103_RIGHT_MLO			BENIGN
+			Mass-Training_P_01103_RIGHT_MLO			MALIGNANT
+
+2) Crear el logger para la representación del proceso en txt
+3) Métricas de los datasets:
+	- Número de instancias por clase y db
+	- Número del tipo de malaltias por clase y db
+	- Distribución del número de simptomatologías por paciente.
+		https://towardsdatascience.com/can-you-find-the-breast-tumours-part-1-of-3-1473ba685036

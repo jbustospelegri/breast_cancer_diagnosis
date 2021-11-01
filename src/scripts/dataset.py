@@ -1,8 +1,10 @@
-from keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array, array_to_img, DataFrameIterator
+from keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array, array_to_img
+from keras_preprocessing.image.dataframe_iterator import  DataFrameIterator
 from sklearn.model_selection import train_test_split
+from typing import io
 
 from utils.functions import create_dir, render_mpl_table
-from utils.config import SEED, PROCESED_DATA_PATH
+from utils.config import SEED, CONVERTED_DATA_PATH
 
 import seaborn as sns
 import pandas as pd
@@ -28,7 +30,7 @@ class Dataset:
     clases = {}
     n_clases = 0
 
-    def __init__(self, path: str, image_format: str = 'jpg'):
+    def __init__(self, path: io, image_format: str = 'jpg'):
         self.path = path
         self.image_format = image_format
 
@@ -242,7 +244,7 @@ class Dataset:
             seed=SEED,
             batch_size=batch_size,
             class_mode='categorical',
-            directory=PROCESED_DATA_PATH if directory else None
+            directory=CONVERTED_DATA_PATH if directory else None
         )
 
         # Parametrización del generador de entrenamiento. Las imagenes de entrenamiento recibirán un conjunto de
@@ -411,7 +413,7 @@ class TestDataset(Dataset):
             seed=SEED,
             batch_size=batch_size,
             class_mode=None,
-            directory=PROCESED_DATA_PATH if directory else None
+            directory=CONVERTED_DATA_PATH if directory else None
         )
 
     def split_dataset_on_train_val(self, train_prop: float, stratify: bool = False):
