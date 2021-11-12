@@ -3,10 +3,28 @@ from typing import io
 
 from utils.functions import create_dir
 
+
+"""
+    CONFIGURACION DEL DATASET
+"""
+TRAIN_DATA_PROP = 0.8
+VAL_DATA_PROP = 0.1
+TEST_DATA_PROP = 0.1
+DATA_AUGMENTATION_FUNCS = {
+    'horizontal_flip': True,
+    'vertical_flip': True,
+    'shear_range': 0.1,
+    'zoom_range': 0.2,
+    # 'rotation_range': 40,
+}
+
+"""
+    CONFIGURACION DE EJECUCIONES DE LOS MODELOS
+"""
+
+EPOCHS = 100
+BATCH_SIZE = 16
 SEED = 81
-
-CLASS_LABELS = {0: 'BENIGN', 1: 'MALIGNANT'}
-
 
 """
     CARPETAS PRINCIPALES DEL PROGRAMA
@@ -58,9 +76,9 @@ INBREAST_PROCESSED_DATA_PATH = os.path.join(PROCESSED_DATA_PATH, 'INBreast')
     CARPETAS DE RESULTADOS 
 """
 OUTPUT_DATA_PATH = os.path.join('..', 'data', '03_OUTPUT')
-OUTPUT_DATASET_ANALYSIS_PATH = os.path.join(OUTPUT_DATA_PATH, 'DATASET_EDA')
 MODEL_DATA_PATH = os.path.join('..', 'models')
 LOGGING_DATA_PATH = os.path.join('..', 'logging')
+OUTPUT_DATASET_ANALYSIS_DIRPATH = os.path.join(OUTPUT_DATA_PATH, 'DATASET_EDA')
 
 
 class ModelConstants:
@@ -70,6 +88,9 @@ class ModelConstants:
     model_logs_dirname: io = None
     model_summary_dirname: io = None
     model_predictions_dirname: io = None
+    model_predictions_filepath: io = None
+    model_output_imgs_preproces_dirname: io = None
+    model_output_imgs_data_augm_dirname: io = None
 
     def set_model_name(self, name: str) -> None:
         self.__set_log_dirname(dirname=os.path.join(LOGGING_DATA_PATH, name))
@@ -77,6 +98,8 @@ class ModelConstants:
         self.__set_predictions_dirname(dirname=os.path.join(OUTPUT_DATA_PATH, name, 'PREDICTIONS'))
         self.__set_model_dirname(dirname=os.path.join(MODEL_DATA_PATH, name, 'STORED_MODELS'))
         self.__set_summary_dirname(dirname=os.path.join(MODEL_DATA_PATH, name, 'SUMMARY'))
+        self.__set_model_preprocessing_dirname(dirname=os.path.join(OUTPUT_DATA_PATH, name, 'PREPROCESSING'))
+        self.__set_model_data_augmentation_dirname(dirname=os.path.join(OUTPUT_DATA_PATH, name, 'DATA AUGMENTATION'))
 
     @create_dir
     def __set_model_dirname(self, dirname: io) -> None:
@@ -92,11 +115,20 @@ class ModelConstants:
 
     @create_dir
     def __set_predictions_dirname(self, dirname: io) -> None:
-        self.model_predictionss_dirname = dirname
+        self.model_predictions_dirname = dirname
+        self.model_predictions_filepath = os.path.join(dirname, 'predicciones.csv')
 
     @create_dir
     def __set_summary_dirname(self, dirname: io) -> None:
         self.model_summary_dirname = dirname
+
+    @create_dir
+    def __set_model_preprocessing_dirname(self, dirname: io) -> None:
+        self.model_output_imgs_preproces_dirname = dirname
+
+    @create_dir
+    def __set_model_data_augmentation_dirname(self, dirname: io) -> None:
+        self.model_output_imgs_data_augm_dirname = dirname
 
 
 MODEL_CONSTANTS = ModelConstants()

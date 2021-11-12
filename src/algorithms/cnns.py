@@ -1,49 +1,45 @@
 import keras
-import pickle
 import os
+import numpy as np
 
-from typing import Callable
+from typing import Callable, io, Union
 from keras import Model, Sequential
 from time import time
 
-from src.utils.functions import create_dir, log_cmd_to_file, f1_score
-from src.utils.config import LOGGING_DATA_PATH, SEED
+from src.utils.functions import log_cmd_to_file
 
-from keras_preprocessing.image import DataFrameIterator
 from keras.callbacks import EarlyStopping, CSVLogger, History
 from keras.optimizers import Adam
 from keras.applications import resnet50, densenet, vgg16, inception_v3
 from keras.layers import Conv2D, BatchNormalization, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D
 
-from sklearn.ensemble import GradientBoostingClassifier
-
-import numpy as np
-import pandas as pd
-
 
 class GeneralModel:
 
+    __name__ = 'GeneralModel'
     model: Model = None
     optimizer: keras.optimizers = None
     callbakcs = []
     history: History = None
 
-    def __init__(self, n_clases: int, name: str = 'baseline', baseline: keras.Model = None, test_name: str = None,
-                 input_shape: tuple = (250, 250), preprocess_func: Callable = None, get_model_structure: bool = False,
-                 log_dir: str = LOGGING_DATA_PATH,  summary_dir: str = MODEL_SUMMARY_DATA_PATH):
-        self.name = name
+    def __init__(self, n_clases: int, log_dir: io, summary_dir: io,  test_name: str = '', baseline: keras.Model = None,
+                 input_shape: tuple = (250, 250), preprocess_func: Callable = None, get_model_structure: bool = False):
         self.baseline = baseline
         self.n_clases = n_clases
         self.input_shape = input_shape
         self.test_name = test_name
         self.preprocess_func = preprocess_func
         self.log_dir = log_dir
-        self.log_filename = self.get_dir(dirname=log_dir, file_ext='csv', file_args=[self.name, self.test_name])
+        self.log_filename = os.path.join(log_dir, f'{"_".join([self.__name__, self.test_name])}.csv')
         self.summary_dir = summary_dir
-        self.summary_filename = self.get_dir(dirname=summary_dir, file_ext='txt', file_args=[self.name, self.test_name])
+        self.summary_filename = os.path.join(summary_dir, f'{"_".join([self.__name__, self.test_name])}.txt')
         self.create_model(print_model=get_model_structure)
+        self.metrics = ['accuracy']
 
-    @create_dir
+    def register_metric(self, *args: Union[Callable, str]):
+        for arg in args:
+            self.metrics.append(arg)
+
     @log_cmd_to_file
     def repr_summary(self, **kwargs):
         """
@@ -110,7 +106,9 @@ class GeneralModel:
         out = self.baseline.output
         out = GlobalAveragePooling2D()(out)
         out = Dense(512, activation='relu')(out)
+        out = Dropout(0.5)(out)
         out = Dense(512, activation='relu')(out)
+        out = Dropout(0.5)(out)
         predictions = Dense(self.n_clases, activation='softmax')(out)
 
         self.model = Model(inputs=self.baseline.input, outputs=predictions)
@@ -130,22 +128,10 @@ class GeneralModel:
         else:
             self.optimizer = opt
 
-        self.model.compile(optimizer=self.optimizer, loss='categorical_crossentropy', metrics=['accuracy', f1_score])
-
-    @create_dir
-    def get_dir(self, dirname: str, file_ext: str, file_args: list = None):
-        """
-        Función que devuelve un filepath del modelo y crea la carpeta del filepath en caso de no existir
-        :param dirname: nombre del directorio
-        :param file_ext: extensión del archivo rchivo
-        :param file_args: nombres adicionales a añadir al nombre del archivo creado
-        :return: filepath
-        """
-
-        if file_args is None:
-            file_args = [f'default_{self.name}']
-
-        return os.path.join(dirname, f'{"_".join(list(filter(None, file_args)))}.{file_ext}')
+        if self.n_clases > 2:
+            self.model.compile(optimizer=self.optimizer, loss='categorical_crossentropy', metrics=self.metrics)
+        else:
+            self.model.compile(optimizer=self.optimizer, loss='binary_crossentropy', metrics=self.metrics)
 
     def set_model_callbacks(self, early_stopping: bool = True, csv_logger: bool = True):
         """
@@ -157,7 +143,7 @@ class GeneralModel:
         self.callbakcs = []
 
         if early_stopping:
-            self.callbakcs.append(EarlyStopping(monitor='val_loss', mode='min', patience=5, restore_best_weights=True))
+            self.callbakcs.append(EarlyStopping(monitor='val_loss', mode='min', patience=20, restore_best_weights=True))
 
         if csv_logger:
             self.callbakcs.append(CSVLogger(filename=self.log_filename, separator=';', append=True))
@@ -168,25 +154,6 @@ class GeneralModel:
         heredadas
         """
         pass
-
-    def train_model(self, epochs: int, batch: int, train_data: DataFrameIterator, val_data: DataFrameIterator = None):
-        """
-        Función utilizada para entrenar un modelo
-        :param epochs: número de epocas
-        :param batch: tamaño de batch
-        :param train_data: dataframe iterator con los datos de entrenamiento
-        :param val_data: dataframe iterator con los datos de validación
-        """
-
-        self.history = self.model.fit(
-            train_data,
-            epochs=epochs,
-            validation_data=val_data,
-            verbose=2,
-            callbacks=self.callbakcs,
-            steps_per_epoch=train_data.samples // batch,
-            validation_steps=val_data.samples // batch,
-        )
 
     def train_pipe(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None,
                    **model_callbacks):
@@ -205,7 +172,15 @@ class GeneralModel:
 
         self.set_model_callbacks(model_callbacks.get('early_stopping', True), model_callbacks.get('csv_logger', True))
 
-        self.train_model(epochs=epochs, batch=batch_size, train_data=train_data, val_data=val_data)
+        self.history = self.model.fit(
+            train_data,
+            epochs=epochs,
+            validation_data=val_data,
+            verbose=2,
+            callbacks=self.callbakcs,
+            steps_per_epoch=train_data.samples // batch_size,
+            validation_steps=val_data.samples // batch_size,
+        )
 
     def train_from_scratch_pipe(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None,
                                 **model_callbacks):
@@ -273,7 +248,6 @@ class GeneralModel:
                               'Tiempo ejecucion': f'{(time() - start_exec) / 60:.2f} minutos'
                           })
 
-    @create_dir
     def save_model(self, dirname: str, model_name: str):
         """
         Función utilizada para almacenar el modelo entrenado
@@ -291,10 +265,15 @@ class GeneralModel:
 
 class VGG16Model(GeneralModel):
 
-    def __init__(self, name: str, n_clases: int, test_name: str = '', get_model_structure: bool = False):
-        super().__init__(n_clases=n_clases, name=name, preprocess_func=vgg16.preprocess_input, input_shape=(224, 224),
-                         test_name=test_name, get_model_structure=get_model_structure,
-                         baseline=vgg16.VGG16(include_top=False, weights='imagenet', input_shape=(224, 224, 3)))
+    __name__ = 'VGG16'
+
+    def __init__(self, n_clases: int, log_dir: io, summary_dir: io, test_name: str = '',
+                 get_model_structure: bool = False):
+        super().__init__(
+            n_clases=n_clases, preprocess_func=vgg16.preprocess_input, input_shape=(224, 224), test_name=test_name,
+            get_model_structure=get_model_structure, summary_dir=summary_dir, log_dir=log_dir,
+            baseline=vgg16.VGG16(include_top=False, weights='imagenet', input_shape=(224, 224, 3))
+        )
 
     def set_trainable_layers(self):
         for layer in self.baseline.layers:
@@ -303,10 +282,15 @@ class VGG16Model(GeneralModel):
 
 class Resnet50Model(GeneralModel):
 
-    def __init__(self, name: str, n_clases: int, test_name: str = '', get_model_structure: bool = False):
-        super().__init__(n_clases=n_clases, name=name, preprocess_func=resnet50.preprocess_input,
-                         test_name=test_name, get_model_structure=get_model_structure, input_shape=(224, 224),
-                         baseline=resnet50.ResNet50(include_top=False, weights='imagenet', input_shape=(224, 224, 3)))
+    __name__ = 'ResNet50'
+
+    def __init__(self, n_clases: int, log_dir: io, summary_dir: io, test_name: str = '',
+                 get_model_structure: bool = False):
+        super().__init__(
+            n_clases=n_clases, preprocess_func=resnet50.preprocess_input, log_dir=log_dir, test_name=test_name,
+            summary_dir=summary_dir, get_model_structure=get_model_structure, input_shape=(224, 224),
+            baseline=resnet50.ResNet50(include_top=False, weights='imagenet', input_shape=(224, 224, 3))
+        )
 
     def set_trainable_layers(self):
         for layer in self.baseline.layers:
@@ -315,10 +299,13 @@ class Resnet50Model(GeneralModel):
 
 class InceptionV3Model(GeneralModel):
 
-    def __init__(self, name: str, n_clases: int, test_name: str = '', get_model_structure: bool = False):
+    __name__ = 'InceptionV3'
+
+    def __init__(self, n_clases: int, log_dir: io, summary_dir: io, test_name: str = '',
+                 get_model_structure: bool = False):
         super().__init__(
-            n_clases=n_clases, name=name, preprocess_func=inception_v3.preprocess_input, input_shape=(299, 299),
-            test_name=test_name, get_model_structure=get_model_structure,
+            n_clases=n_clases, preprocess_func=inception_v3.preprocess_input, input_shape=(299, 299),
+            test_name=test_name, get_model_structure=get_model_structure, summary_dir=summary_dir, log_dir=log_dir,
             baseline=inception_v3.InceptionV3(include_top=False, weights='imagenet', input_shape=(299, 299, 3)))
 
     def set_trainable_layers(self):
@@ -348,10 +335,13 @@ class InceptionV3Model(GeneralModel):
 
 class DenseNetModel(GeneralModel):
 
-    def __init__(self, name: str, n_clases: int, test_name: str = '', get_model_structure: bool = False):
+    __name__ = 'DenseNet'
+
+    def __init__(self, n_clases: int, log_dir: io, summary_dir: io, test_name: str = '',
+                 get_model_structure: bool = False):
         super().__init__(
-            n_clases=n_clases, name=name, preprocess_func=densenet.preprocess_input, input_shape=(224, 224),
-            test_name=test_name, get_model_structure=get_model_structure,
+            n_clases=n_clases, preprocess_func=densenet.preprocess_input, input_shape=(224, 224),
+            test_name=test_name, get_model_structure=get_model_structure, summary_dir=summary_dir, log_dir=log_dir,
             baseline=densenet.DenseNet121(include_top=False, weights='imagenet', input_shape=(224, 224, 3)))
 
     def set_trainable_layers(self):
@@ -363,118 +353,3 @@ class DenseNetModel(GeneralModel):
         self.baseline.get_layer('relu').trainable = True
 
 
-class ModelEnsamble:
-
-    def __init__(self, model_path: str = ''):
-        if os.path.exists(model_path):
-            self.model_gb = pickle.load(open(model_path, 'rb'))
-        else:
-            self.model_gb = GradientBoostingClassifier(max_depth=3, n_estimators=20, random_state=SEED)
-
-    @staticmethod
-    def get_dataframe_from_models(data: pd.DataFrame, **model_inputs):
-        """
-        Función utilizada para generar un set de datos unificado a partir de las predicciones generadas por cada modelo
-        :param data: dataframe con el nombre de archivo
-        :param model_inputs: kwargs cuya key será el nombre del modelo que genera las predicciones y cuyo value será
-                             un dataframe formado por las predicciones (columna predictions) y el filename de cada
-                             observación.
-        :return: dataframe unificado
-        """
-        for model, df in model_inputs.items():
-            data = pd.merge(
-                left=data,
-                right=df.set_index('filename').rename(columns={'predictions': model})[[model]],
-                right_index=True,
-                left_index=True,
-                how='left'
-            )
-        return data
-
-    @create_dir
-    def train_model(self, train: pd.DataFrame,  dirname: str,  filename: str, val: pd.DataFrame = None,
-                    save_model: str = '', **models_ensamble):
-        """
-        Función utilizada para generar el algorítmo de gradient boosting a partir de las predicciones generadas por cada
-        modelo.
-        :param train: Dataframe que contendrá los identificadores (filenames) del conjunto del set de entrenamiento y
-                      una columna 'mode' cuyo valore sera train. Además deberá contener la columna true_label con las
-                      clases verdaderas de cada observación
-        :param dirname: directorio en el que se almacenarán las predicciones del modelo
-        :param filename: nombre con el que se almacenarán las predicciones del modelo
-        :param val:  Dataframe que contendrá los identificadores (filenames) del conjunto del set de validación y
-                     una columna 'mode' cuyo valor sera val. Además deberá contener la columna true_label con las
-                      clases verdaderas de cada observación
-        :param save_model: nombre del archivo con el que se guardará el modelo.
-        :param models_ensamble: kwargs que contendrá como key el nombre del modelo y como values los valores devueltos
-                                por el método predict de cada modelo
-        """
-
-        # En caso de existir dataset de validación, se concatena train y val en un dataset único. En caso contrario,
-        # se recupera unicamente el set de datos de train
-        if val is not None:
-            gb_dataset = pd.concat(objs=[train.set_index('filenames'), val.set_index('filenames')], ignore_index=False)
-        else:
-            gb_dataset = train
-
-        # se asigna el nombre del indice
-        gb_dataset.index.name = 'file'
-
-        # Se unifica el set de datos obteniendo las predicciones de cada modelo representadas por models ensamble
-        df = self.get_dataframe_from_models(gb_dataset, **models_ensamble)
-
-        # generación del conjunto de datos de train para gradient boosting
-        train_gb_x = df[df['mode'].str.lower() == 'train'][list(models_ensamble.keys())]
-        train_gb_y = df[df['mode'].str.lower() == 'train'][['true_label']]
-
-        # generación del conjunto de datos de validación
-        if val is not None:
-            val_gb_x = df[df['mode'].str.lower() == 'val'][list(models_ensamble.keys())]
-
-        # entrenamiento del modelo
-        self.model_gb.fit(pd.get_dummies(train_gb_x), np.reshape(train_gb_y.values, -1))
-
-        # se añade al dataset original, las predicciones del modelo de gradient boosting
-        df.loc[:, 'Gradient_Boosting'] = [*self.model_gb.predict(pd.get_dummies(train_gb_x)),
-                                          *self.model_gb.predict(pd.get_dummies(val_gb_x))]
-
-        # se almacenan las predicciones
-        savefile = os.path.join(dirname, filename)
-        df.reset_index().to_csv(savefile, sep=';', index=False)
-
-        # se almacena el modelo en caso de que el usuario haya definido un nombre de archivo
-        if save_model:
-            pickle.dump(self.model_gb, open(save_model, 'wb'))
-
-    @create_dir
-    def predict(self, dirname: str, filename: str, data: DataFrameIterator, return_model_predictions: bool = False,
-                **input_models):
-        """
-        Función utilizada para realizar la predicción del algorítmo de graadient boosting a partir de las predicciones
-        del conjunto de redes convolucionales
-        
-        :param dirname: directorio en el que se almacenará el log de predicciones
-        :param filename: nombre del archivo en el que se almacenará el log de predicciones
-        :param data: dataframe que contiene el nombre de cada imagen en una columna llamada filenames
-        :param return_model_predictions: booleano que permite recuperar en el log de predicciones, las predicciones
-                                         individuales de cada red neuronal convolucional
-        :param input_models: kwargs que contendrá como key el nombre del modelo y como values los valores devueltos
-                             por el método predict de cada modelo de red neuronal convolucional
-        """
-
-        # Se genera un dataframe con los directorios de las imagenes a predecir
-        gb_dataset = pd.DataFrame(index=data.filenames)
-        gb_dataset.index.name = 'image'
-
-        # Se unifica el set de datos obteniendo las predicciones de cada modelo representadas por input_models
-        df = self.get_dataframe_from_models(gb_dataset, **input_models)
-
-        # Se añaden las predicciones
-        df.loc[:, 'label'] = self.model_gb.predict(pd.get_dummies(df[input_models.keys()]))
-
-        # se escribe el log de errores con las predicciones individuales de cada arquitectura de red o únicamente las
-        # generadas por gradient boosting
-        if return_model_predictions:
-            df.to_csv(os.path.join(dirname, filename), sep=';')
-        else:
-            df[['label']].to_csv(os.path.join(dirname, filename), sep=';')

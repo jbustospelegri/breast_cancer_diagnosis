@@ -1,5 +1,5 @@
-from scripts.models import VGG16Model, Resnet50Model, InceptionV3Model, DenseNetModel, ModelEnsamble
-from scripts.dataset import TestDataset
+from algorithms.models import VGG16Model, Resnet50Model, InceptionV3Model, DenseNetModel, ModelEnsamble
+from data_viz.dataset import TestDataset
 
 from utils.config import PREDICTIONS_PATH, MODEL_SAVE_DATA_PATH, TEST_DATA_PATH, CLASS_LABELS
 from utils.functions import f1_score, get_predictions
@@ -39,7 +39,7 @@ if __name__ == '__main__':
         data = TestDataset(path=TEST_DATA_PATH)
         data.get_dataset()
         test_datagen = data.get_dataset_generator(
-            batch_size=batch_size, size=cnn.input_shape, preprocessing_function=cnn.preprocess_func
+            batch_size=batch_size, size=cnn.input_shape, preproces_callback=cnn.preprocess_func
         )
         print('-' * 50 + f'\nSet de datos cargado correctamente\n' + '-' * 50)
 

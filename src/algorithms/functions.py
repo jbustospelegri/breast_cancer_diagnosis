@@ -1,0 +1,124 @@
+import keras
+import pandas as pd
+
+from multiprocessing import Queue
+from typing import Union, io, Callable
+
+from keras import models
+from keras_preprocessing.image import DataFrameIterator
+from tensorflow import one_hot
+from tensorflow.python.keras.backend import argmax
+from tensorflow.python.keras.optimizer_v1 import Adam
+
+from algorithms.cnns import GeneralModel
+from algorithms.metrics import f1_score
+from breast_cancer_dataset.datasets import BreastCancerDataset
+
+from utils.config import BATCH_SIZE, EPOCHS, MODEL_CONSTANTS
+
+
+def get_predictions(keras_model: models, data: DataFrameIterator, class_labels: dict, **kwargs) -> pd.DataFrame:
+    """
+    Función utilizada para generar las predicciones de un modelo. El dataframe generado contendrá el path de la imagen,
+    la clase verdadera (en caso de existir) y la clase predicha.
+
+    :param keras_model: modelo sobre el que se aplicará el método .predict para generar las predicciones
+    :param data: dataset sobre el cual aplicar las predicciones
+    :param class_labels: diccionario con las clases verdaderas del set de datos. Este diccionario debe contener como
+                         key la posición correspondiente a cada prediccion dentro del vector de probabilidades devuelto
+                         por el método predict() de keras y, como value, el nombre de la clase
+    :param kwargs: columnas adicionales para añadir al dataframe devuelto. El key de kwargs será el nombre de la columna
+                   y los values serán el valor asignado a cada columna.
+    :return: dataframe con el path de la imagen, la clase verdadera (en caso de existir), la clase predicha y columnas
+             definidas por kwargs.
+    """
+
+    # Se recuepra el número de clases
+    num_clases = len(class_labels.keys())
+
+    # Se genera un orden aleatorio del datagenerator
+    data.on_epoch_end()
+
+    # se recupera el path de los archivos del dataset generator
+    fnames = [data.filenames[i] for i in data.index_array] if data.index_array is not None else data.filenames
+
+    true_labels = []
+    # En caso de que exista la clase verdadera, se recupera y se añade al dataset
+    if hasattr(data, 'classes'):
+        for idx in range(0, (data.samples // data.batch_size) + 1):
+            true_labels += [class_labels[label] for label in data[idx][1].argmax(axis=-1).tolist()]
+
+    # Se predicen los datos. Debido a que la salida del modelo para cada muestra es un vector de probabilidades,
+    # dada por la función de activacón softmax, se obtiene la clase predicha mediante el valor máximo (clase más
+    # probable).
+    predictions = [class_labels[pred] for pred in one_hot(argmax(keras_model.predict(data), axis=1), num_clases).numpy()
+        .argmax(axis=-1).tolist()]
+
+    # Se crea el dataset final
+    dataset = pd.DataFrame({'filename': fnames, 'predictions': predictions, 'true_labels': true_labels}) \
+        if true_labels else pd.DataFrame({'filename': fnames, 'predictions': predictions})
+
+    # Se añaden columnas adicionales al dataset
+    for col, value in kwargs.get('add_columns', {}).items():
+        dataset.loc[:, col] = [value] * len(dataset)
+
+    return dataset
+
+
+def training_pipeline(model: Callable[..., GeneralModel], df: Union[BreastCancerDataset], q: Queue, c: MODEL_CONSTANTS,
+                      name: str) -> None:
+    """
+    Función utilizada para generar el pipeline de entrenamiento de cada modelo.
+
+    :param q:
+    :type model: GeneralModel
+    :param c:
+    :param df: objeto dataset con el cual obtener los dataframe iterators de entrenamiento y validacion.
+    :param model_name: nombre del modelo para seleccionar qué modelo entrenar
+    :param bs: tamaño del batch
+    :param n_epochs: número de épocas
+    :param name: nombre del test para almacenar el modelo y los logs generados
+    :param opt: optimizador de gradiente descendiente a utilizar durante el proceso de back propagation
+    :param queue: queue para devolver los resultados al proceso principal
+
+    """
+
+    # Se inicializa cada modelo:
+    cnn = model(n_clases=len(df.class_dict), test_name=name, get_model_structure=True, log_dir=c.model_logs_dirname,
+                summary_dir=c.model_summary_dirname)
+
+    # Se registran las métricas que se desean almacenar:
+    cnn.register_metric('AUC', 'Precision', 'Recall', f1_score)
+
+    # Se recuperan los generadores de entrenamiento y validación en función del tamaño de entrada definido para cada
+    # red y su función de preprocesado.
+    train, val = df.get_dataset_generator(
+        batch_size=BATCH_SIZE, size=cnn.input_shape, preprocessing_function=cnn.preprocess_func,
+        directory=c.model_output_imgs_data_augm_dirname
+    )
+
+    print('-' * 50 + f'\nEmpieza proceso de transfer learning para {cnn.__name__}')
+    cnn.transfer_learning_pipe(train, val, EPOCHS, BATCH_SIZE, Adam(learning_rate=1e-3))
+    print('-' * 50 + f'\nFinalizado proceso transfer learning.\n' + '-' * 50)
+
+    print('-' * 50 + f'\nEmpieza proceso de fine tunning {cnn.__name__}')
+    cnn.train_from_scratch_pipe(train, val, EPOCHS, BATCH_SIZE, Adam(learning_rate=1e-5))
+    print('-' * 50 + f'\nFinalizado proceso de fine tunning.\n' + '-' * 50)
+
+    print('-' * 50 + f'\nAlmacenando  modelo.\n' + '-' * 50)
+    cnn.save_model(dirname=c.model_dirname, model_name=f"{cnn.__name__}.h5")
+    print('-' * 50 + f'\nModelo almacenado correctamente.\n' + '-' * 50)
+
+    print('-' * 50 + f'\nObteniendo predicciones del modelo {cnn.__name__}.\n' + '-' * 50)
+    class_dict_labels = {v: k for k, v in train.class_indices.items()}
+
+    # Se generan las predicciones de entrenamiento y validación en formato de dataframe y se devuelven al proceso ppal.
+    q.put(pd.concat(
+        objs=[
+            get_predictions(keras_model=cnn, data=train, class_labels=class_dict_labels,
+                            add_columns=dict(mode='train')),
+            get_predictions(keras_model=cnn, data=val, class_labels=class_dict_labels,
+                            add_columns=dict(mode='val'))],
+        ignore_index=True
+    ))
+    print('-' * 50 + f'\nPredicciones finalizadas.\n' + '-' * 50)

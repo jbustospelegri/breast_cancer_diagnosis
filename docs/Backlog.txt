@@ -1,50 +1,33 @@
-1) Revisar literatura dataset CBIS-DDSM para:
-	- Determinar los casos Bening - No callback
-	- Analizar significado de las columnas -> ver si se puede meter algo en el Model ensambling
-	- Existen 19 fotografías que presentan dos clases distintas.
-	-		studio									pathology
-			Calc-Test_P_00353_LEFT_CC				BENIGN
-			Calc-Test_P_00353_LEFT_CC				MALIGNANT
-			Calc-Test_P_00353_LEFT_MLO				BENIGN
-			Calc-Test_P_00353_LEFT_MLO				MALIGNANT
-			Calc-Training_P_00600_LEFT_CC			BENIGN
-			Calc-Training_P_00600_LEFT_CC			MALIGNANT
-			Calc-Training_P_00600_LEFT_MLO			BENIGN
-			Calc-Training_P_00600_LEFT_MLO			MALIGNANT
-			Calc-Training_P_00858_RIGHT_CC			BENIGN
-			Calc-Training_P_00858_RIGHT_CC			BENIGN_WITHOUT_CALLBACK
-			Calc-Training_P_00858_RIGHT_MLO			BENIGN_WITHOUT_CALLBACK
-			Calc-Training_P_00858_RIGHT_MLO			BENIGN
-			Calc-Training_P_00937_RIGHT_CC			MALIGNANT
-			Calc-Training_P_00937_RIGHT_CC			BENIGN
-			Calc-Training_P_00937_RIGHT_MLO			MALIGNANT
-			Calc-Training_P_00937_RIGHT_MLO			BENIGN
-			Calc-Training_P_01284_RIGHT_MLO			MALIGNANT
-			Calc-Training_P_01284_RIGHT_MLO			BENIGN
-			Calc-Training_P_01819_LEFT_CC			MALIGNANT
-			Calc-Training_P_01819_LEFT_CC			BENIGN_WITHOUT_CALLBACK
-			Calc-Training_P_01819_LEFT_MLO			MALIGNANT
-			Calc-Training_P_01819_LEFT_MLO			BENIGN_WITHOUT_CALLBACK
-			Mass-Test_P_00969_LEFT_CC				BENIGN
-			Mass-Test_P_00969_LEFT_CC				MALIGNANT
-			Mass-Test_P_00969_LEFT_MLO				BENIGN
-			Mass-Test_P_00969_LEFT_MLO				MALIGNANT
-			Mass-Training_P_00419_LEFT_CC			BENIGN
-			Mass-Training_P_00419_LEFT_CC			MALIGNANT
-			Mass-Training_P_00419_LEFT_MLO			MALIGNANT
-			Mass-Training_P_00419_LEFT_MLO			BENIGN
-			Mass-Training_P_00797_LEFT_CC			BENIGN
-			Mass-Training_P_00797_LEFT_CC			MALIGNANT
-			Mass-Training_P_00797_LEFT_MLO			BENIGN
-			Mass-Training_P_00797_LEFT_MLO			MALIGNANT
-			Mass-Training_P_01103_RIGHT_CC			BENIGN
-			Mass-Training_P_01103_RIGHT_CC			MALIGNANT
-			Mass-Training_P_01103_RIGHT_MLO			BENIGN
-			Mass-Training_P_01103_RIGHT_MLO			MALIGNANT
+1) Ver como se realiza el finetunning/extract features en un modelo de red:
+	- Extract features:
+	    Se corta una red pre-entrenada en cualquier punto (normalmente se excluyen las capas FC).
+		Se utiliza esta red para pasar las imagenes en el proceso de feed forward. En la capa recortada, se recupera
+		el vector de características y se le aplica un flaten.
+		Se utiliza el vector para entrenar un modelo:
+			- Si el set de datos es pequeño y cabe en memoria se pueden utilizar SVMs o Linear Regresion.
+			- Si el set de datos es grande y no cabe en memoria se realiza un algorítmo de entrenamiento adaptativo,
+			  es decir, que se pueda entrenar por batches. En resumen, una CNN. Por lo tanto realizar un
+			  extract features consistirá en congelar los pesos de las capas convolucionales y entrenar el nuevo modelo
+			  de red creado a la salida.
+   - Fine Tuning:
+   		Se cortan las capas FC de una red pre-entrenada.
+		Se añade una nueva arquitectura de capas FC sobre las capas convolucionales de la red. Estas capas FC nuevas
+		tendrán pesos aleatorios de forma que, si se entrena la red de forma completa, con la actualización de los pesos
+		de las capas Convolucionales se podrían perder las características entrenadas -> No se quiere esto. De modo
+		que es habitual utilizar una estrategia de warm up para las capas FC (se congela la parte CNN de la red y
+		se entrenan los pesos de las nuevas capas FC con un learning rate bajo).
+		Para incrementar la accuracy, se pueden descongelar las capas CNN y reentrenar el modelo con un learning rate de
+		nuevo muy bajo.
 
-2) Crear el logger para la representación del proceso en txt
-3) Métricas de los datasets:
-	- Número de instancias por clase y db
-	- Número del tipo de malaltias por clase y db
-	- Distribución del número de simptomatologías por paciente.
-		https://towardsdatascience.com/can-you-find-the-breast-tumours-part-1-of-3-1473ba685036
+2) Crear en model la congelación de las capas
+	- Ver con el include_top = False qué capas contiene cada CNN y modificar las capas adicionales del baseline.
+	- Al añadir las capas nuevas, configurar el número de neuronas de las NN con la regla del pulgar:
+		"A good rule of thumb is to take the square root of the previous number of nodes in the layer and then find the
+	 	closest power of 2."
+
+3) Crear en model.py los optimizadores y el learning rate utilizado para cada etapa: SGD y Adam con learning rates del
+   paper.
+
+4) Aplicar regularización L2 en la función de pérdidas -> Repasar en qué consiste.
+
+5)

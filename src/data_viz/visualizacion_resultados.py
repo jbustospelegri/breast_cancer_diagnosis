@@ -1,5 +1,5 @@
-from utils.config import CLASS_LABELS
-from utils.functions import create_dir, render_mpl_table
+from data_viz.functions import render_mpl_table
+from utils.functions import create_dir
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -108,7 +108,7 @@ class DataVisualizer:
         dataset = pd.read_csv(input_file, sep=';')
 
         # Se recuperan las columnas de cada modelo.
-        models_name = [i for i in dataset.columns if i not in ['true_label', 'file', 'mode']]
+        models_name = [*MODELS['CNNS'], *MODELS['ENSAMBLING']]
 
         # En función del número de modelos, se generan n hileras para graficar los resultados. Cada hilera contendrá
         # dos modelos.
@@ -165,7 +165,7 @@ class DataVisualizer:
         dataset = pd.read_csv(input_file, sep=';')
 
         # Se recuperan las columnas referentes a métricas de modelos,
-        models_name = [i for i in dataset.columns if i not in ['true_label', 'file', 'mode']]
+        models_name = [*MODELS['CNNS'], *MODELS['ENSAMBLING']]
 
         # Se crea un dataset que contendrá las métricas accuracy, precision, recall y f1 para train y validación a nivel
         # general. En caso de tener el parametro class_metrics a True, las columnas del dataset serán un multiindice con

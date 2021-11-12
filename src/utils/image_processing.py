@@ -2,55 +2,99 @@ from pathlib import Path
 
 import os
 import pydicom
-import pandas as pd
 import numpy as np
 import cv2
 
 from typing import io, Union
+from PIL import Image
 
 from utils.config import LOGGING_DATA_PATH
+from utils.functions import get_dirname, get_filename
 
 
-def convert_dcm_imgs(args) -> None:
+def convert_img(args) -> None:
     """
+    Función encargada de convertir las imagenes del formato recibido al formato explícito.
 
-    :param args:
-
+    :param args: Los argumentos deberán ser:
+        - Posición 0: (Obligatorio) Ruta la imagen a transformar.
+        - Posición 1: (Obligatorio) Ruta de la imagen transformada.
     """
-    img_path: io = args[0]
-    dest_path: io = args[1]
-    name: str = args[2]
-    extension: str = args[3]
-    aux: str = args[4]
-
     try:
+        # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
+        assert len(args) >= 2, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
+        img_path: io = args[0]
+        dest_path: io = args[1]
+
+        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
+        assert os.path.isfile(img_path), f"{img_path} doesn't exists."
+        assert os.path.splitext(img_path)[1] in ['.pgm', '.dcm'], f'Conversion only available for: png, jpg'
+
+        if os.path.splitext(img_path)[1] == '.dcm':
+            convert_dcm_imgs(ori_path=img_path, dest_path=dest_path)
+        else:
+            convert_pgm_imgs(ori_path=img_path, dest_path=dest_path)
+    except AssertionError as err:
+        err = f'Error en la función convert_dcm_imgs.\n{err}'
+        with open(os.path.join(LOGGING_DATA_PATH, f'General Errors.txt'), 'a') as f:
+            f.write(f'{err}')
+
+    except Exception as err:
+        with open(os.path.join(LOGGING_DATA_PATH, f'conversion_{get_filename(img_path)}.txt'), 'w') as f:
+            f.write(err)
+
+
+def convert_dcm_imgs(ori_path: io, dest_path: io) -> None:
+    """
+    Función encargada de leer imagenes en formato dcm y convertirlas al formato especificado por el usuario.
+    """
+    try:
+        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
+        assert os.path.splitext(dest_path)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
+
         # se crea el directorio y sus subdirectorios en caso de no existir
-        for img_type in ['CROP', 'FULL', 'MASK']:
-            Path(os.path.join(dest_path, img_type)).mkdir(parents=True, exist_ok=True)
+        Path(get_dirname(dest_path)).mkdir(parents=True, exist_ok=True)
 
         # Se lee la información de las imagenes en formato dcm
-        img = pydicom.dcmread(img_path)
+        img = pydicom.dcmread(ori_path)
 
         # Se convierte las imagenes a formato de array
         img_array = img.pixel_array
 
-        # Se recuperan los distintos valores de píxeles que contiene la imagen. Este array servirá para diferenciar
-        # entre imagenes recortadas o mascaras
-        unique_pixel_values = np.unique(img_array).tolist()
+        # Se almacena la imagen
+        cv2.imwrite(dest_path, img_array)
 
-        # En función del atributo SeriesDescription, el valor de píexeles único o bien, si la imagen termina en un
-        # dígito o no (variable aux), se determinará si se trata de una imagen recortada, completa o una mascara
-        if ('full' in getattr(img, 'SeriesDescription', [])) or (aux == 'FULL'):
-            cv2.imwrite(os.path.join(dest_path, 'FULL', f'{name}.{extension}'), img_array)
-        elif ('mask' in getattr(img, 'SeriesDescription', [])) or (len(unique_pixel_values) == 2):
-            cv2.imwrite(os.path.join(dest_path, 'MASK', f'{name}.{extension}'), img_array)
-        elif ('crop' in getattr(img, 'SeriesDescription', [])) or (len(unique_pixel_values) != 2):
-            cv2.imwrite(os.path.join(dest_path, 'CROP', f'{name}.{extension}'), img_array)
-        else:
-            raise ValueError(f'Imagen {img_path} no clasificada correctamente en crop, mask o crop')
+    except AssertionError as err:
+        err = f'Error en la función convert_dcm_imgs.\n{err}'
+        with open(os.path.join(LOGGING_DATA_PATH, f'General Errors.txt'), 'a') as f:
+            f.write(f'{err}')
 
     except Exception as err:
-        with open(os.path.join(LOGGING_DATA_PATH, f'{name}.txt'), 'w') as f:
+        with open(os.path.join(LOGGING_DATA_PATH, f'conversion_{get_filename(ori_path)}.txt'), 'w') as f:
+            f.write(err)
+
+
+def convert_pgm_imgs(ori_path: io, dest_path: io) -> None:
+    """
+    Función encargada de leer imagenes en formato pgm y convertirlas al formato especificado por el usuario.
+    """
+    try:
+        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
+        assert os.path.splitext(dest_path)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
+
+        # se crea el directorio y sus subdirectorios en caso de no existir
+        Path(get_dirname(dest_path)).mkdir(parents=True, exist_ok=True)
+
+        # Se lee la información de las imagenes en formato pgm y se almacena en el formato deseado
+        Image.open(ori_path).save(dest_path, os.path.splitext(dest_path)[1].replace('.', ''))
+
+    except AssertionError as err:
+        err = f'Error en la función convert_dcm_imgs.\n{err}'
+        with open(os.path.join(LOGGING_DATA_PATH, f'General Errors.txt'), 'a') as f:
+            f.write(f'{err}')
+
+    except Exception as err:
+        with open(os.path.join(LOGGING_DATA_PATH, f'conversion_{get_filename(ori_path)}.txt'), 'w') as f:
             f.write(err)
 
 
@@ -66,7 +110,14 @@ def crop_borders(img: np.ndarray, left: float = 0.01, right: float = 0.01, top: 
 
 
 def min_max_normalize(img: np.ndarray) -> np.ndarray:
-    return (img - img.min()) / (img.max() - img.min())
+    """
+
+    :param img:
+    :return:
+    """
+    # Se normaliza las imagenes para poder realizar la ecualización del histograma. Para ello, se aplica
+    # como valor mínimo el 0 y como máximo el valor 255.
+    return cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
 
 
 def binarize_img(img: np.ndarray, thresh: Union[float, int] = 0.5, maxval: Union[float, int] = 1) -> np.ndarray:
@@ -91,7 +142,6 @@ def edit_mask(mask: np.ndarray, kernel_size: tuple = (23, 23)) -> np.ndarray:
 
     :param mask:
     :param kernel_size:
-    :param operation:
     :return:
     """
 
@@ -108,7 +158,7 @@ def edit_mask(mask: np.ndarray, kernel_size: tuple = (23, 23)) -> np.ndarray:
     return edited_mask
 
 
-def get_breast_zone(mask: np.ndarray) -> np.ndarray:
+def get_breast_zone(mask: np.ndarray) -> Union[np.ndarray, tuple]:
 
     """
     Función encargada de encontrar los contornos de la imagen y retornar los top_x más grandes.
@@ -131,7 +181,10 @@ def get_breast_zone(mask: np.ndarray) -> np.ndarray:
         image=np.zeros(mask.shape, np.uint8), contours=largest_countour, contourIdx=-1, color=(1, 1, 1), thickness=-1
     )
 
-    return breast_zone
+    # Se obtiene el rectangulo que contiene el pecho
+    x, y, w, h = cv2.boundingRect(largest_countour[0])
+
+    return breast_zone, (x, y, w, h)
 
 
 def remove_artifacts(img: np.ndarray, **kwargs) -> np.ndarray:
@@ -157,10 +210,85 @@ def remove_artifacts(img: np.ndarray, **kwargs) -> np.ndarray:
 
     # Una vez identificados con un 1 tanto artefactos como el seno, se debe de identificar cual es la región
     # perteneciente al seno. Esta será la que tenga un área mayor.
-    mask = get_breast_zone(mask=modified_mask)
+    mask, (x, y, w, h) = get_breast_zone(mask=modified_mask)
 
     # Se aplica y se devuelve la mascara.
     img[mask == 0] = 0
 
-    return img
+    return img[y:y+h, x:x+w]
 
+
+def flip_breast(img: np.ndarray, orient: str = 'left') -> np.ndarray:
+    """
+    Función utilizada para realizar el giro de los senos en caso de ser necesario. Esta funcionalidad pretende
+    estandarizar las imagenes de forma que los flips se realizen posteriormente en el data augmentation-
+
+    :param img: imagen para realizar el giro
+    :param orient: 'left' o 'right'. Orientación que debe presentar el seno a la salida de la función
+    :return: imagen girada.
+    """
+
+    # Se obtiene el número de columnas (número de píxeles) que contiene la imagen para obtener el centro.
+    _, n_col, _ = img.shape
+
+    # Se obtiene el centro dividiendo entre 2
+    x_center = n_col // 2
+
+    # Se suman los valores de cada columna y de cada hilera. En función del mayor valor obtenido, se obtendrá
+    # la orientación del seno ya que el pecho está identificado por las zonas blancas (valor 1).
+    left_side = img[:, :x_center].sum()
+    right_side = img[:, x_center:].sum()
+
+    # Si se desea que el seno esté orientado hacia la derecha y está orientado a la izquierda se girará.
+    # Si se desea que el seno esté orientado hacia la izquierda y está orientado a la derecha se girará.
+    cond = {'right': left_side > right_side, 'left': left_side < right_side}
+    if cond[orient]:
+        return cv2.flip(img.copy(), 1)
+    # En caso contrario el seno estará bien orientado.
+    else:
+        return img
+
+
+def apply_clahe_transform(img: np.ndarray, clip: int = 1) -> np.ndarray:
+    """
+    función que aplica una ecualización sobre la intensidad de píxeles de la imagen para mejorar el contraste
+    de estas.
+    :param img: imagen original sobre la cual realizar la ecualización adaptativa
+    :return: imagen ecualizada
+    """
+
+    # Se transforma la imagen a escala de grises.
+    gray = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2GRAY)
+    img_uint8 = gray.astype("uint8")
+
+    # Se aplica la ecualización adaptativa del histograma de píxeles.
+    clahe_create = cv2.createCLAHE(clipLimit=clip, tileGridSize=(8, 8))
+    clahe_img = clahe_create.apply(img_uint8)
+
+    return clahe_img
+
+
+def pad_image_into_square(img: np.ndarray) -> np.ndarray:
+    """
+
+    :param img:
+    :return:
+    """
+
+    nrows, ncols, dim = img.shape
+
+    padded_img = np.zeros(shape=(max(nrows, ncols), max(nrows, ncols), dim), dtype=np.uint8)
+    padded_img[:nrows, :ncols, :] = img
+
+    return padded_img
+
+
+def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
+    """
+
+    :param img:
+    :param size:
+    :return:
+    """
+
+    return cv2.resize(src=img.copy(), dsize=size, interpolation=cv2.INTER_LANCZOS4)
