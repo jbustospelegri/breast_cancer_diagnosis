@@ -10,7 +10,7 @@ from typing import io
 import numpy as np
 
 
-def create_countplot(data: DataFrame,  filepath: io, x: str, hue: str = None, title: str = '', annotate: bool = True,
+def create_countplot(data: DataFrame, file: io, x: str, hue: str = None, title: str = '', annotate: bool = True,
                      norm: bool = False):
 
     # Figura de matplotlib para almacenar el gráfico
@@ -41,7 +41,7 @@ def create_countplot(data: DataFrame,  filepath: io, x: str, hue: str = None, ti
     ax.set(ylabel='')
 
     # Se almacena la figura
-    plt.savefig(filepath)
+    plt.savefig(file)
 
 
 def render_mpl_table(data, col_width=3.0, row_height=0.625, font_size=14, header_color='#40466e', row_colors=None,
@@ -75,7 +75,7 @@ def render_mpl_table(data, col_width=3.0, row_height=0.625, font_size=14, header
     return ax.get_figure(), ax
 
 
-def plot_image(img, title, ax_):
+def plot_image(img: np.ndarray, title: str, ax_: plt.axes):
     """
     Función que permite representar una imagen en un axes de matplotlib suprimiendole el grid y los ejes.
 

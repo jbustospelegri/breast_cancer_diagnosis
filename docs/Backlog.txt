@@ -27,7 +27,20 @@
 
 3) Crear en model.py los optimizadores y el learning rate utilizado para cada etapa: SGD y Adam con learning rates del
    paper.
+   - Ver en callbacks lo del decay para los optimizadores.
 
 4) Aplicar regularización L2 en la función de pérdidas -> Repasar en qué consiste.
 
-5)
+5) Crear el pipeline de entrenar el modelo con finetunning y train from scratch con pesos aleatorios.
+    - 5.1: Random Initialization: Se crea la arquitectura con los pesos entrenados de forma random y se entrena
+                                  todo el modelo (unfreeze de todas las capas).
+    - 5.2: Feature Extraction: Se congelan todas las capas convolucionales y se entrenan exclusivamente las capas FC.
+                               (0 - fine tunning estrategy). Se utilizará un optimizador Adam durante 30 epocas.
+    - 5.3: Fine Tunning: Se ponen como trainable de 1 - N capas convolucionales del modelo realizando dos fases:
+                        1) Warm up: Se entrena únicamente la parte FC con optimizador Adam y 30 épocas
+                        2) FineTunning: Se entrenan las capas convolucionales que aparecen como unfreeze con un
+                                        optimizador SGD y un learning rate de 10-4 con weight decay de 10 y
+                                        early stopping con paciencia de 20. El entreno se realiza durante 90 epocas.
+
+6) Crear un modulo que permita distintos procesados de las imagenes almacenando su configuración:
+    - Aplicar la GCN normalización en las imagenes (este procesado no está aplicado).

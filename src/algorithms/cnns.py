@@ -1,162 +1,110 @@
 import keras
 import os
-import numpy as np
 
 from typing import Callable, io, Union
 from keras import Model, Sequential
 from time import time
 
-from src.utils.functions import log_cmd_to_file
-
-from keras.callbacks import EarlyStopping, CSVLogger, History
+from keras.callbacks import History
 from keras.optimizers import Adam
 from keras.applications import resnet50, densenet, vgg16, inception_v3
 from keras.layers import Conv2D, BatchNormalization, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D
+from tensorflow.python.keras.preprocessing.image import DataFrameIterator
 
 
 class GeneralModel:
 
     __name__ = 'GeneralModel'
     model: Model = None
-    optimizer: keras.optimizers = None
-    callbakcs = []
+    callbakcs = {}
+    metrics = ['accuracy']
     history: History = None
+    layers_dict = {
+        '1FT': ['block4_dropout', 'block4_maxpool', 'block4_bn3', 'block4_conv2', 'block4_bn1', 'block4_conv1'],
+        '2FT': ['block3_dropout', 'block3_maxpool', 'block3_bn3', 'block3_conv2', 'block3_bn1', 'block3_conv1'],
+        '3FT': ['block2_dropout', 'block2_maxpool', 'block2_bn2', 'block2_conv2', 'block2_bn1', 'block2_conv1'],
+        '4FT': ['block1_dropout', 'block1_maxpool', 'block1_bn1', 'block1_conv1']
+    }
 
-    def __init__(self, n_clases: int, log_dir: io, summary_dir: io,  test_name: str = '', baseline: keras.Model = None,
-                 input_shape: tuple = (250, 250), preprocess_func: Callable = None, get_model_structure: bool = False):
+    def __init__(self, n_clases: int, baseline: keras.Model = None, input_shape: tuple = (250, 250),
+                 preprocess_func: Callable = None, weights: str = None):
         self.baseline = baseline
         self.n_clases = n_clases
         self.input_shape = input_shape
-        self.test_name = test_name
         self.preprocess_func = preprocess_func
-        self.log_dir = log_dir
-        self.log_filename = os.path.join(log_dir, f'{"_".join([self.__name__, self.test_name])}.csv')
-        self.summary_dir = summary_dir
-        self.summary_filename = os.path.join(summary_dir, f'{"_".join([self.__name__, self.test_name])}.txt')
-        self.create_model(print_model=get_model_structure)
-        self.metrics = ['accuracy']
+        self.weights = weights
+        self.__create_model()
 
-    def register_metric(self, *args: Union[Callable, str]):
-        for arg in args:
-            self.metrics.append(arg)
-
-    @log_cmd_to_file
-    def repr_summary(self, **kwargs):
-        """
-        Función utilizada para representar el summary de un modelo, el número de parámetros entrenables y un conjunto
-        de parámetros definidos por el usuario a partir del kwarg txt_kwargs
-        """
-
-        if kwargs.get('txt_kwargs', None):
-            print('-' * 50)
-            print('\tInformación Adicional')
-            print('\n\t\t- '.join([f'{k}: {v}' for k, v in kwargs.get('txt_kwargs', {}).items()]))
-            print('-' * 50)
-
-        if kwargs.get('get_summary', False):
-            print('\n\tInformación del modelo:\n')
-            self.model.summary()
-            print('-' * 50)
-
-        elif kwargs.get('get_number_params', False):
-            trainable_count = int(np.sum([keras.backend.count_params(p) for p in self.model.trainable_weights]))
-            non_trainable_count = int(np.sum([keras.backend.count_params(p) for p in self.model.non_trainable_weights]))
-            print('\tInformación parámeros del modelo:')
-            print('\t\t-Número total de parámetros: {:,}'.format(trainable_count + non_trainable_count))
-            print('\t\t-Parámetros entrenables: {:,}'.format(trainable_count))
-            print('\t\t-Parámetros no entrenables: {:,}'.format(non_trainable_count))
-
-    def create_baseline(self):
+    def __create_baseline(self):
         """
         Función que permite crear una estructura básica compuesta por un conjunto de capas convolucionales. Este metodo
         será sobreescrito por las clases heredadas.
         """
         self.baseline = Sequential()
 
-        self.baseline.add(Conv2D(32, (3, 3), padding="same", input_shape=(*self.input_shape, 3), activation='relu'))
-        self.baseline.add(BatchNormalization(axis=1))
-        self.baseline.add(MaxPooling2D(pool_size=(3, 3)))
-        self.baseline.add(Dropout(0.25))
+        self.baseline.add(Conv2D(32, (3, 3), padding="same", input_shape=(*self.input_shape, 3), activation='relu',
+                                 name='block1_conv1'))
+        self.baseline.add(BatchNormalization(axis=1, name='block1_bn1'))
+        self.baseline.add(MaxPooling2D(pool_size=(3, 3), name='block1_maxpool'))
+        self.baseline.add(Dropout(0.25, name='block1_dropout'))
 
-        self.baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu'))
-        self.baseline.add(BatchNormalization(axis=1))
-        self.baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu'))
-        self.baseline.add(BatchNormalization(axis=1))
-        self.baseline.add(MaxPooling2D(pool_size=(2, 2)))
-        self.baseline.add(Dropout(0.25))
+        self.baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu', name='block2_conv1'))
+        self.baseline.add(BatchNormalization(axis=1, name='block2_bn1'))
+        self.baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu', name='block2_conv2'))
+        self.baseline.add(BatchNormalization(axis=1, name='block2_bn2'))
+        self.baseline.add(MaxPooling2D(pool_size=(2, 2), name='block2_maxpool'))
+        self.baseline.add(Dropout(0.25, name='block2_dropout'))
 
-        self.baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu'))
-        self.baseline.add(BatchNormalization(axis=1))
-        self.baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu'))
-        self.baseline.add(BatchNormalization(axis=1))
-        self.baseline.add(MaxPooling2D(pool_size=(2, 2)))
-        self.baseline.add(Dropout(0.25))
+        self.baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu', name='block3_conv1'))
+        self.baseline.add(BatchNormalization(axis=1, name='block3_bn1'))
+        self.baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu', name='block3_conv2'))
+        self.baseline.add(BatchNormalization(axis=1, name='block3_bn3'))
+        self.baseline.add(MaxPooling2D(pool_size=(2, 2), name='block3_maxpool'))
+        self.baseline.add(Dropout(0.25, name='block3_dropout'))
 
-    def create_model(self, print_model: bool = False):
+        self.baseline.add(Conv2D(256, (3, 3), padding="same", activation='relu', name='block4_conv1'))
+        self.baseline.add(BatchNormalization(axis=1, name='block4_bn1'))
+        self.baseline.add(Conv2D(256, (3, 3), padding="same", activation='relu', name='block4_conv2'))
+        self.baseline.add(BatchNormalization(axis=1, name='block4_bn3'))
+        self.baseline.add(MaxPooling2D(pool_size=(2, 2), name='block4_maxpool'))
+        self.baseline.add(Dropout(0.25, name='block4_dropout'))
+
+    def __create_model(self):
         """
         Función utilizada para crear la estructura de un modelo. Esta, estará formada por la estructura básica devuelta
         por self.baseline juntamente con dos capas FC de 512 neuronas con función de activación relu. La capa de salida
         estará compuesta por una capa de salida FC con tantas neuronas como clases existan en el dataset y con función
         de activación softmax
-        :param print_model: booleano que permite recuperar la estructura del modelo compilado
         """
+
         if self.baseline is None:
-            self.create_baseline()
+            self.__create_baseline()
 
         out = self.baseline.output
         out = GlobalAveragePooling2D()(out)
-        out = Dense(512, activation='relu')(out)
         out = Dropout(0.5)(out)
-        out = Dense(512, activation='relu')(out)
-        out = Dropout(0.5)(out)
-        predictions = Dense(self.n_clases, activation='softmax')(out)
+        predictions = Dense(self.n_clases, activation='softmax', kernel_regularizer=keras.regularizers.L2())(out)
 
         self.model = Model(inputs=self.baseline.input, outputs=predictions)
 
-        self.repr_summary(get_summary=print_model, dirname=self.summary_dir, file_log=self.summary_filename)
-
-    def compile_model(self, opt: keras.optimizers = None):
-        """
-        Función utilizada para compilar un modelo. La función de pérdidas será categorical_crossentropy y las métricas
-        serán accuracy y f1_score.
-        :param opt: optimizador de keras con el que se compilará el modelo. Por defecto será Adam con learning rate de
-                    1e-3
-        """
-
-        if opt is None:
-            self.optimizer = Adam(lr=1e-3)
-        else:
-            self.optimizer = opt
-
-        if self.n_clases > 2:
-            self.model.compile(optimizer=self.optimizer, loss='categorical_crossentropy', metrics=self.metrics)
-        else:
-            self.model.compile(optimizer=self.optimizer, loss='binary_crossentropy', metrics=self.metrics)
-
-    def set_model_callbacks(self, early_stopping: bool = True, csv_logger: bool = True):
-        """
-        Función utilizada para añadir callbacks a la fase de entrenamiento de un modelo
-        :param early_stopping: booleano que permite añadir un callback de early stopping
-        :param csv_logger:  boleano que permite añadir un callback de csvlogger
-        """
-
-        self.callbakcs = []
-
-        if early_stopping:
-            self.callbakcs.append(EarlyStopping(monitor='val_loss', mode='min', patience=20, restore_best_weights=True))
-
-        if csv_logger:
-            self.callbakcs.append(CSVLogger(filename=self.log_filename, separator=';', append=True))
-
-    def set_trainable_layers(self):
+    def __set_trainable_layers(self, unfrozen_layers: str):
         """
         Función utilizada para setear layers del modelo como entrenables. Este metodo será sobreescrito por las clases
         heredadas
         """
-        pass
+        if unfrozen_layers == 'ALL':
+            self.model.trainable = True
+        elif unfrozen_layers == '0FT':
+            for layer in self.model.layers:
+                self.model.get_layer(layer.name).trainable = layer.name in self.baseline.layers
+        elif unfrozen_layers in self.layers_dict.keys():
+            list_keys = sorted(self.layers_dict.keys(), key=lambda x: int(x[0]))
+            for layer_names in [self.layers_dict[d] for d in list_keys[:list_keys.index(unfrozen_layers) + 1]]:
+                for layer in layer_names:
+                    self.model.get_layer(name=layer).trainable = True
 
-    def train_pipe(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None,
-                   **model_callbacks):
+    def __start_train(self, train_data: DataFrameIterator, val_data: DataFrameIterator, epochs: int, batch_size: int,
+                      opt: keras.optimizers = None, unfrozen_layers: str = 'ALL'):
         """
         Función que compila el modelo, añade los callbacks definidos por el usuario y entrena el modelo
         :param train_data: dataframe iterator con los datos de train
@@ -164,89 +112,58 @@ class GeneralModel:
         :param epochs: número de épocas con las que realizar el entrenamiento
         :param batch_size: tamaño del batch
         :param opt: algorítmo de optimización de gradiente descendente
-        :param model_callbacks: kwargs compuesto por booleanos que permiten al usuario añadir callbacks al proceso de
-                                entrenamiento
+
         """
 
-        self.compile_model(opt)
+        # Se configura si los layers serán entrenables o no
+        self.model.trainable = False
+        self.__set_trainable_layers(unfrozen_layers=unfrozen_layers)
 
-        self.set_model_callbacks(model_callbacks.get('early_stopping', True), model_callbacks.get('csv_logger', True))
+        # Se compila el modelo
+        self.model.compile(
+            optimizer=opt or Adam(lr=1e-3),
+            loss='categorical_crossentropy' if self.n_clases > 2 else 'binary_crossentropy',
+            metrics=self.metrics
+        )
 
         self.history = self.model.fit(
             train_data,
             epochs=epochs,
             validation_data=val_data,
             verbose=2,
-            callbacks=self.callbakcs,
+            callbacks=list(self.callbakcs.values()),
             steps_per_epoch=train_data.samples // batch_size,
             validation_steps=val_data.samples // batch_size,
         )
 
-    def train_from_scratch_pipe(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None,
-                                **model_callbacks):
+    def register_metric(self, *args: Union[Callable, str]):
+        for arg in args:
+            self.metrics.append(arg)
+
+    def register_callback(self, **kargs: keras.callbacks):
+        self.callbakcs = {**self.callbakcs, **kargs}
+
+    def train_from_scratch(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None):
         """
             Función utilizada para entrenar completamente el modelo.
         """
-        self.model.trainable = True
-        start_exec = time()
-        self.train_pipe(train_data, val_data, epochs, batch_size, opt, **model_callbacks)
-        # se almacenan un conjunto de métricas obtenidas de la fase de entrenamiento.
-        self.repr_summary(file_log=self.summary_filename,
-                          txt_kwargs={
-                              '\n' + '-' * 50 + '\n\tExecution': 'Train from scratch\n' + '-' * 50,
-                              'Batch size': batch_size,
-                              'Optimizador': opt.get_config()['name'],
-                              'Learning Rate': opt.get_config()['learning_rate'],
-                              'Epochs': f'{len(self.history.history["loss"])} of {epochs}',
-                              'Tiempo ejecucion': f'{(time() - start_exec) / 60:.2f} minutos'
-                          })
+        self.__start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='ALL')
 
-    def extract_features_pipe(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None,
-                              **model_callbacks):
+    def extract_features(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None):
         """
         Función utilizada para aplicar un proceso de extract features de modo que se conjela la arquitectura definida en
         self.baseline y se entrenan las últimas capas de la arquitectura
         """
+        self.__start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='0FT')
 
-        self.baseline.trainable = False
-        start_exec = time()
-        self.train_pipe(train_data, val_data, epochs, batch_size, opt, **model_callbacks)
-        # se almacenan un conjunto de métricas obtenidas de la fase de entrenamiento.
-        self.repr_summary(file_log=self.summary_filename,
-                          get_number_params=True,
-                          txt_kwargs={
-                              '\n' + '-' * 50 + '\n\tExecution': 'Extract - Features\n' + '-' * 50,
-                              'Batch size': batch_size,
-                              'Optimizador': opt.get_config()['name'],
-                              'Learning Rate': opt.get_config()['learning_rate'],
-                              'Epochs': f'{len(self.history.history["loss"])} of {epochs}',
-                              'Tiempo ejecucion': f'{(time() - start_exec) / 60:.2f} minutos'
-                           })
-
-    def transfer_learning_pipe(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None,
-                               **model_callbacks):
+    def fine_tunning(self, train_data, val_data, epochs: int, batch_size: int, opt: keras.optimizers = None,
+                     unfrozen_layers: str = '1FT'):
         """
         Función utilizada para aplicar un proceso de transfer learning de modo que se conjelan n - k capas. Las k capas
         entrenables en la arquitectura definida por self.baseline se determinarán a partir del método
         set_trainable_layers
         """
-
-        self.baseline.trainable = False
-        self.set_trainable_layers()
-
-        start_exec = time()
-        self.train_pipe(train_data, val_data, epochs, batch_size, opt, **model_callbacks)
-        # se almacenan un conjunto de métricas obtenidas de la fase de entrenamiento.
-        self.repr_summary(file_log=self.summary_filename,
-                          get_number_params=True,
-                          txt_kwargs={
-                              '\n' + '-' * 50 + '\n\tExecution': 'Transfer Learning\n' + '-' * 50,
-                              'Batch size': batch_size,
-                              'Optimizador': opt.get_config()['name'],
-                              'Learning Rate': opt.get_config()['learning_rate'],
-                              'Epochs': f'{len(self.history.history["loss"])} of {epochs}',
-                              'Tiempo ejecucion': f'{(time() - start_exec) / 60:.2f} minutos'
-                          })
+        self.__start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers=unfrozen_layers)
 
     def save_model(self, dirname: str, model_name: str):
         """
@@ -266,30 +183,28 @@ class GeneralModel:
 class VGG16Model(GeneralModel):
 
     __name__ = 'VGG16'
+    LAYERS_DICT = {
+        '1FT': ['block5_conv1', 'block5_conv2', 'block5_conv3', 'block5_pool'],
+        '2FT': ['block4_conv1', 'block4_conv2', 'block4_conv3', 'block4_pool'],
+        '3FT': ['block3_conv1', 'block3_conv2', 'block3_conv3', 'block3_pool'],
+        '4FT': ['block2_conv1', 'block2_conv2', 'block2_pool']
+    }
 
-    def __init__(self, n_clases: int, log_dir: io, summary_dir: io, test_name: str = '',
-                 get_model_structure: bool = False):
+    def __init__(self, n_clases: int, weights: Union[str, io] = None):
         super().__init__(
-            n_clases=n_clases, preprocess_func=vgg16.preprocess_input, input_shape=(224, 224), test_name=test_name,
-            get_model_structure=get_model_structure, summary_dir=summary_dir, log_dir=log_dir,
-            baseline=vgg16.VGG16(include_top=False, weights='imagenet', input_shape=(224, 224, 3))
+            n_clases=n_clases, preprocess_func=vgg16.preprocess_input, input_shape=(224, 224),
+            baseline=vgg16.VGG16(include_top=False, weights=weights, input_shape=(224, 224, 3))
         )
-
-    def set_trainable_layers(self):
-        for layer in self.baseline.layers:
-            layer.trainable = 'block5' in layer.name
 
 
 class Resnet50Model(GeneralModel):
 
     __name__ = 'ResNet50'
 
-    def __init__(self, n_clases: int, log_dir: io, summary_dir: io, test_name: str = '',
-                 get_model_structure: bool = False):
+    def __init__(self, n_clases: int, weights: Union[str, io] = None):
         super().__init__(
-            n_clases=n_clases, preprocess_func=resnet50.preprocess_input, log_dir=log_dir, test_name=test_name,
-            summary_dir=summary_dir, get_model_structure=get_model_structure, input_shape=(224, 224),
-            baseline=resnet50.ResNet50(include_top=False, weights='imagenet', input_shape=(224, 224, 3))
+            n_clases=n_clases, preprocess_func=resnet50.preprocess_input, input_shape=(224, 224),
+            baseline=resnet50.ResNet50(include_top=False, weights=weights, input_shape=(224, 224, 3))
         )
 
     def set_trainable_layers(self):
@@ -301,12 +216,10 @@ class InceptionV3Model(GeneralModel):
 
     __name__ = 'InceptionV3'
 
-    def __init__(self, n_clases: int, log_dir: io, summary_dir: io, test_name: str = '',
-                 get_model_structure: bool = False):
+    def __init__(self, n_clases: int, weights: Union[str, io] = None):
         super().__init__(
             n_clases=n_clases, preprocess_func=inception_v3.preprocess_input, input_shape=(299, 299),
-            test_name=test_name, get_model_structure=get_model_structure, summary_dir=summary_dir, log_dir=log_dir,
-            baseline=inception_v3.InceptionV3(include_top=False, weights='imagenet', input_shape=(299, 299, 3)))
+            baseline=inception_v3.InceptionV3(include_top=False, weights=weights, input_shape=(299, 299, 3)))
 
     def set_trainable_layers(self):
         self.baseline.get_layer('conv2d_87').trainable = True
@@ -337,12 +250,10 @@ class DenseNetModel(GeneralModel):
 
     __name__ = 'DenseNet'
 
-    def __init__(self, n_clases: int, log_dir: io, summary_dir: io, test_name: str = '',
-                 get_model_structure: bool = False):
+    def __init__(self, n_clases: int, weights: Union[str, io] = None):
         super().__init__(
             n_clases=n_clases, preprocess_func=densenet.preprocess_input, input_shape=(224, 224),
-            test_name=test_name, get_model_structure=get_model_structure, summary_dir=summary_dir, log_dir=log_dir,
-            baseline=densenet.DenseNet121(include_top=False, weights='imagenet', input_shape=(224, 224, 3)))
+            baseline=densenet.DenseNet121(include_top=False, weights=weights, input_shape=(224, 224, 3)))
 
     def set_trainable_layers(self):
         for layer in self.baseline.layers:

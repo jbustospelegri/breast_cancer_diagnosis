@@ -32,16 +32,18 @@ def convert_img(args) -> None:
 
         if os.path.splitext(img_path)[1] == '.dcm':
             convert_dcm_imgs(ori_path=img_path, dest_path=dest_path)
-        else:
+        elif os.path.splitext(img_path)[1] == '.pgm':
             convert_pgm_imgs(ori_path=img_path, dest_path=dest_path)
+        else:
+            raise KeyError(f'Conversion function for {os.path.splitext(img_path)} not implemented')
+
     except AssertionError as err:
-        err = f'Error en la función convert_dcm_imgs.\n{err}'
-        with open(os.path.join(LOGGING_DATA_PATH, f'General Errors.txt'), 'a') as f:
-            f.write(f'{err}')
+        with open(os.path.join(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nAssertion Error in convert_dcm_imgs\n{err}\n{"=" * 100}')
 
     except Exception as err:
-        with open(os.path.join(LOGGING_DATA_PATH, f'conversion_{get_filename(img_path)}.txt'), 'w') as f:
-            f.write(err)
+        with open(os.path.join(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\n{get_filename(img_path)}\n{err}\n{"=" * 100}')
 
 
 def convert_dcm_imgs(ori_path: io, dest_path: io) -> None:

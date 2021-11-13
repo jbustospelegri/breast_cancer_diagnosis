@@ -1,5 +1,6 @@
-import keras
 import pandas as pd
+
+import utils.config as conf
 
 from multiprocessing import Queue
 from typing import Union, io, Callable
@@ -8,13 +9,15 @@ from keras import models
 from keras_preprocessing.image import DataFrameIterator
 from tensorflow import one_hot
 from tensorflow.python.keras.backend import argmax
-from tensorflow.python.keras.optimizer_v1 import Adam
+from tensorflow.python.keras.callbacks import EarlyStopping, CSVLogger, ReduceLROnPlateau, LambdaCallback
+from tensorflow.python.keras.optimizer_v1 import Adam, SGD
 
 from algorithms.cnns import GeneralModel
 from algorithms.metrics import f1_score
 from breast_cancer_dataset.datasets import BreastCancerDataset
 
-from utils.config import BATCH_SIZE, EPOCHS, MODEL_CONSTANTS
+
+from utils.functions import get_path
 
 
 def get_predictions(keras_model: models, data: DataFrameIterator, class_labels: dict, **kwargs) -> pd.DataFrame:
@@ -65,13 +68,12 @@ def get_predictions(keras_model: models, data: DataFrameIterator, class_labels: 
     return dataset
 
 
-def training_pipeline(model: Callable[..., GeneralModel], df: Union[BreastCancerDataset], q: Queue, c: MODEL_CONSTANTS,
-                      name: str) -> None:
+def training_pipe(model: Callable[..., GeneralModel], df: BreastCancerDataset, q: Queue, c: conf.MODEL_CONSTANTS,
+                  weight_init: Union[str, io] = None, frozen_layers: Union[str, int] = None) -> None:
     """
     Función utilizada para generar el pipeline de entrenamiento de cada modelo.
 
     :param q:
-    :type model: GeneralModel
     :param c:
     :param df: objeto dataset con el cual obtener los dataframe iterators de entrenamiento y validacion.
     :param model_name: nombre del modelo para seleccionar qué modelo entrenar
@@ -82,34 +84,59 @@ def training_pipeline(model: Callable[..., GeneralModel], df: Union[BreastCancer
     :param queue: queue para devolver los resultados al proceso principal
 
     """
-
     # Se inicializa cada modelo:
-    cnn = model(n_clases=len(df.class_dict), test_name=name, get_model_structure=True, log_dir=c.model_logs_dirname,
-                summary_dir=c.model_summary_dirname)
+    cnn = model(n_clases=len(df.class_dict), weights=None if weight_init == 'random' else weight_init)
 
     # Se registran las métricas que se desean almacenar:
     cnn.register_metric('AUC', 'Precision', 'Recall', f1_score)
 
+    # Se registran los callbacks del modelo:
+    cnn.register_callback(
+        early_stopping=EarlyStopping(monitor='val_loss', mode='min', patience=20, restore_best_weights=True),
+        log_hyperparams=LambdaCallback(on_train_end=lambda logs: print(logs)),
+        lr_reduce_on_plateau=ReduceLROnPlateau(monitor='val_loss', mode='min', factor=0.1, patience=5)
+    )
+
+    name = cnn.__name__
+
     # Se recuperan los generadores de entrenamiento y validación en función del tamaño de entrada definido para cada
     # red y su función de preprocesado.
     train, val = df.get_dataset_generator(
-        batch_size=BATCH_SIZE, size=cnn.input_shape, preprocessing_function=cnn.preprocess_func,
-        directory=c.model_output_imgs_data_augm_dirname
+        batch_size=conf.BATCH_SIZE, size=cnn.input_shape, preprocessing_function=cnn.preprocess_func,
+        directory=c.MODEL_CONSTANTS.model_db_data_augm_dir
     )
 
-    print('-' * 50 + f'\nEmpieza proceso de transfer learning para {cnn.__name__}')
-    cnn.transfer_learning_pipe(train, val, EPOCHS, BATCH_SIZE, Adam(learning_rate=1e-3))
-    print('-' * 50 + f'\nFinalizado proceso transfer learning.\n' + '-' * 50)
+    if weight_init == 'random':
+        print(f'{"=" * 75}\nEntrenando {name} desde 0 con inicialización de pesos {weight_init}\n{"=" * 75}')
+        cnn.register_callback(log=CSVLogger(
+            filename=get_path(c.model_log_dir, f'{name}_{weight_init}_{frozen_layers}_scratch.csv'), separator=';'))
+        cnn.train_from_scratch(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(lr=conf.WARM_UP_LEARNING_RATE))
+        print(f'{"=" * 75}\nEntrenamiento finalizado.\n{"=" * 75}')
 
-    print('-' * 50 + f'\nEmpieza proceso de fine tunning {cnn.__name__}')
-    cnn.train_from_scratch_pipe(train, val, EPOCHS, BATCH_SIZE, Adam(learning_rate=1e-5))
-    print('-' * 50 + f'\nFinalizado proceso de fine tunning.\n' + '-' * 50)
+    elif weight_init == 'imagenet':
+        print(f'{"=" * 75}\nEntrenando {name} mediante transfer learning con inicialización de pesos de '
+              f'{weight_init})\n{"=" * 75}')
 
-    print('-' * 50 + f'\nAlmacenando  modelo.\n' + '-' * 50)
-    cnn.save_model(dirname=c.model_dirname, model_name=f"{cnn.__name__}.h5")
-    print('-' * 50 + f'\nModelo almacenado correctamente.\n' + '-' * 50)
+        print(f'{"-" * 75}\n\tEmpieza proceso de extract-features (warm up)\n{"-" * 75}')
+        cnn.register_callback(log=CSVLogger(
+            filename=get_path(c.model_log_dir, f'{name}_{weight_init}_{frozen_layers}_ExtractFeatures.csv'),
+            separator=';'))
+        cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, conf.BATCH_SIZE, Adam(lr=conf.WARM_UP_LEARNING_RATE))
+        print(f'{"-" * 75}\n\tEntrenamiento finalizado.\n{"-" * 75}')
 
-    print('-' * 50 + f'\nObteniendo predicciones del modelo {cnn.__name__}.\n' + '-' * 50)
+        print(f'{"-" * 75}\n\tEmpieza proceso de fine-tunning\n{"-" * 75}')
+        cnn.register_callback(log=CSVLogger(
+            filename=get_path(c.model_log_dir, f'{name}_{weight_init}_{frozen_layers}_FineTunning.csv'), separator=';'))
+        cnn.fine_tunning(train, val, conf.EPOCHS, conf.BATCH_SIZE, SGD(lr=conf.LEARNING_RATE), frozen_layers)
+        print(f'{"-" * 75}\n\tEntrenamiento finalizado.\n{"-" * 75}')
+
+        print(f'{"=" * 75}\nProceso de transfer learning finalizado\n{"=" * 75}')
+
+    print(f'{"=" * 75}\nAlmacenando  modelo.\n{"=" * 75}' )
+    cnn.save_model(dirname=conf.MODEL_CONSTANTS.model_store_dir, model_name=f"{name}.h5")
+    print(f'{"=" * 75}\nModelo almacenado correctamente.\n{"=" * 75}')
+
+    print(f'{"=" * 75}\nObteniendo predicciones del modelo {name}.\n{"=" * 75}')
     class_dict_labels = {v: k for k, v in train.class_indices.items()}
 
     # Se generan las predicciones de entrenamiento y validación en formato de dataframe y se devuelven al proceso ppal.
@@ -121,4 +148,4 @@ def training_pipeline(model: Callable[..., GeneralModel], df: Union[BreastCancer
                             add_columns=dict(mode='val'))],
         ignore_index=True
     ))
-    print('-' * 50 + f'\nPredicciones finalizadas.\n' + '-' * 50)
+    print(f'\n{"=" * 75}Predicciones finalizadas.\n{"=" * 75}')
