@@ -2,7 +2,7 @@ from algorithms.models import VGG16Model, Resnet50Model, InceptionV3Model, Dense
 from data_viz.dataset import TestDataset
 
 from utils.config import PREDICTIONS_PATH, MODEL_SAVE_DATA_PATH, TEST_DATA_PATH, CLASS_LABELS
-from utils.functions import f1_score, get_predictions
+from utils.functions import f1_score, get_predictions, get_path
 
 from keras.models import load_model
 
@@ -18,8 +18,7 @@ if __name__ == '__main__':
     # Constantes del entrenamiento
     predictions = {}
     filename_predictions = f'test_{stored_models_test_name}.csv'
-    ensamble_model_filepath = os.path.join(MODEL_SAVE_DATA_PATH,
-                                           f'GradientBoostingClassifier_{stored_models_test_name}.sav')
+    ensamble_model_filepath = get_path(MODEL_SAVE_DATA_PATH, f'GradientBoostingClassifier_{stored_models_test_name}.sav')
     models = [
         VGG16Model(n_clases=6, name='VGG16', test_name=stored_models_test_name, get_model_structure=False),
         Resnet50Model(n_clases=6, name='ResNet50', test_name=stored_models_test_name, get_model_structure=False),

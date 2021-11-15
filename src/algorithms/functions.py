@@ -1,7 +1,5 @@
 import pandas as pd
 
-import utils.config as conf
-
 from multiprocessing import Queue
 from typing import Union, io, Callable
 
@@ -9,15 +7,16 @@ from keras import models
 from keras_preprocessing.image import DataFrameIterator
 from tensorflow import one_hot
 from tensorflow.python.keras.backend import argmax
-from tensorflow.python.keras.callbacks import EarlyStopping, CSVLogger, ReduceLROnPlateau, LambdaCallback
-from tensorflow.python.keras.optimizer_v1 import Adam, SGD
+from tensorflow.python.keras.callbacks import EarlyStopping, CSVLogger, ReduceLROnPlateau
+from tensorflow.keras.optimizers import Adam, SGD
 
 from algorithms.cnns import GeneralModel
 from algorithms.metrics import f1_score
 from breast_cancer_dataset.datasets import BreastCancerDataset
 
+import utils.config as conf
 
-from utils.functions import get_path
+from utils.functions import get_path, bulk_data
 
 
 def get_predictions(keras_model: models, data: DataFrameIterator, class_labels: dict, **kwargs) -> pd.DataFrame:
@@ -68,7 +67,7 @@ def get_predictions(keras_model: models, data: DataFrameIterator, class_labels: 
     return dataset
 
 
-def training_pipe(model: Callable[..., GeneralModel], df: BreastCancerDataset, q: Queue, c: conf.MODEL_CONSTANTS,
+def training_pipe(model: Callable[..., GeneralModel], df: BreastCancerDataset, q: Queue, c: conf.MODEL_FILES,
                   weight_init: Union[str, io] = None, frozen_layers: Union[str, int] = None) -> None:
     """
     Función utilizada para generar el pipeline de entrenamiento de cada modelo.
@@ -93,7 +92,6 @@ def training_pipe(model: Callable[..., GeneralModel], df: BreastCancerDataset, q
     # Se registran los callbacks del modelo:
     cnn.register_callback(
         early_stopping=EarlyStopping(monitor='val_loss', mode='min', patience=20, restore_best_weights=True),
-        log_hyperparams=LambdaCallback(on_train_end=lambda logs: print(logs)),
         lr_reduce_on_plateau=ReduceLROnPlateau(monitor='val_loss', mode='min', factor=0.1, patience=5)
     )
 
@@ -103,37 +101,43 @@ def training_pipe(model: Callable[..., GeneralModel], df: BreastCancerDataset, q
     # red y su función de preprocesado.
     train, val = df.get_dataset_generator(
         batch_size=conf.BATCH_SIZE, size=cnn.input_shape, preprocessing_function=cnn.preprocess_func,
-        directory=c.MODEL_CONSTANTS.model_db_data_augm_dir
+        directory=c.model_viz_data_augm_dir
     )
 
-    if weight_init == 'random':
+    if frozen_layers == 'ALL':
         print(f'{"=" * 75}\nEntrenando {name} desde 0 con inicialización de pesos {weight_init}\n{"=" * 75}')
         cnn.register_callback(log=CSVLogger(
             filename=get_path(c.model_log_dir, f'{name}_{weight_init}_{frozen_layers}_scratch.csv'), separator=';'))
-        cnn.train_from_scratch(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(lr=conf.WARM_UP_LEARNING_RATE))
+        t = cnn.train_from_scratch(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(lr=conf.WARM_UP_LEARNING_RATE))
+        bulk_data(file=c.model_summary_train_csv, cnn=name, process='Scratch', FT=frozen_layers,
+                  weights=weight_init, time=t, trainable_layers=cnn.get_trainable_layers())
         print(f'{"=" * 75}\nEntrenamiento finalizado.\n{"=" * 75}')
 
-    elif weight_init == 'imagenet':
+    else:
         print(f'{"=" * 75}\nEntrenando {name} mediante transfer learning con inicialización de pesos de '
-              f'{weight_init})\n{"=" * 75}')
+              f'{weight_init}\n{"=" * 75}')
 
         print(f'{"-" * 75}\n\tEmpieza proceso de extract-features (warm up)\n{"-" * 75}')
         cnn.register_callback(log=CSVLogger(
             filename=get_path(c.model_log_dir, f'{name}_{weight_init}_{frozen_layers}_ExtractFeatures.csv'),
             separator=';'))
-        cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, conf.BATCH_SIZE, Adam(lr=conf.WARM_UP_LEARNING_RATE))
+        t = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, conf.BATCH_SIZE, Adam(lr=conf.WARM_UP_LEARNING_RATE))
+        bulk_data(file=c.model_summary_train_csv, cnn=name, process='ExtractFeatures', FT=frozen_layers,
+                  weights=weight_init, time=t, trainable_layers=cnn.get_trainable_layers())
         print(f'{"-" * 75}\n\tEntrenamiento finalizado.\n{"-" * 75}')
 
         print(f'{"-" * 75}\n\tEmpieza proceso de fine-tunning\n{"-" * 75}')
         cnn.register_callback(log=CSVLogger(
             filename=get_path(c.model_log_dir, f'{name}_{weight_init}_{frozen_layers}_FineTunning.csv'), separator=';'))
-        cnn.fine_tunning(train, val, conf.EPOCHS, conf.BATCH_SIZE, SGD(lr=conf.LEARNING_RATE), frozen_layers)
+        t = cnn.fine_tunning(train, val, conf.EPOCHS, conf.BATCH_SIZE, SGD(lr=conf.LEARNING_RATE), frozen_layers)
+        bulk_data(file=c.model_summary_train_csv, cnn=name, process='FineTunning', FT=frozen_layers,
+                  weights=weight_init, time=t, trainable_layers=cnn.get_trainable_layers())
         print(f'{"-" * 75}\n\tEntrenamiento finalizado.\n{"-" * 75}')
 
         print(f'{"=" * 75}\nProceso de transfer learning finalizado\n{"=" * 75}')
 
     print(f'{"=" * 75}\nAlmacenando  modelo.\n{"=" * 75}' )
-    cnn.save_model(dirname=conf.MODEL_CONSTANTS.model_store_dir, model_name=f"{name}.h5")
+    cnn.save_model(dirname=c.model_store_dir, model_name=f"{name}.h5")
     print(f'{"=" * 75}\nModelo almacenado correctamente.\n{"=" * 75}')
 
     print(f'{"=" * 75}\nObteniendo predicciones del modelo {name}.\n{"=" * 75}')
@@ -143,9 +147,9 @@ def training_pipe(model: Callable[..., GeneralModel], df: BreastCancerDataset, q
     q.put(pd.concat(
         objs=[
             get_predictions(keras_model=cnn, data=train, class_labels=class_dict_labels,
-                            add_columns=dict(mode='train')),
+                            add_columns=dict(mode='train', frozen_layers=frozen_layers, weights=weight_init)),
             get_predictions(keras_model=cnn, data=val, class_labels=class_dict_labels,
-                            add_columns=dict(mode='val'))],
+                            add_columns=dict(mode='val', frozen_layers=frozen_layers, weights=weight_init))],
         ignore_index=True
     ))
-    print(f'\n{"=" * 75}Predicciones finalizadas.\n{"=" * 75}')
+    print(f'{"=" * 75}\nPredicciones finalizadas.\n{"=" * 75}')

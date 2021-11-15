@@ -3,6 +3,10 @@ from pathlib import Path
 from typing import io, Union
 
 import os
+import numpy as np
+import cv2
+import math
+import pandas as pd
 
 
 def get_filename(x: io) -> str:
@@ -26,3 +30,44 @@ def create_dir(path: io):
 
 def search_files(file: io, ext: str) -> iter:
     return glob(os.path.join(file, '**', f'*.{ext}'), recursive=True)
+
+
+def save_img(img: np.ndarray, save_example_dirpath: io, name: str):
+    """
+    Función para almacenar una imagen
+    :param img: imagen a almacenar
+    :param save_example_dirpath:  directorio en el que se almacenará la imagen
+    :param name: nombre con el que se almacenará la imagen
+    """
+    if save_example_dirpath is not None:
+        cv2.imwrite(get_path(save_example_dirpath, f'{name}.png'), img=img)
+
+
+def detect_func_err(func):
+    def _exec(*args, **kwargs):
+        try:
+            result = func(*args, **kwargs)
+            return result
+        except Exception as err:
+            err.args += (func.__name__, )
+            raise
+    return _exec
+
+
+def closest_power2(x):
+    """
+    Return the closest power of 2 by checking whether
+    the second binary number is a 1.
+    """
+    op = math.floor if bin(x)[3] != "1" else math.ceil
+    return 2**(op(math.log(x, 2)))
+
+
+def get_number_of_neurons(previous_shape: list) -> int:
+    num_params = np.prod(list(filter(lambda x: x is not None, previous_shape)))
+    return closest_power2(int(np.sqrt(num_params)) - 1)
+
+
+def bulk_data(file: io, **kwargs) -> None:
+    pd.DataFrame(kwargs, index=[0]).\
+        to_csv(file, sep=';', decimal=',', header=not os.path.isfile(file), mode='a', encoding='utf-8', index=False)

@@ -1,12 +1,10 @@
 from itertools import product
-
-import seaborn as sns
-import matplotlib.pyplot as plt
 from keras_preprocessing.image import array_to_img
-
 from pandas import DataFrame
 from typing import io
 
+import seaborn as sns
+import matplotlib.pyplot as plt
 import numpy as np
 
 

@@ -8,8 +8,8 @@ import cv2
 from typing import io, Union
 from PIL import Image
 
-from utils.config import LOGGING_DATA_PATH
-from utils.functions import get_dirname, get_filename
+from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS
+from utils.functions import get_dirname, get_filename, save_img, get_path, detect_func_err
 
 
 def convert_img(args) -> None:
@@ -29,6 +29,7 @@ def convert_img(args) -> None:
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
         assert os.path.isfile(img_path), f"{img_path} doesn't exists."
         assert os.path.splitext(img_path)[1] in ['.pgm', '.dcm'], f'Conversion only available for: png, jpg'
+        assert not os.path.isfile(dest_path), f'Image converted {dest_path} currently exists'
 
         if os.path.splitext(img_path)[1] == '.dcm':
             convert_dcm_imgs(ori_path=img_path, dest_path=dest_path)
@@ -38,11 +39,11 @@ def convert_img(args) -> None:
             raise KeyError(f'Conversion function for {os.path.splitext(img_path)} not implemented')
 
     except AssertionError as err:
-        with open(os.path.join(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
-            f.write(f'{"=" * 100}\nAssertion Error in convert_dcm_imgs\n{err}\n{"=" * 100}')
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nAssertion Error in convert_img\n{err}\n{"=" * 100}')
 
     except Exception as err:
-        with open(os.path.join(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
             f.write(f'{"=" * 100}\n{get_filename(img_path)}\n{err}\n{"=" * 100}')
 
 
@@ -67,13 +68,12 @@ def convert_dcm_imgs(ori_path: io, dest_path: io) -> None:
         cv2.imwrite(dest_path, img_array)
 
     except AssertionError as err:
-        err = f'Error en la función convert_dcm_imgs.\n{err}'
-        with open(os.path.join(LOGGING_DATA_PATH, f'General Errors.txt'), 'a') as f:
-            f.write(f'{err}')
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nAssertion Error in convert_dcm_imgs\n{err}\n{"=" * 100}')
 
     except Exception as err:
-        with open(os.path.join(LOGGING_DATA_PATH, f'conversion_{get_filename(ori_path)}.txt'), 'w') as f:
-            f.write(err)
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\n{get_filename(ori_path)}\n{err}\n{"=" * 100}')
 
 
 def convert_pgm_imgs(ori_path: io, dest_path: io) -> None:
@@ -91,27 +91,143 @@ def convert_pgm_imgs(ori_path: io, dest_path: io) -> None:
         Image.open(ori_path).save(dest_path, os.path.splitext(dest_path)[1].replace('.', ''))
 
     except AssertionError as err:
-        err = f'Error en la función convert_dcm_imgs.\n{err}'
-        with open(os.path.join(LOGGING_DATA_PATH, f'General Errors.txt'), 'a') as f:
-            f.write(f'{err}')
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nAssertion Error in convert_pgm_imgs\n{err}\n{"=" * 100}')
 
     except Exception as err:
-        with open(os.path.join(LOGGING_DATA_PATH, f'conversion_{get_filename(ori_path)}.txt'), 'w') as f:
-            f.write(err)
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\n{get_filename(ori_path)}\n{err}\n{"=" * 100}')
 
 
+def image_processing(args) -> None:
+    """
+    Función utilizada para realizar el preprocesado de las mamografías. Este preprocesado consiste en:
+        1 - Recortar los bordes de las imagenes.
+        2 - Realziar una normalización min-max para estandarizar las imagenes a 8 bits.
+        3 - Quitar anotaciones realziadas sobre las iamgenes.
+        4 - Relizar un flip horizontal para estandarizar la orientacion de los senos.
+        5 - Mejorar el contraste de las imagenes en blanco y negro  mediante CLAHE.
+        6 - Recortar las imagenes para que queden cuadradas.
+        7 - Normalización min-max para estandarizar el valor de los píxeles entre 0 y 255
+        8 - Resize de las imagenes a un tamaño de 300 x 300
+
+    :param args: listado de argumentos cuya posición debe ser:
+        1 - path de la imagen sin procesar.
+        2 - path de destino de la imagen procesada.
+        3 - extensión con la que se debe de almacenar la imagen
+        4 - directorio en el que se deben de almacenar los ejemplos.
+    """
+
+    try:
+        # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
+        assert len(args) >= 3, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
+
+        conf: str = args[0]
+        img_filepath: io = args[1]
+        dest_dirpath: io = args[2]
+
+        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
+        assert conf in PREPROCESSING_FUNCS.keys(), f'{conf} not valid as a preprocessing function'
+        assert os.path.isfile(img_filepath), f'The image {img_filepath} does not exists.'
+        assert os.path.splitext(dest_dirpath)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
+        assert not os.path.isfile(dest_dirpath), f'Processing file exists: {dest_dirpath}'
+
+        # Se asigna el cuarto argumento en función de su existencia. En caso contrario se asignan valores por
+        # defecto
+        try:
+            save_example_dirname: io = args[3]
+            assert os.path.isdir(save_example_dirname)
+        except AssertionError:
+            Path(save_example_dirname).mkdir(parents=True, exist_ok=True)
+        except (IndexError, TypeError):
+            save_example_dirname = None
+
+        # Se lee la imagen original sin procesar.
+        img = cv2.imread(img_filepath)
+
+        images = {'ORIGINAL': img}
+        for preproces_name, preproces_kwargs in PREPROCESSING_FUNCS[conf].items():
+
+            input_img = images[list(images.keys())[-1]]
+
+            # Se recortan los bordes de las imagenes.
+            if 'CROPPING' in preproces_name.upper():
+                images[preproces_name.upper()] = crop_borders(img=input_img, **preproces_kwargs)
+
+            # Se estandarizan las imagenes con la normalización min_max para reducir el tamaño estas de 16
+            # bits a 8 bits en caso de que sea necesario. El output generado serán imagenes con valores entre 0 y 255
+            elif 'MIN_MAX' in preproces_name.upper():
+                images[preproces_name.upper()] = min_max_normalize(img=input_img, **preproces_kwargs)
+
+            # Se eliminan los artefactos
+            elif 'REMOVE_ARTIFACTS' in preproces_name.upper():
+                images[preproces_name.upper()] = remove_artifacts(img=input_img, **preproces_kwargs)
+
+            # Se realiza el flip de la imagen en caso de ser necesario:
+            elif 'FLIP_IMG' in preproces_name.upper():
+                images[preproces_name.upper()] = flip_breast(img=input_img, **preproces_kwargs)
+
+            # Se aplica la ecualización del contraste
+            elif 'ECUALIZATION' in preproces_name.upper():
+                ecual_imgs = []
+                for ecual_func, ecual_kwargs in PREPROCESSING_FUNCS[conf][preproces_name].items():
+
+                    if 'CLAHE' in ecual_func.upper():
+                        images[ecual_func.upper()] = apply_clahe_transform(img=input_img, **ecual_kwargs)
+                        ecual_imgs.append(images[ecual_func.upper()])
+
+                    elif 'gcn' in ecual_func:
+                        pass
+
+                    else:
+                        KeyError('ECUALIZATION PREPROCESSING FUNC NOT DEFINED')
+
+                if len(PREPROCESSING_FUNCS[conf][preproces_name].keys()) == 2:
+                    images['SYNTHESIZED'] = cv2.merge((cv2.cvtColor(input_img, cv2.COLOR_BGR2GRAY), *ecual_imgs))
+
+            # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
+            elif 'SQUARE_PAD' in preproces_name.upper():
+                images[preproces_name.upper()] = pad_image_into_square(img=input_img)
+
+            # Se aplica el resize de la imagen:
+            elif 'RESIZING' in preproces_name.upper():
+                images[preproces_name.upper()] = resize_img(img=input_img, **preproces_kwargs)
+
+            else:
+                raise KeyError('PREPROCESSING FUNC NOT DEFINED')
+
+        for i, (name, imag) in enumerate(images.items()):
+            save_img(imag, save_example_dirname, f'{i}. {name}')
+
+        # Se almacena la imagen definitiva
+        assert cv2.imwrite(dest_dirpath, img=images[preproces_name.upper()]), 'Error al guardar la imagen'
+
+    except AssertionError as err:
+        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
+
+    except Exception as err:
+        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\n{get_filename(img_filepath)}\n{err}\n{"=" * 100}')
+
+
+@detect_func_err
 def crop_borders(img: np.ndarray, left: float = 0.01, right: float = 0.01, top: float = 0.01, bottom: float = 0.01) \
         -> np.ndarray:
+    try:
+        n_rows, n_cols, _ = img.shape
 
-    n_rows, n_cols, _ = img.shape
+        left_crop, right_crop = int(n_cols * left), int(n_cols * (1 - right))
+        top_crop, bottom_crop = int(n_rows * top), int(n_rows * (1 - bottom))
 
-    left_crop, right_crop = int(n_cols * left), int(n_cols * (1 - right))
-    top_crop, bottom_crop = int(n_rows * top), int(n_rows * (1 - bottom))
+        return img[top_crop:bottom_crop, left_crop:right_crop, :]
+    except Exception as err:
+        err.args = err.args + ('crop borders', )
+        raise
 
-    return img[top_crop:bottom_crop, left_crop:right_crop, :]
 
-
-def min_max_normalize(img: np.ndarray) -> np.ndarray:
+@detect_func_err
+def min_max_normalize(img: np.ndarray, min: int = 0, max: int = 255) -> np.ndarray:
     """
 
     :param img:
@@ -119,9 +235,10 @@ def min_max_normalize(img: np.ndarray) -> np.ndarray:
     """
     # Se normaliza las imagenes para poder realizar la ecualización del histograma. Para ello, se aplica
     # como valor mínimo el 0 y como máximo el valor 255.
-    return cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
+    return cv2.normalize(img, None, min, max, cv2.NORM_MINMAX)
 
 
+@detect_func_err
 def binarize_img(img: np.ndarray, thresh: Union[float, int] = 0.5, maxval: Union[float, int] = 1) -> np.ndarray:
     """
 
@@ -139,6 +256,7 @@ def binarize_img(img: np.ndarray, thresh: Union[float, int] = 0.5, maxval: Union
     return binarised_img
 
 
+@detect_func_err
 def edit_mask(mask: np.ndarray, kernel_size: tuple = (23, 23)) -> np.ndarray:
     """
 
@@ -160,6 +278,7 @@ def edit_mask(mask: np.ndarray, kernel_size: tuple = (23, 23)) -> np.ndarray:
     return edited_mask
 
 
+@detect_func_err
 def get_breast_zone(mask: np.ndarray) -> Union[np.ndarray, tuple]:
 
     """
@@ -189,6 +308,7 @@ def get_breast_zone(mask: np.ndarray) -> Union[np.ndarray, tuple]:
     return breast_zone, (x, y, w, h)
 
 
+@detect_func_err
 def remove_artifacts(img: np.ndarray, **kwargs) -> np.ndarray:
     """
 
@@ -220,6 +340,7 @@ def remove_artifacts(img: np.ndarray, **kwargs) -> np.ndarray:
     return img[y:y+h, x:x+w]
 
 
+@detect_func_err
 def flip_breast(img: np.ndarray, orient: str = 'left') -> np.ndarray:
     """
     Función utilizada para realizar el giro de los senos en caso de ser necesario. Esta funcionalidad pretende
@@ -251,6 +372,7 @@ def flip_breast(img: np.ndarray, orient: str = 'left') -> np.ndarray:
         return img
 
 
+@detect_func_err
 def apply_clahe_transform(img: np.ndarray, clip: int = 1) -> np.ndarray:
     """
     función que aplica una ecualización sobre la intensidad de píxeles de la imagen para mejorar el contraste
@@ -270,6 +392,7 @@ def apply_clahe_transform(img: np.ndarray, clip: int = 1) -> np.ndarray:
     return clahe_img
 
 
+@detect_func_err
 def pad_image_into_square(img: np.ndarray) -> np.ndarray:
     """
 
@@ -285,6 +408,7 @@ def pad_image_into_square(img: np.ndarray) -> np.ndarray:
     return padded_img
 
 
+@detect_func_err
 def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
     """
 

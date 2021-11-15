@@ -11,7 +11,7 @@ from itertools import product
 
 
 from utils.config import SEED
-from utils.functions import create_dir
+from utils.functions import get_path
 
 
 class GradientBoosting:
@@ -111,9 +111,8 @@ class GradientBoosting:
 
         # se almacena el modelo en caso de que el usuario haya definido un nombre de archivo
         if model_dirname:
-            pickle.dump(self.model_gb, open(os.path.join(model_dirname, 'GradientBoosterClassifier.sav'), 'wb'))
+            pickle.dump(self.model_gb, open(get_path(model_dirname, 'GradientBoosterClassifier.sav'), 'wb'))
 
-    @create_dir
     def predict(self, dirname: str, filename: str, data: DataFrameIterator, return_model_predictions: bool = False,
                 **input_models):
         """
@@ -142,6 +141,6 @@ class GradientBoosting:
         # se escribe el log de errores con las predicciones individuales de cada arquitectura de red o únicamente las
         # generadas por gradient boosting
         if return_model_predictions:
-            df.to_csv(os.path.join(dirname, filename), sep=';')
+            df.to_csv(get_path(dirname, filename), sep=';')
         else:
-            df[['label']].to_csv(os.path.join(dirname, filename), sep=';')
+            df[['label']].to_csv(get_path(dirname, filename), sep=';')

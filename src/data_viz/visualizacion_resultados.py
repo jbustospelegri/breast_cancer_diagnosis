@@ -1,5 +1,5 @@
 from data_viz.functions import render_mpl_table
-from utils.functions import create_dir
+from utils.functions import create_dir, get_path
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 
 from sklearn.metrics import recall_score, f1_score, precision_score, accuracy_score
-from glob import glob
 from typing import List
 from collections import defaultdict
 
@@ -35,7 +34,7 @@ class DataVisualizer:
 
         # Se itera sobre los archivos almacenados en el directorio para almacenarlos en un dataframe. Estos archivos
         # se filtrarán mediante el nombre del test asignado durante el entrenamiento.
-        for file in glob(os.path.join(f'{dirname}', f'*{test_name}.csv'), recursive=True):
+        for file in searh_files(f'{dirname}', f'*{test_name}.csv'):
 
             # Se lee el dataframe
             data = pd.read_csv(file, sep=';')
@@ -93,7 +92,6 @@ class DataVisualizer:
 
         return pd.concat(data_list, ignore_index=True)
 
-    @create_dir
     def plot_confusion_matrix(self, dirname: str, out_file: str, input_file: str):
         """
          Función que permite crear una matriz de confusión a partir de las predicciones generadas por el modelo en la
@@ -145,7 +143,7 @@ class DataVisualizer:
             # Se ajustan los subplots
             fig.tight_layout()
             # Se almacena la figura.
-            fig.savefig(os.path.join(dirname, f'{out_file}_{mode}.jpg'))
+            fig.savefig(get_path(dirname, f'{out_file}_{mode}.jpg'))
 
     @staticmethod
     def get_metrics_matrix(input_file: str, dirname: str, out_file: str, class_metrics: bool = False):
@@ -223,7 +221,7 @@ class DataVisualizer:
         metrics.reset_index(inplace=True)
         # se crea la tabla en formato de imagen y se almacena.
         fig, _ = render_mpl_table(metrics)
-        fig.savefig(os.path.join(dirname, f'{out_file}.jpg'))
+        fig.savefig(get_path(dirname, f'{out_file}.jpg'))
 
     @staticmethod
     def plot_model_metrics(plot_params: List[dict], dirname: str = None, filename: str = None, plots_per_line: int = 2):
@@ -268,9 +266,8 @@ class DataVisualizer:
 
         # Ajuste de la figura y guardado de la imagen
         figure.tight_layout()
-        figure.savefig(os.path.join(dirname, filename))
+        figure.savefig(get_path(dirname, filename))
 
-    @create_dir
     def get_model_logs_metrics(self, logs_dir: str, test_name: str, dirname: str, out_filename: str,
                                train_phases: list = None):
         """

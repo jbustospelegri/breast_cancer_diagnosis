@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import cv2
@@ -6,7 +7,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pathlib import Path
 from glob import glob
 from collections import defaultdict
 from multiprocessing import Pool, cpu_count
@@ -18,15 +18,13 @@ from tqdm import tqdm
 from data_viz.functions import create_countplot, plot_image
 from utils.config import (
     CBIS_DDSM_DB_PATH, CBIS_DDSM_CALC_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TRAIN, CBIS_DDSM_MASS_CASE_DESC_TEST,
-    CBIS_DDSM_MASS_CASE_DESC_TRAIN, CBIS_DDSM_CONVERTED_DATA_PATH, MIAS_DB_PATH, MIAS_CASE_DESC,
-    MIAS_CONVERTED_DATA_PATH, INBREAST_DB_PATH, INBREAST_CASE_DESC, INBREAST_CONVERTED_DATA_PATH, MODEL_CONSTANTS,
-    SEED, LOGGING_DATA_PATH, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCES_CONSTANTS, PREPROCESSING_FUNCS
+    CBIS_DDSM_MASS_CASE_DESC_TRAIN, CBIS_DDSM_CONVERTED_DATA_PATH, CBIS_DDSM_PREPROCESSED_DATA_PATH,
+    MIAS_DB_PATH, MIAS_CASE_DESC, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH,
+    INBREAST_DB_PATH, INBREAST_CASE_DESC, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH,
+    MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS
 )
 from utils.functions import get_filename, get_dirname, get_path, search_files
-from utils.image_processing import (
-    convert_img, crop_borders, min_max_normalize, remove_artifacts, flip_breast, apply_clahe_transform,
-    pad_image_into_square, resize_img, convert_pgm_imgs
-)
+from utils.image_processing import convert_img, image_processing
 
 INFO_COLS = [
     'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
@@ -41,8 +39,8 @@ class BreastCancerDataset:
         self.df = self.__get_data_from_databases(preprocesing_conf)
         self.class_dict = {x: l for x, l in enumerate(self.df.IMG_LABEL.unique())}
         self.__split_dataset(train_prop=TRAIN_DATA_PROP, stratify=True)
-        self.__get_eda_from_df(dir=MODEL_CONSTANTS.model_db_eda_dir)
-        self.__data_desc_to_excel(self.df)
+        self.__get_eda_from_df(dir=MODEL_FILES.model_viz_eda_dir)
+        self.__bulk_data_desc_to_files(df=self.df, conf=preprocesing_conf)
 
     def get_dataset_generator(self, batch_size: int, size: tuple = (224, 224), directory: io = None,
                               preprocessing_function: Callable = None):
@@ -112,7 +110,7 @@ class BreastCancerDataset:
 
         return train_df_iter, val_df_iter
 
-    def __get_data_from_databases(self, preprocesing_conf: dict) -> pd.DataFrame:
+    def __get_data_from_databases(self, preprocessing_conf: str) -> pd.DataFrame:
 
         l = []
         for database in self.databases:
@@ -120,11 +118,11 @@ class BreastCancerDataset:
             # Se inicializa la base de datos
             db = database()
 
-            # Se realiza la conversión de formato dicom a png.
-            db.convert_images_format()
-
-            # Se realiza el preprocesado de las fotografías.
-            db.preproces_images(conf=preprocesing_conf, show_example=True)
+            # # Se realiza la conversión de formato dicom a png.
+            # db.convert_images_format()
+            #
+            # # Se realiza el preprocesado de las fotografías.
+            # db.preproces_images(conf=preprocessing_conf, show_example=True)
 
             l.append(db.df_desc)
 
@@ -156,12 +154,16 @@ class BreastCancerDataset:
         self.df.loc[:, 'TRAIN_VAL'] = np.where(self.df.PREPROCESSED_IMG.isin(train_x), 'train', 'val')
 
     @staticmethod
-    def __data_desc_to_excel(df: pd.DataFrame) -> None:
+    def __bulk_data_desc_to_files(df: pd.DataFrame, conf: str) -> None:
         """
         Función escribe el feedback del dataset en la carpeta de destino de la conversión.
         """
-        print(f'{"-" * 75}\n\tBulking data to {MODEL_CONSTANTS.model_db_desc_csv}\n{"-" * 75}')
-        df.to_excel(MODEL_CONSTANTS.model_db_desc_csv, index=False)
+        print(f'{"-" * 75}\n\tBulking data to {MODEL_FILES.model_db_desc_csv}\n{"-" * 75}')
+        df.to_excel(MODEL_FILES.model_db_desc_csv, index=False)
+
+        print(f'\tBulking preprocessing functions to {MODEL_FILES.model_db_processing_info_file}\n{"-" * 75}')
+        with open(MODEL_FILES.model_db_processing_info_file, 'w') as out:
+            json.dump(PREPROCESSING_FUNCS[conf], out, indent=4)
 
     @staticmethod
     def __get_data_augmentation_examples(out_filepath: io, example_imag: io) -> None:
@@ -234,7 +236,7 @@ class DatasetCBISDDSM:
             ori_extension: str = 'dcm',
             dest_extension: str = 'png',
             converted_dir: io = CBIS_DDSM_CONVERTED_DATA_PATH,
-            procesed_dir: io = PREPROCES_CONSTANTS.cbis_ddsm_processed_data_path,
+            procesed_dir: io = CBIS_DDSM_PREPROCESSED_DATA_PATH,
             database_info_file_paths: List[io] = None
     ):
 
@@ -330,14 +332,14 @@ class DatasetCBISDDSM:
 
         # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
         df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
-            lambda x: os.path.join(
+            lambda x: get_path(
                 self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID.split("/")[0]}.{self.dest_extension}'
             ), axis=1
         )
 
         # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
         df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
-            lambda x: os.path.join(
+            lambda x: get_path(
                 self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID.split("/")[0]}.{self.dest_extension}'
             ), axis=1
         )
@@ -359,14 +361,11 @@ class DatasetCBISDDSM:
 
         # Se crea un pool de multihilos para realizar la tarea de conversión de forma paralelizada.
         with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(
-                pool.imap(convert_img, arg_iter), total=len(arg_iter), desc='conversion dcm to png'
-            )
+            results = tqdm(pool.imap(convert_img, arg_iter), total=len(arg_iter), desc='conversion dcm to png')
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
-        converted_imgs = pd.DataFrame(data=search_files(file=self.conversion_dir, ext=self.dest_extension),
-                                      columns=[f'{self.dest_extension}_path'])
+        converted_imgs = list(search_files(file=self.conversion_dir, ext=self.dest_extension))
         print(f"\tConverted {len(converted_imgs)} images to {self.dest_extension} format.\n{'-' * 75}")
 
     def preproces_images(self, conf: str, show_example: bool = False) -> None:
@@ -381,7 +380,7 @@ class DatasetCBISDDSM:
         if show_example:
             photos = random.sample(full_img_df.index.tolist(), 5)
             full_img_df.loc[photos, 'example_dir'] = full_img_df.loc[photos, :].apply(
-                lambda x: get_path(MODEL_CONSTANTS.model_db_procesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG)),
+                lambda x: get_path(MODEL_FILES.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG)),
                 axis=1
             )
 
@@ -391,135 +390,12 @@ class DatasetCBISDDSM:
         args = [(conf, row.CONVERTED_IMG, row.PREPROCESSED_IMG, row.example_dir) for _, row in full_img_df.iterrows()]
 
         with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(
-                pool.imap(self.image_processing, args), total=len(args), desc='preprocessing full images'
-            )
+            results = tqdm(pool.imap(image_processing, args), total=len(args), desc='preprocessing full images')
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
         proc_imgs = list(search_files(file=self.procesed_dir, ext=self.dest_extension))
         print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
-
-    @staticmethod
-    def image_processing(args) -> None:
-        """
-        Función utilizada para realizar el preprocesado de las mamografías. Este preprocesado consiste en:
-            1 - Recortar los bordes de las imagenes.
-            2 - Realziar una normalización min-max para estandarizar las imagenes a 8 bits.
-            3 - Quitar anotaciones realziadas sobre las iamgenes.
-            4 - Relizar un flip horizontal para estandarizar la orientacion de los senos.
-            5 - Mejorar el contraste de las imagenes en blanco y negro  mediante CLAHE.
-            6 - Recortar las imagenes para que queden cuadradas.
-            7 - Normalización min-max para estandarizar el valor de los píxeles entre 0 y 255
-            8 - Resize de las imagenes a un tamaño de 300 x 300
-
-        :param args: listado de argumentos cuya posición debe ser:
-            1 - path de la imagen sin procesar.
-            2 - path de destino de la imagen procesada.
-            3 - extensión con la que se debe de almacenar la imagen
-            4 - directorio en el que se deben de almacenar los ejemplos.
-        """
-
-        try:
-            # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
-            assert len(args) >= 3, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
-
-            conf: str = args[0]
-            img_filepath: io = args[1]
-            dest_dirpath: io = args[2]
-
-            # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
-            assert conf in PREPROCESSING_FUNCS.keys(), f'{conf} not valid as a preprocessing function'
-            assert os.path.isfile(img_filepath), f'The image {img_filepath} does not exists.'
-            assert os.path.splitext(dest_dirpath)[2] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
-            assert os.path.isfile(dest_dirpath), f'Processing file exists: {dest_dirpath}'
-
-            # Se asigna el cuarto argumento en función de su existencia. En caso contrario se asignan valores por
-            # defecto
-            try:
-                save_example_dirname: io = args[3]
-                assert os.path.isdir(save_example_dirname)
-            except AssertionError:
-                Path(save_example_dirname).mkdir(parents=True, exist_ok=True)
-            except (IndexError, TypeError):
-                save_example_dirname = None
-
-            def save_img(img: np.ndarray, save_example_dirpath: io, name: str):
-                """
-                Función para almacenar una imagen
-                :param img: imagen a almacenar
-                :param save_example_dirpath:  directorio en el que se almacenará la imagen
-                :param name: nombre con el que se almacenará la imagen
-                """
-                if save_example_dirpath is not None:
-                    cv2.imwrite(get_path(save_example_dirpath, f'{name}.png'), img=img)
-
-
-            # Se lee la imagen original sin procesar.
-            img = cv2.imread(img_filepath)
-
-            images = {'Original': img}
-            for preproces_name, preproces_kwargs in PREPROCESSING_FUNCS[conf].items():
-
-                input_img = images[list(images.keys())[-1]]
-
-                # Se recortan los bordes de las imagenes.
-                if 'CROPPING' in preproces_name:
-                    images[preproces_name] = crop_borders(img=input_img, **preproces_kwargs)
-
-                # Se estandarizan las imagenes con la normalización min_max para reducir el tamaño estas de 16
-                # bits a 8 bits en caso de que sea necesario. El output generado serán imagenes con valores entre 0 y 255
-                elif 'MIN_MAX' in preproces_name:
-                    images[preproces_name] = min_max_normalize(img=input_img)
-
-                # Se eliminan los artefactos
-                elif 'REMOVE_ARTIFACTS' in preproces_name:
-                    images[preproces_name] = remove_artifacts(img=input_img, **preproces_kwargs)
-
-                # Se realiza el flip de la imagen en caso de ser necesario:
-                elif 'FLIP_IMG' in preproces_name:
-                    images[preproces_name] = flip_breast(img=input_img, **preproces_kwargs)
-
-                # Se aplica la ecualización del contraste
-                elif 'ECUALIZATION' in preproces_name:
-                    for ecual_func, ecual_kwargs in PREPROCESSING_FUNCS[conf][preproces_name].items():
-
-                        if 'clahe' in ecual_func:
-                            images[ecual_func] = apply_clahe_transform(img=input_img, **ecual_kwargs)
-
-                        elif 'gcn' in ecual_func:
-                            pass
-
-                        else:
-                            KeyError('ECUALIZATION PREPROCESSING FUNC NOT DEFINED')
-
-                    if len(PREPROCESSING_FUNCS[conf][preproces_name].keys()) == 2:
-                        images['SYNTHESIZED'] = cv2.merge((cv2.cvtColor(input_img, cv2.COLOR_BGR2GRAY), ))
-
-                # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
-                elif 'SQUARE_PAD' in preproces_name:
-                    images[preproces_name] = pad_image_into_square(img=input_img)
-
-                # Se aplica el resize de la imagen:
-                elif 'RESIZING' in preproces_name:
-                    images[preproces_name] = resize_img(img=input_img, **preproces_kwargs)
-
-                else:
-                    raise KeyError('PREPROCESSING FUNC NOT DEFINED')
-
-            for i, name, imag in enumerate(images.keys()):
-                save_img(imag, save_example_dirname, f'{i}. {name}')
-
-            # Se almacena la imagen definitiva
-            assert cv2.imwrite(dest_dirpath, img=images[preproces_name]), 'Error al guardar la imagen'
-
-        except AssertionError as err:
-            with open(os.path.join(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
-                f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
-
-        except Exception as err:
-            with open(os.path.join(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
-                f.write(f'{"=" * 100}\n{get_filename(img_filepath)}\n{err}\n{"=" * 100}')
 
 
 class DatasetINBreast(DatasetCBISDDSM):
@@ -528,7 +404,7 @@ class DatasetINBreast(DatasetCBISDDSM):
         super().__init__(
             ori_dir=INBREAST_DB_PATH,
             converted_dir=INBREAST_CONVERTED_DATA_PATH,
-            procesed_dir=PREPROCES_CONSTANTS.inbreast_processed_data_path,
+            procesed_dir=INBREAST_PREPROCESSED_DATA_PATH,
             database_info_file_paths=[INBREAST_CASE_DESC]
         )
 
@@ -606,13 +482,13 @@ class DatasetINBreast(DatasetCBISDDSM):
 
         # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
         df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
-            lambda x: os.path.join(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE,
-                                   f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
+            lambda x: get_path(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE,
+                               f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
         )
 
         # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
         df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
-            lambda x: os.path.join(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE,
+            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE,
                                    f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
         )
 
@@ -621,14 +497,12 @@ class DatasetINBreast(DatasetCBISDDSM):
 
 class DatasetMIAS(DatasetCBISDDSM):
 
-    convert_func = convert_pgm_imgs
-
     def __init__(self):
         super().__init__(
             ori_dir=MIAS_DB_PATH,
-            converted_dir=MIAS_CONVERTED_DATA_PATH,
             ori_extension='pgm',
-            procesed_dir=PREPROCES_CONSTANTS.mias_processed_data_path,
+            converted_dir=MIAS_CONVERTED_DATA_PATH,
+            procesed_dir=MIAS_PREPROCESSED_DATA_PATH,
             database_info_file_paths=[MIAS_CASE_DESC]
         )
 
@@ -686,10 +560,7 @@ class DatasetMIAS(DatasetCBISDDSM):
 
         # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
         # de origen (por defecto INBREAST_DB_PATH)
-        db_files_df = pd.DataFrame(
-            data=glob(os.path.join(self.ori_dir, '**', f'*.{self.ori_extension}'), recursive=True),
-            columns=['RAW_IMG']
-        )
+        db_files_df = pd.DataFrame(data=search_files(self.ori_dir, self.ori_extension), columns=['RAW_IMG'])
 
         # Se procesa la columna ori path para poder lincar cada path con los datos del excel. Para ello, se separa
         # los nombres de cara archivo a partir del símbolo _ y se obtiene la primera posición.
@@ -702,13 +573,13 @@ class DatasetMIAS(DatasetCBISDDSM):
 
         # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
         df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
-            lambda x: os.path.join(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE,
-                                   f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
+            lambda x: get_path(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE,
+                               f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
         )
 
         # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
         df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
-            lambda x: os.path.join(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE,
+            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE,
                                    f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
         )
 
@@ -738,7 +609,7 @@ class TestDataset:
         print('-' * 50 + f'\nLeyendo directorio de imagenes {self.path} para generar datataset')
 
         # Se itera sobre el directorio de imagenes obteniendo cada imagen
-        for file in glob(os.path.join(self.path, f'*{self.image_format}'), recursive=True):
+        for file in search_files(self.path, f'*{self.image_format}'):
 
             elements.append([file, np.nan, 'Test'])
 

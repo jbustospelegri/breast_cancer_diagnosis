@@ -1,24 +1,22 @@
 from itertools import repeat
+from multiprocessing import Queue, Process
 
 from breast_cancer_dataset.datasets import BreastCancerDataset
 from data_viz.visualizacion_resultados import DataVisualizer
 from algorithms.model_ensambling import GradientBoosting
-from algorithms.cnns import InceptionV3Model, Resnet50Model, DenseNetModel, VGG16Model
-
-from utils.config import MODEL_CONSTANTS, PREPROCESSING_CONFIG
-
-from multiprocessing import Queue, Process
-
+from algorithms.cnns import InceptionV3Model, Resnet50Model, DenseNetModel, VGG16Model, GeneralModel
 from algorithms.functions import training_pipe
 
+from utils.config import MODEL_FILES, PREPROCESSING_CONFIG
+from utils.functions import bulk_data, get_path
 
 if __name__ == '__main__':
 
     # Parámetros de entrada que serán sustituidos por las variables del usuario
-    experiment = 'complete_imag'
+    experiment = 'COMPLETE_IMAG'
 
     # Se setean las carpetas para almacenar las variables del modelo en función del experimento.
-    model_config = MODEL_CONSTANTS
+    model_config = MODEL_FILES
     model_config.set_model_name(name=experiment)
 
     # Se inicializa el procesado de las imagenes para los distintos datasets.
@@ -28,7 +26,6 @@ if __name__ == '__main__':
     # un subproceso daemonico para evitar la sobrecarga de memoria.
     for weight_init, frozen_layers in zip(['random', *repeat('imagenet', 6)], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
                                                                                'ALL']):
-
         # Diccionario en el que se almacenarán las predicciones de cada modelo. Estas serán utilizadas para aplicar el
         # algorítmo de gradient boosting.
         model_predictions = {}
@@ -48,11 +45,13 @@ if __name__ == '__main__':
             predictions = q.get()
 
             # Se almacenan los resultados de cada modelo.
-            model_predictions[cnn] = predictions
+            model_predictions[cnn.__name__] = predictions
 
         print(f'{"-" * 75}\nGeneradando combinación secuencial de clasificadores.\n{"-" * 75}')
 
         # hacer un bulking de las predicciones a un csv
+        for net, dataf in model_predictions.items():
+            bulk_data(file=get_path(model_config.model_predictions_dir, f'{net}_predictions.csv'), **dataf.to_dict())
 
         # ensambler = GradientBoosting()
         # df_ensambler = db.df.rename(

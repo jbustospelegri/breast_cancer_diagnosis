@@ -1,3 +1,7 @@
+--------------
+DONE
+-------------
+
 1) Ver como se realiza el finetunning/extract features en un modelo de red:
 	- Extract features:
 	    Se corta una red pre-entrenada en cualquier punto (normalmente se excluyen las capas FC).
@@ -29,8 +33,6 @@
    paper.
    - Ver en callbacks lo del decay para los optimizadores.
 
-4) Aplicar regularización L2 en la función de pérdidas -> Repasar en qué consiste.
-
 5) Crear el pipeline de entrenar el modelo con finetunning y train from scratch con pesos aleatorios.
     - 5.1: Random Initialization: Se crea la arquitectura con los pesos entrenados de forma random y se entrena
                                   todo el modelo (unfreeze de todas las capas).
@@ -43,4 +45,18 @@
                                         early stopping con paciencia de 20. El entreno se realiza durante 90 epocas.
 
 6) Crear un modulo que permita distintos procesados de las imagenes almacenando su configuración:
-    - Aplicar la GCN normalización en las imagenes (este procesado no está aplicado).
+
+7) Log con el callback end_train que permita:
+    - Recoger el tiempo de train
+    - # Parámetros entrenados
+    - # Número de capas unfreeze
+-------
+TODO
+------
+4) Aplicar regularización L2 en la función de pérdidas -> Repasar en qué consiste.
+
+6.1)  Aplicar la GCN normalización en las imagenes (este procesado no está aplicado).
+
+7.1) Plot model de la arquitectura de red
+
+8) Arreglar el model ensambling
