@@ -1,5 +1,6 @@
 from typing import Mapping, io, Union
 
+from algorithms.metrics import f1_score
 from utils.functions import get_path
 
 
@@ -24,13 +25,31 @@ DATA_AUGMENTATION_FUNCS: dict = {
     CONFIGURACION DE EJECUCIONES DE LOS MODELOS
 """
 
-EPOCHS: int = 10#100
-WARM_UP_EPOCHS: int = 5#30
+EPOCHS: int = 5#100
+WARM_UP_EPOCHS: int = 2#30
 LEARNING_RATE: float = 1e-4
 WARM_UP_LEARNING_RATE: float = 1e-3
 
 BATCH_SIZE: int = 16
 SEED: int = 81
+
+METRICS = {
+    'AUC': 'auc',
+    'Precision': 'precision',
+    'Recall': 'recall',
+    'F1 Score': f1_score
+}
+
+"""
+    CONFIGURACION PARA EL GRADIENT BOOSTING
+"""
+N_ESTIMATORS = 20
+MAX_DEPTH = 3
+XGB_CONFIG = 'CONF1'
+XGB_COLS = {
+    'CONF1': [],
+    'CONF2': ['BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE']
+}
 
 """
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
@@ -177,19 +196,30 @@ class ModelConstants:
         self.model_db_processing_info_file: io = get_path(self.model_root_dir, 'preprocess_config.json')
 
         self.model_store_dir: io = get_path(self.model_root_dir, 'STORED_MODELS')
+        self.model_store_cnn_dir: io = get_path(self.model_store_dir, 'CNN')
+        self.model_store_xgb_dir: io = get_path(self.model_store_dir, 'GRADIENT_BOOSTING')
+
         self.model_log_dir: io = get_path(self.model_root_dir, 'TRAIN_LOGS')
         self.model_summary_dir: io = get_path(self.model_root_dir, 'SUMMARY_MODELS')
         self.model_summary_train_csv: io = get_path(self.model_root_dir, 'SUMMARY_MODELS', 'train_summary.csv')
 
         self.model_predictions_dir: io = get_path(self.model_root_dir, 'PREDICTIONS')
+        self.model_predictions_cnn_dir = get_path(self.model_predictions_dir, 'CNN')
+        self.model_predictions_xgb_dir = get_path(self.model_predictions_dir, 'GRADIENT_BOOSTING')
 
         self.model_data_viz_dir: io = get_path(self.model_root_dir, 'DATA_VIZ')
 
         self.model_viz_preprocesing_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'PREPROCESSING')
         self.model_viz_eda_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'DATASET_EDA')
         self.model_viz_train_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'TRAIN_PHASE')
-        self.model_viz_results_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'RESULTS')
         self.model_viz_data_augm_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'DATA_AUGMENTATION_EXAMPLES')
+
+        self.model_viz_results_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'RESULTS')
+        self.model_viz_results_model_history_dir: io = get_path(self.model_viz_results_dir, 'MODEL_HISTORY')
+        self.model_viz_results_confusion_matrix_dir: io = get_path(self.model_viz_results_dir, 'CONFUSION_MATRIX')
+        self.model_viz_results_accuracy_dir: io = get_path(self.model_viz_results_dir, 'ACCURACY')
+        self.model_viz_results_metrics_dir: io = get_path(self.model_viz_results_dir, 'METRICS')
+
 
 
 MODEL_FILES = ModelConstants()

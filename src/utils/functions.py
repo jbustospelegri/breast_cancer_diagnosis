@@ -28,8 +28,12 @@ def create_dir(path: io):
     Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def search_files(file: io, ext: str) -> iter:
-    return glob(os.path.join(file, '**', f'*.{ext}'), recursive=True)
+def search_files(file: io, ext: str, in_subdirs: bool = True) -> iter:
+    if in_subdirs:
+        return glob(os.path.join(file, '**', f'*.{ext}'), recursive=True)
+    else:
+        return glob(os.path.join(file, f'*.{ext}'), recursive=True)
+
 
 
 def save_img(img: np.ndarray, save_example_dirpath: io, name: str):
@@ -68,6 +72,7 @@ def get_number_of_neurons(previous_shape: list) -> int:
     return closest_power2(int(np.sqrt(num_params)) - 1)
 
 
-def bulk_data(file: io, **kwargs) -> None:
-    pd.DataFrame(kwargs, index=[0]).\
-        to_csv(file, sep=';', decimal=',', header=not os.path.isfile(file), mode='a', encoding='utf-8', index=False)
+def bulk_data(file: io, mode: str = 'w', **kwargs) -> None:
+    pd.DataFrame.from_dict(kwargs, orient='index').T.\
+        to_csv(file, sep=';', decimal=',', header=not os.path.isfile(file) or mode == 'w', mode=mode, encoding='utf-8',
+               index=False)

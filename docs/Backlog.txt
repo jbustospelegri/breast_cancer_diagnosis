@@ -43,20 +43,40 @@ DONE
                         2) FineTunning: Se entrenan las capas convolucionales que aparecen como unfreeze con un
                                         optimizador SGD y un learning rate de 10-4 con weight decay de 10 y
                                         early stopping con paciencia de 20. El entreno se realiza durante 90 epocas.
-
-6) Crear un modulo que permita distintos procesados de las imagenes almacenando su configuración:
+6) Preprocesado de imagenes
+      6.1 - Crear un modulo que permita distintos procesados de las imagenes almacenando su configuración:
 
 7) Log con el callback end_train que permita:
     - Recoger el tiempo de train
     - # Parámetros entrenados
     - # Número de capas unfreeze
+
+8) Arreglar el model ensambling
+
+9) Visualizaciones:
+    9.1 - Gráfico de métricas registradas durante el entrenamiento (AUC, precision, loss, recall, accuracy, f1)
+          Los gráficos muestran las distintas redes y las fases de train/val.
+          Se crea un fichero para cada inicializacion de pesos/finnetunning-extractfeatures-all/capas congeladas.
+    9.2 - Gráfico con el tiempo de entrenamiento de los modelos.
+          Barplot con hue=frozen_layers, x=Redes, y=suma tiempo entrenamiento (FT+EF vs Scratch), col=weights
+    9.5 - Gráfico para datos de train donde se muestra la matriz de confusión de cada red + gradient boosting.
+          Se crea un gráfico para cada combinación de weighs, layers
+    9.6 - Idem 9.5 con datos de validación.
+    9.7 - Models métrics para cada combinaciónd e weiths, layers.
+    9.3 - Gráfico de barras que muestra la accuracy de imagenet vs random utilizando el train all.
+          Barplot con hue=weights, x=redes,y=accuracy, data=data[layers == 'all']
+    9.4 - Gráfico de barras según accuracy en imagenet en función de la red
+          Barplot con hue=layers, x=redes, y=accuracy, data=data[weighs=='imagenet']
 -------
 TODO
 ------
 4) Aplicar regularización L2 en la función de pérdidas -> Repasar en qué consiste.
 
-6.1)  Aplicar la GCN normalización en las imagenes (este procesado no está aplicado).
+6) Preprocesado de imagenes
+    6.2 -  Aplicar la GCN normalización en las imagenes (este procesado no está aplicado).
 
 7.1) Plot model de la arquitectura de red
 
-8) Arreglar el model ensambling
+
+
+

@@ -19,7 +19,7 @@ class GeneralModel:
     callbakcs = {}
     metrics = ['accuracy']
     history: History = None
-    layers_dict = {
+    LAYERS_DICT = {
         '1FT': ['block4_dropout', 'block4_maxpool', 'block4_bn3', 'block4_conv2', 'block4_bn1', 'block4_conv1'],
         '2FT': ['block3_dropout', 'block3_maxpool', 'block3_bn3', 'block3_conv2', 'block3_bn1', 'block3_conv1'],
         '3FT': ['block2_dropout', 'block2_maxpool', 'block2_bn2', 'block2_conv2', 'block2_bn1', 'block2_conv1'],
@@ -104,13 +104,14 @@ class GeneralModel:
         elif unfrozen_layers == '0FT':
             for layer in self.model.layers:
                 layer.trainable = layer.name not in [l.name for l in self.baseline.layers]
-        elif unfrozen_layers in self.layers_dict.keys():
-            list_keys = sorted(self.layers_dict.keys(), key=lambda x: int(x[0]))
+        elif unfrozen_layers in self.LAYERS_DICT.keys():
+            self.__set_trainable_layers(unfrozen_layers='0FT')
+            list_keys = sorted(self.LAYERS_DICT.keys(), key=lambda x: int(x[0]))
             train_layers = [l for layers in list_keys[:list_keys.index(unfrozen_layers) + 1] for l
-                            in self.layers_dict[layers]]
-            for layer in self.model.layers:
-                layer.trainable = any([l in layer.name for l in train_layers]) \
-                                  or layer.name not in [l.name for l in self.baseline.layers]
+                            in self.LAYERS_DICT[layers]]
+            for layer in train_layers:
+                self.model.get_layer(layer).trainable = True
+
         else:
             raise ValueError(f'Unfrozen layers parametrization for {unfrozen_layers}')
 
@@ -297,7 +298,7 @@ class DenseNetModel(GeneralModel):
     LAYERS_DICT = {
         '1FT': [
             'conv5_block16_0_bn', 'conv5_block16_0_relu', 'conv5_block16_1_conv', 'conv5_block16_1_bn',
-            'conv5_block16_1_relu', 'conv5_block16_2_conv', 'conv5_block16_concat''conv5_block6', 'bn', 'relu'
+            'conv5_block16_1_relu', 'conv5_block16_2_conv', 'conv5_block16_concat', 'bn', 'relu'
         ],
         '2FT': [
             'conv5_block15_0_bn', 'conv5_block15_0_relu', 'conv5_block15_1_conv', 'conv5_block15_1_bn',

@@ -1,7 +1,7 @@
 from itertools import product
 from keras_preprocessing.image import array_to_img
 from pandas import DataFrame
-from typing import io
+from typing import io, List
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -37,39 +37,84 @@ def create_countplot(data: DataFrame, file: io, x: str, hue: str = None, title: 
 
     # Se elimina el label del eje y.
     ax.set(ylabel='')
+    ax.yaxis.grid(True)
+
+    sns.despine(ax=ax, left=True)
 
     # Se almacena la figura
     plt.savefig(file)
 
 
-def render_mpl_table(data, col_width=3.0, row_height=0.625, font_size=14, header_color='#40466e', row_colors=None,
-                     edge_color='w', bbox=None, header_columns=0, ax=None, **kwargs):
+def merge_cells(table: plt.table, cells: List[tuple]):
+    '''
+    Merge N matplotlib.Table cells
+
+    Parameters
+    -----------
+    table: matplotlib.Table
+        the table
+    cells: list[set]
+        list of sets od the table coordinates
+        - example: [(0,1), (0,0), (0,2)]
+
+    Notes
+    ------
+    https://stackoverflow.com/a/53819765/12684122
+    '''
+    cells_array = [np.asarray(c) for c in cells]
+    h = np.array([cells_array[i + 1][0] - cells_array[i][0] for i in range(len(cells_array) - 1)])
+    v = np.array([cells_array[i + 1][1] - cells_array[i][1] for i in range(len(cells_array) - 1)])
+
+    # if it's a horizontal merge, all values for `h` are 0
+    if not np.any(h):
+        # sort by horizontal coord
+        cells = np.array(sorted(list(cells), key=lambda v: v[1]))
+        edges = ['BTL'] + ['BT'] * (len(cells) - 2) + ['BTR']
+    elif not np.any(v):
+        cells = np.array(sorted(list(cells), key=lambda h: h[0]))
+        edges = ['TRL'] + ['RL'] * (len(cells) - 2) + ['BRL']
+    else:
+        raise ValueError("Only horizontal and vertical merges allowed")
+
+    for cell, e in zip(cells, edges):
+        table[cell[0], cell[1]].visible_edges = e
+
+    for cell in cells[1:]:
+        table[cell[0], cell[1]].get_text().set_visible(False)
+
+
+def render_mpl_table(data, font_size=14, merge_pos: List[List[tuple]] = None, header_rows: int = 1):
     """
     Función utilizada para renderizar un dataframe en una tabla de matplotlib. Función recuperada de
     https://stackoverflow.com/questions/19726663/how-to-save-the-pandas-dataframe-series-data-as-a-figure
     """
-    if bbox is None:
-        bbox = [0, 0, 1, 1]
 
-    if row_colors is None:
-        row_colors = ['#f1f1f2', 'w']
+    col_width = 3
+    row_height = 0.625
+    row_colors = ['#f1f1f2', 'w']
 
-    if ax is None:
-        size = (np.array(data.shape[::-1]) + np.array([0, 1])) * np.array([col_width, row_height])
-        fig, ax = plt.subplots(figsize=size)
-        ax.axis('off')
+    size = (np.array(data.shape[::-1]) + np.array([0, 1])) * np.array([col_width, row_height])
+    fig, ax = plt.subplots(figsize=size)
+    ax.axis('off')
+    header_columns = data.columns.nlevels
 
-    mpl_table = ax.table(cellText=data.values, bbox=bbox, colLabels=data.columns, cellLoc='center', **kwargs)
-    mpl_table.auto_set_font_size(False)
-    mpl_table.set_fontsize(font_size)
+    table = ax.table(
+        cellText=np.vstack([*[data.columns.get_level_values(i) for i in range(0, header_columns)], data.values]),
+        bbox=[0, 0, 1, 1], cellLoc='center'
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(font_size)
 
-    for k, cell in mpl_table._cells.items():
-        cell.set_edgecolor(edge_color)
-        if k[0] == 0 or k[1] < header_columns:
-            cell.set_text_props(weight='bold', color='w')
-            cell.set_facecolor(header_color)
+    for k, cell in table._cells.items():
+        if k[0] < header_columns or k[1] < header_rows:
+            cell.set_text_props(weight='bold')
         else:
             cell.set_facecolor(row_colors[k[0] % len(row_colors)])
+
+    if merge_pos is not None:
+        for cells in merge_pos:
+            merge_cells(table, cells)
+
     return ax.get_figure(), ax
 
 

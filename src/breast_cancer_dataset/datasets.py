@@ -118,11 +118,11 @@ class BreastCancerDataset:
             # Se inicializa la base de datos
             db = database()
 
-            # # Se realiza la conversión de formato dicom a png.
-            # db.convert_images_format()
-            #
-            # # Se realiza el preprocesado de las fotografías.
-            # db.preproces_images(conf=preprocessing_conf, show_example=True)
+            # Se realiza la conversión de formato dicom a png.
+            db.convert_images_format()
+
+            # Se realiza el preprocesado de las fotografías.
+            db.preproces_images(conf=preprocessing_conf, show_example=True)
 
             l.append(db.df_desc)
 
@@ -319,6 +319,9 @@ class DatasetCBISDDSM:
         print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1])} images for ambiguous pathologys')
         df.drop(index=df[df.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index, inplace=True)
 
+        print(f'\tExcluding {len(df[df.ID.duplicated()])} samples duplicated pathologys')
+        df.drop(index=df[df.ID.duplicated()].index, inplace=True)
+
         # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
         # de origen (por defecto INBREAST_DB_PATH)
         db_files_df = pd.DataFrame(data=search_files(file=self.ori_dir, ext=self.ori_extension), columns=['RAW_IMG'])
@@ -458,6 +461,9 @@ class DatasetINBreast(DatasetCBISDDSM):
         print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
         df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
 
+        print(f'\tExcluding {len(df[df.ID.duplicated()])} samples duplicated pathologys')
+        df.drop(index=df[df.ID.duplicated()].index, inplace=True)
+
         # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
         # una zona benigna y otra maligna).
         duplicated_tags = df.groupby(['ID']).IMG_LABEL.nunique()
@@ -557,6 +563,9 @@ class DatasetMIAS(DatasetCBISDDSM):
         duplicated_tags = df.groupby(['ID']).IMG_LABEL.nunique()
         print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1])} images for ambiguous pathologys')
         df.drop(index=df[df.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index, inplace=True)
+
+        print(f'\tExcluding {len(df[df.ID.duplicated()])} samples duplicated pathologys')
+        df.drop(index=df[df.ID.duplicated()].index, inplace=True)
 
         # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
         # de origen (por defecto INBREAST_DB_PATH)
