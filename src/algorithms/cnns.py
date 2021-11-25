@@ -1,13 +1,18 @@
+import numpy as np
+
 from typing import Callable, io, Union
-from keras import Model, Sequential, optimizers, callbacks
 from time import process_time
 
-from keras.callbacks import History
-from keras.optimizers import Adam
-from keras.regularizers import L2
-from keras.applications import resnet50, densenet, vgg16, inception_v3
-from keras.layers import Conv2D, BatchNormalization, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D
+from tensorflow.keras import Model, Sequential, optimizers, callbacks
+from tensorflow.keras.backend import count_params
+from tensorflow.keras.callbacks import History
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.regularizers import L2
+from tensorflow.keras.applications import resnet50, densenet, vgg16, inception_v3
 from tensorflow.python.keras.preprocessing.image import DataFrameIterator
+from tensorflow.keras.layers import (
+    Conv2D, BatchNormalization, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input
+)
 
 from utils.functions import get_path, get_number_of_neurons
 
@@ -19,57 +24,57 @@ class GeneralModel:
     callbakcs = {}
     metrics = ['accuracy']
     history: History = None
+    shape = (255, 255, 3)
     LAYERS_DICT = {
+        '0FT': [],
         '1FT': ['block4_dropout', 'block4_maxpool', 'block4_bn3', 'block4_conv2', 'block4_bn1', 'block4_conv1'],
         '2FT': ['block3_dropout', 'block3_maxpool', 'block3_bn3', 'block3_conv2', 'block3_bn1', 'block3_conv1'],
         '3FT': ['block2_dropout', 'block2_maxpool', 'block2_bn2', 'block2_conv2', 'block2_bn1', 'block2_conv1'],
         '4FT': ['block1_dropout', 'block1_maxpool', 'block1_bn1', 'block1_conv1']
     }
 
-    def __init__(self, n_clases: int, baseline: Model = None, input_shape: tuple = (250, 250), weights: str = None,
-                 preprocess_func: Callable = None):
-        self.baseline = baseline
-        self.n_clases = n_clases
-        self.input_shape = input_shape
+    def __init__(self, n: int, baseline: Model = None, preprocess_func: Callable = None):
+        self.baseline = baseline if baseline is not None else self.create_baseline()
+        self.n = n
         self.preprocess_func = preprocess_func
-        self.weights = weights
-        self.__create_model()
+        self.create_model()
 
-    def __create_baseline(self):
+    def create_baseline(self):
         """
         Función que permite crear una estructura básica compuesta por un conjunto de capas convolucionales. Este metodo
         será sobreescrito por las clases heredadas.
         """
-        self.baseline = Sequential()
+        baseline = Sequential()
 
-        self.baseline.add(Conv2D(32, (3, 3), padding="same", input_shape=(*self.input_shape, 3), activation='relu',
-                                 name='block1_conv1'))
-        self.baseline.add(BatchNormalization(axis=1, name='block1_bn1'))
-        self.baseline.add(MaxPooling2D(pool_size=(3, 3), name='block1_maxpool'))
-        self.baseline.add(Dropout(0.25, name='block1_dropout'))
+        baseline.add(Conv2D(32, (3, 3), padding="same", activation='relu', name='block1_conv1'))
+        baseline.add(BatchNormalization(axis=1, name='block1_bn1'))
+        baseline.add(MaxPooling2D(pool_size=(3, 3), name='block1_maxpool'))
+        baseline.add(Dropout(0.25, name='block1_dropout'))
 
-        self.baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu', name='block2_conv1'))
-        self.baseline.add(BatchNormalization(axis=1, name='block2_bn1'))
-        self.baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu', name='block2_conv2'))
-        self.baseline.add(BatchNormalization(axis=1, name='block2_bn2'))
-        self.baseline.add(MaxPooling2D(pool_size=(2, 2), name='block2_maxpool'))
-        self.baseline.add(Dropout(0.25, name='block2_dropout'))
+        baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu', name='block2_conv1'))
+        baseline.add(BatchNormalization(axis=1, name='block2_bn1'))
+        baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu', name='block2_conv2'))
+        baseline.add(BatchNormalization(axis=1, name='block2_bn2'))
+        baseline.add(MaxPooling2D(pool_size=(2, 2), name='block2_maxpool'))
+        baseline.add(Dropout(0.25, name='block2_dropout'))
 
-        self.baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu', name='block3_conv1'))
-        self.baseline.add(BatchNormalization(axis=1, name='block3_bn1'))
-        self.baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu', name='block3_conv2'))
-        self.baseline.add(BatchNormalization(axis=1, name='block3_bn3'))
-        self.baseline.add(MaxPooling2D(pool_size=(2, 2), name='block3_maxpool'))
-        self.baseline.add(Dropout(0.25, name='block3_dropout'))
+        baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu', name='block3_conv1'))
+        baseline.add(BatchNormalization(axis=1, name='block3_bn1'))
+        baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu', name='block3_conv2'))
+        baseline.add(BatchNormalization(axis=1, name='block3_bn3'))
+        baseline.add(MaxPooling2D(pool_size=(2, 2), name='block3_maxpool'))
+        baseline.add(Dropout(0.25, name='block3_dropout'))
 
-        self.baseline.add(Conv2D(256, (3, 3), padding="same", activation='relu', name='block4_conv1'))
-        self.baseline.add(BatchNormalization(axis=1, name='block4_bn1'))
-        self.baseline.add(Conv2D(256, (3, 3), padding="same", activation='relu', name='block4_conv2'))
-        self.baseline.add(BatchNormalization(axis=1, name='block4_bn3'))
-        self.baseline.add(MaxPooling2D(pool_size=(2, 2), name='block4_maxpool'))
-        self.baseline.add(Dropout(0.25, name='block4_dropout'))
+        baseline.add(Conv2D(256, (3, 3), padding="same", activation='relu', name='block4_conv1'))
+        baseline.add(BatchNormalization(axis=1, name='block4_bn1'))
+        baseline.add(Conv2D(256, (3, 3), padding="same", activation='relu', name='block4_conv2'))
+        baseline.add(BatchNormalization(axis=1, name='block4_bn3'))
+        baseline.add(MaxPooling2D(pool_size=(2, 2), name='block4_maxpool'))
+        baseline.add(Dropout(0.25, name='block4_dropout'))
 
-    def __create_model(self):
+        return baseline
+
+    def create_model(self):
         """
         Función utilizada para crear la estructura de un modelo. Esta, estará formada por la estructura básica devuelta
         por self.baseline juntamente con dos capas FC de 512 neuronas con función de activación relu. La capa de salida
@@ -77,46 +82,43 @@ class GeneralModel:
         de activación softmax
         """
 
-        if self.baseline is None:
-            self.__create_baseline()
+        input = Input(shape=self.shape)
+        x = self.baseline(input, training=False)
+        x = GlobalAveragePooling2D()(x)
 
-        out = self.baseline.output
-        out = GlobalAveragePooling2D()(out)
-
-        neurons = get_number_of_neurons(out.get_shape().as_list())
+        neurons = get_number_of_neurons(x.get_shape().as_list())
         while neurons > 15:
-            out = Dropout(0.5)(out)
-            out = Dense(neurons, activation='relu', kernel_regularizer=L2())(out)
-            neurons = get_number_of_neurons(out.get_shape().as_list())
+            x = Dropout(0.25)(x)
+            x = Dense(neurons, activation='relu')(x)
+            neurons = get_number_of_neurons(x.get_shape().as_list())
 
-        out = Dropout(0.5)(out)
-        predictions = Dense(self.n_clases, activation='softmax', kernel_regularizer=L2())(out)
+        x = Dropout(0.5)(x)
+        output = Dense(self.n, activation='softmax')(x)
 
-        self.model = Model(inputs=self.baseline.input, outputs=predictions)
+        self.model = Model(inputs=input, outputs=output)
 
-    def __set_trainable_layers(self, unfrozen_layers: str):
+    def set_trainable_layers(self, unfrozen_layers: str):
         """
         Función utilizada para setear layers del modelo como entrenables. Este metodo será sobreescrito por las clases
         heredadas
         """
+        self.baseline.trainable = False
+
         if unfrozen_layers == 'ALL':
-            self.model.trainable = True
-        elif unfrozen_layers == '0FT':
-            for layer in self.model.layers:
-                layer.trainable = layer.name not in [l.name for l in self.baseline.layers]
+            self.baseline.trainable = True
+
         elif unfrozen_layers in self.LAYERS_DICT.keys():
-            self.__set_trainable_layers(unfrozen_layers='0FT')
             list_keys = sorted(self.LAYERS_DICT.keys(), key=lambda x: int(x[0]))
-            train_layers = [l for layers in list_keys[:list_keys.index(unfrozen_layers) + 1] for l
-                            in self.LAYERS_DICT[layers]]
+            train_layers = \
+                [l for layers in list_keys[:list_keys.index(unfrozen_layers) + 1] for l in self.LAYERS_DICT[layers]]
             for layer in train_layers:
-                self.model.get_layer(layer).trainable = True
+                self.baseline.get_layer(layer).trainable = True
 
         else:
             raise ValueError(f'Unfrozen layers parametrization for {unfrozen_layers}')
 
-    def __start_train(self, train_data: DataFrameIterator, val_data: DataFrameIterator, epochs: int, batch_size: int,
-                      opt: optimizers = None, unfrozen_layers: str = 'ALL') -> float:
+    def start_train(self, train_data: DataFrameIterator, val_data: DataFrameIterator, epochs: int, batch_size: int,
+                    opt: optimizers = Adam(1e-3), unfrozen_layers: str = 'ALL') -> float:
         """
         Función que compila el modelo, añade los callbacks definidos por el usuario y entrena el modelo
         :param train_data: dataframe iterator con los datos de train
@@ -128,15 +130,10 @@ class GeneralModel:
         """
 
         # Se configura si los layers serán entrenables o no
-        self.model.trainable = False
-        self.__set_trainable_layers(unfrozen_layers=unfrozen_layers)
+        self.set_trainable_layers(unfrozen_layers=unfrozen_layers)
 
         # Se compila el modelo
-        self.model.compile(
-            optimizer=opt or Adam(lr=1e-3),
-            loss='categorical_crossentropy' if self.n_clases > 2 else 'binary_crossentropy',
-            metrics=self.metrics
-        )
+        self.model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=self.metrics)
 
         start = process_time()
         self.history = self.model.fit(
@@ -161,7 +158,7 @@ class GeneralModel:
         """
             Función utilizada para entrenar completamente el modelo.
         """
-        t = self.__start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='ALL')
+        t = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='ALL')
         return t
 
     def extract_features(self, train_data, val_data, epochs: int, batch_size: int, opt: optimizers = None):
@@ -169,7 +166,7 @@ class GeneralModel:
         Función utilizada para aplicar un proceso de extract features de modo que se conjela la arquitectura definida en
         self.baseline y se entrenan las últimas capas de la arquitectura
         """
-        t = self.__start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='0FT')
+        t = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='0FT')
         return t
 
     def fine_tunning(self, train_data, val_data, epochs: int, batch_size: int, opt: optimizers = None,
@@ -179,7 +176,7 @@ class GeneralModel:
         entrenables en la arquitectura definida por self.baseline se determinarán a partir del método
         set_trainable_layers
         """
-        t = self.__start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers=unfrozen_layers)
+        t = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers=unfrozen_layers)
         return t
 
     def save_model(self, dirname: str, model_name: str):
@@ -197,30 +194,34 @@ class GeneralModel:
         return self.model.predict(*args, **kwargs)
 
     def get_trainable_layers(self) -> int:
-        return len([l for l in self.model.layers if l.trainable]) - 1
+        return len([l for l in self.baseline.layers if l.trainable])
+
+    def get_trainable_params(self) -> int:
+        return int(np.sum([count_params(p) for p in self.baseline.trainable_weights]))
 
 
 class VGG16Model(GeneralModel):
 
     __name__ = 'VGG16'
     LAYERS_DICT = {
+        '0FT': [],
         '1FT': ['block5_conv1', 'block5_conv2', 'block5_conv3', 'block5_pool'],
         '2FT': ['block4_conv1', 'block4_conv2', 'block4_conv3', 'block4_pool'],
         '3FT': ['block3_conv1', 'block3_conv2', 'block3_conv3', 'block3_pool'],
         '4FT': ['block2_conv1', 'block2_conv2', 'block2_pool']
     }
+    shape = (224, 224, 3)
 
-    def __init__(self, n_clases: int, weights: Union[str, io] = None):
-        super().__init__(
-            n_clases=n_clases, preprocess_func=vgg16.preprocess_input, input_shape=(224, 224),
-            baseline=vgg16.VGG16(include_top=False, weights=weights, input_shape=(224, 224, 3))
-        )
+    def __init__(self, n: int, weights: Union[str, io] = None):
+        super().__init__(n=n, baseline=vgg16.VGG16(include_top=False, weights=weights, input_shape=self.shape),
+                         preprocess_func=vgg16.preprocess_input)
 
 
 class Resnet50Model(GeneralModel):
 
     __name__ = 'ResNet50'
     LAYERS_DICT = {
+        '0FT': [],
         '1FT': [
             'conv5_block3_1_conv', 'conv5_block3_1_bn', 'conv5_block3_1_relu', 'conv5_block3_2_conv',
             'conv5_block3_2_bn', 'conv5_block3_2_relu', 'conv5_block3_3_conv', 'conv5_block3_3_bn', 'conv5_block3_add',
@@ -242,18 +243,18 @@ class Resnet50Model(GeneralModel):
             'conv4_block6_out'
         ]
     }
+    shape = (224, 224, 3)
 
-    def __init__(self, n_clases: int, weights: Union[str, io] = None):
-        super().__init__(
-            n_clases=n_clases, preprocess_func=resnet50.preprocess_input, input_shape=(224, 224),
-            baseline=resnet50.ResNet50(include_top=False, weights=weights, input_shape=(224, 224, 3))
-        )
+    def __init__(self, n: int, weights: Union[str, io] = None):
+        super().__init__(n=n, baseline=resnet50.ResNet50(include_top=False, weights=weights, input_shape=self.shape),
+                         preprocess_func=resnet50.preprocess_input)
 
 
 class InceptionV3Model(GeneralModel):
 
     __name__ = 'InceptionV3'
     LAYERS_DICT = {
+        '0FT': [],
         '1FT': [
             'conv2d_89', 'batch_normalization_89', 'activation_89', 'conv2d_90', 'batch_normalization_90',
             'activation_90', 'conv2d_91', 'batch_normalization_91', 'activation_91', 'concatenate_1',
@@ -285,17 +286,19 @@ class InceptionV3Model(GeneralModel):
             'batch_normalization_69', 'activation_69', 'conv2d_60', 'batch_normalization_60', 'activation_60', 'mixed7'
         ]
     }
+    shape = (299, 299, 3)
 
-    def __init__(self, n_clases: int, weights: Union[str, io] = None):
+    def __init__(self, n: int, weights: Union[str, io] = None):
         super().__init__(
-            n_clases=n_clases, preprocess_func=inception_v3.preprocess_input, input_shape=(299, 299),
-            baseline=inception_v3.InceptionV3(include_top=False, weights=weights, input_shape=(299, 299, 3)))
+            n=n, baseline=inception_v3.InceptionV3(include_top=False, weights=weights, input_shape=self.shape),
+            preprocess_func=inception_v3.preprocess_input)
 
 
 class DenseNetModel(GeneralModel):
 
     __name__ = 'DenseNet'
     LAYERS_DICT = {
+        '0FT': [],
         '1FT': [
             'conv5_block16_0_bn', 'conv5_block16_0_relu', 'conv5_block16_1_conv', 'conv5_block16_1_bn',
             'conv5_block16_1_relu', 'conv5_block16_2_conv', 'conv5_block16_concat', 'bn', 'relu'
@@ -313,8 +316,8 @@ class DenseNetModel(GeneralModel):
             'conv5_block13_1_relu', 'conv5_block13_2_conv', 'conv5_block13_concat'
         ]
     }
+    shape = (224, 224, 3)
 
-    def __init__(self, n_clases: int, weights: Union[str, io] = None):
-        super().__init__(
-            n_clases=n_clases, preprocess_func=densenet.preprocess_input, input_shape=(224, 224),
-            baseline=densenet.DenseNet121(include_top=False, weights=weights, input_shape=(224, 224, 3)))
+    def __init__(self, n: int, weights: Union[str, io] = None):
+        super().__init__(n=n, baseline=densenet.DenseNet121(include_top=False, weights=weights, input_shape=self.shape),
+                         preprocess_func=densenet.preprocess_input)

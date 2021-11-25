@@ -4,7 +4,7 @@ import pickle
 import pandas as pd
 import numpy as np
 
-from keras_preprocessing.image import DataFrameIterator
+from tensorflow.keras.preprocessing.image import Iterator
 from sklearn.ensemble import GradientBoostingClassifier
 from typing import io
 
@@ -25,7 +25,7 @@ class GradientBoosting:
         self.model_gb = pickle.load(open(model_filepath, 'rb'))
 
     @staticmethod
-    def __get_dataframe_from_kwargs(data: pd.DataFrame, **model_inputs):
+    def get_dataframe_from_kwargs(data: pd.DataFrame, **model_inputs):
         """
         Función utilizada para generar un set de datos unificado a partir de las predicciones generadas por cada modelo
         :param data: dataframe con el nombre de archivo
@@ -86,8 +86,7 @@ class GradientBoosting:
         # se almacena el modelo en caso de que el usuario haya definido un nombre de archivo
         pickle.dump(self.model_gb, open(get_path(save_model_dir, f'{self.__name__}.sav'), 'wb'))
 
-    def predict(self, dirname: str, filename: str, data: DataFrameIterator, return_model_predictions: bool = False,
-                **input_models):
+    def predict(self, dirname: str, filename: str, data: Iterator, return_model_predictions: bool = False, **kwargs):
         """
         Función utilizada para realizar la predicción del algorítmo de graadient boosting a partir de las predicciones
         del conjunto de redes convolucionales
@@ -106,10 +105,10 @@ class GradientBoosting:
         gb_dataset.index.name = 'image'
 
         # Se unifica el set de datos obteniendo las predicciones de cada modelo representadas por input_models
-        df = self.__get_dataframe_from_kwargs(gb_dataset, **input_models)
+        df = self.get_dataframe_from_kwargs(gb_dataset, **kwargs)
 
         # Se añaden las predicciones
-        df.loc[:, 'label'] = self.model_gb.predict(pd.get_dummies(df[input_models.keys()]))
+        df.loc[:, 'label'] = self.model_gb.predict(pd.get_dummies(df[kwargs.keys()]))
 
         # se escribe el log de errores con las predicciones individuales de cada arquitectura de red o únicamente las
         # generadas por gradient boosting

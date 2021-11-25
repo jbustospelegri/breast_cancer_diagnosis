@@ -3,6 +3,8 @@ from typing import Mapping, io, Union
 from algorithms.metrics import f1_score
 from utils.functions import get_path
 
+import cv2
+
 
 """
     CONFIGURACION DEL DATASET
@@ -18,25 +20,23 @@ DATA_AUGMENTATION_FUNCS: dict = {
     'vertical_flip': True,
     'shear_range': 0.1,
     'zoom_range': 0.2,
-    # 'rotation_range': 40,
 }
 
 """
     CONFIGURACION DE EJECUCIONES DE LOS MODELOS
 """
 
-EPOCHS: int = 5#100
-WARM_UP_EPOCHS: int = 2#30
-LEARNING_RATE: float = 1e-4
-WARM_UP_LEARNING_RATE: float = 1e-3
+EPOCHS: int = 100
+WARM_UP_EPOCHS: int = 30
+LEARNING_RATE: float = 1e-3
 
 BATCH_SIZE: int = 16
 SEED: int = 81
 
 METRICS = {
-    'AUC': 'auc',
-    'Precision': 'precision',
-    'Recall': 'recall',
+    'AUC': 'AUC',
+    'Precision': 'Precision',
+    'Recall': 'Recall',
     'F1 Score': f1_score
 }
 
@@ -54,6 +54,7 @@ XGB_COLS = {
 """
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
+IMG_SHAPE: int = 512
 PREPROCESSING_CONFIG: str = 'CONF1'
 PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[str, int, float, tuple, dict]]]]] = {
     'CONF1': {
@@ -67,31 +68,50 @@ PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[st
             'min': 0,
             'max': 255
         },
-        'REMOVE_ARTIFACTS': {
+        'REMOVE_ARTIFACTS_BLACK_BORDERS': {
             'bin_kwargs': {
-                'thresh': 30,
-                'maxval': 1,
+                'thresh': 'constant',
+                'threshval': 1
             },
             'mask_kwargs': {
-                'kernel_size': (60, 60)
+                'kernel_shape': cv2.MORPH_RECT,
+                'kernel_size': (20, 20),
+                'operations': [(cv2.MORPH_CLOSE, None)]
+            }
+        },
+        'REMOVE_ARTIFACTS': {
+            'bin_kwargs': {
+                'thresh': 'adaptative',
+                'size': 7,
+                'method': cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                'c': 2
+            },
+            'mask_kwargs': {
+                'kernel_shape': cv2.MORPH_ELLIPSE,
+                'kernel_size': (20, 20),
+                'operations': [(cv2.MORPH_CLOSE, None), (cv2.MORPH_OPEN, 2)]
             }
         },
         'FLIP_IMG': {
             'orient': 'left'
         },
+        # 'REMOVE_NOISE': {
+        #     # 'additive_noise': {
+        #     #     'ksize': 3
+        #     # },
+        #     # 'multiplicative_noise': {
+        #     #     'gh': 2,
+        #     #     'gl': 0.5,
+        #     #     'd0': 30,
+        #     #     'c': 1
+        #     # },
+        # },
         'ECUALIZATION': {
-            'clahe_1': {'clip': 1},
-            'clahe_2': {'clip': 2}
-        },
-        'CROPPING_2': {
-            'left': 0.05,
-            'right': 0,
-            'top': 0,
-            'bottom': 0
+            'clahe_1': {'clip': 2}
         },
         'SQUARE_PAD': True,
         'RESIZING': {
-            'size': (1024, 1024)
+            'size': (IMG_SHAPE, IMG_SHAPE)
         }
     },
     'CONF2': {
@@ -105,30 +125,51 @@ PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[st
             'min': 0,
             'max': 255
         },
-        'REMOVE_ARTIFACTS': {
+        'REMOVE_ARTIFACTS_BLACK_BORDERS': {
             'bin_kwargs': {
-                'thresh': 30,
-                'maxval': 1,
+                'thresh': 'constant',
+                'threshval': 1
             },
             'mask_kwargs': {
-                'kernel_size': (60, 60)
+                'kernel_shape': cv2.MORPH_RECT,
+                'kernel_size': (20, 20),
+                'operations': [(cv2.MORPH_CLOSE, None)]
+            }
+        },
+        'REMOVE_ARTIFACTS': {
+            'bin_kwargs': {
+                'thresh': 'adaptative',
+                'size': 7,
+                'method': cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                'c': 2
+            },
+            'mask_kwargs': {
+                'kernel_shape': cv2.MORPH_ELLIPSE,
+                'kernel_size': (20, 20),
+                'operations': [(cv2.MORPH_CLOSE, None), (cv2.MORPH_OPEN, 2)]
             }
         },
         'FLIP_IMG': {
             'orient': 'left'
         },
+        # 'REMOVE_NOISE': {
+        #     # 'additive_noise': {
+        #     #     'ksize': 3
+        #     # },
+        #     # 'multiplicative_noise': {
+        #     #     'gh': 2,
+        #     #     'gl': 0.5,
+        #     #     'd0': 30,
+        #     #     'c': 1
+        #     # },
+        # },
         'ECUALIZATION': {
-            'clahe_1': {'clip': 1}
-        },
-        'CROPPING_2': {
-            'left': 0.05,
-            'right': 0,
-            'top': 0,
-            'bottom': 0
+            'clahe_1': {'clip': 1},
+            'clahe_2': {'clip': 2}
         },
         'SQUARE_PAD': True,
         'RESIZING': {
-            'size': (1024, 1024)
+            'size': (512, 512)
         }
     }
 }

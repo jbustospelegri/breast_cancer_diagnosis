@@ -1,20 +1,30 @@
 from itertools import repeat
+
+import tensorflow
+
 from multiprocessing import Queue, Process
 
-from breast_cancer_dataset.datasets import BreastCancerDataset
-from data_viz.visualizacion_resultados import DataVisualizer
 from algorithms.model_ensambling import GradientBoosting
-from algorithms.cnns import InceptionV3Model, Resnet50Model, DenseNetModel, VGG16Model, GeneralModel
+from breast_cancer_dataset.datasets import BreastCancerDataset
+from algorithms.cnns import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
 from algorithms.functions import training_pipe
+from data_viz.visualizacion_resultados import DataVisualizer
 
 from utils.config import MODEL_FILES, PREPROCESSING_CONFIG, XGB_CONFIG
-from utils.functions import bulk_data, get_path, search_files, get_filename
+from utils.functions import bulk_data, get_path, get_filename, get_dirname
+
+from preprocessing.image_processing import image_processing
 
 
 if __name__ == '__main__':
 
+    # Se chequea la existencia de GPU's activas
+    print("TF version   : ", tensorflow.__version__)
+    # we'll need GPU!
+    print("GPU available: ", tensorflow.config.list_physical_devices('GPU'))
+
     # Parámetros de entrada que serán sustituidos por las variables del usuario
-    experiment = 'COMPLETE_IMAG'
+    experiment = 'COMPLETE_IMAG_HOJAS'
 
     # Se setean las carpetas para almacenar las variables del modelo en función del experimento.
     model_config = MODEL_FILES
@@ -25,17 +35,16 @@ if __name__ == '__main__':
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
-    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['0FT', '1FT', '2FT', '3FT', '4FT',
+    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['1FT', '2FT', '3FT', '4FT', '0FT',
                                                                                'ALL', 'ALL']):
         # Diccionario en el que se almacenarán las predicciones de cada modelo. Estas serán utilizadas para aplicar el
         # algorítmo de gradient boosting.
         for cnn in [VGG16Model, InceptionV3Model, Resnet50Model, DenseNetModel]:
 
-            # Queue que servirá para recuparar las predicciones de cada modelo.
             q = Queue()
 
             # Se rea el proceso
-            p = Process(target=training_pipe, args=(cnn, db, q, model_config, weight_init, frozen_layers), daemon=True)
+            p = Process(target=training_pipe, args=(cnn, db, q, model_config, weight_init, frozen_layers,), daemon=True)
 
             # Se lanza el proceso
             p.start()
@@ -44,10 +53,9 @@ if __name__ == '__main__':
             predictions = q.get()
 
             # Se almacenan los resultados de cada modelo.
-            bulk_data(
-                get_path(model_config.model_predictions_cnn_dir, weight_init, frozen_layers,
-                         f'{cnn.__name__.replace("Model", "")}.csv'), **predictions.to_dict()
-            )
+            path = get_path(model_config.model_predictions_cnn_dir, weight_init, frozen_layers,
+                            f'{cnn.__class__.__name__}.csv')
+            bulk_data(path, **predictions.to_dict())
 
         # Se crea el gradient boosting
         print(f'{"-" * 75}\nGeneradando combinación secuencial de clasificadores.\n{"-" * 75}')

@@ -35,7 +35,6 @@ def search_files(file: io, ext: str, in_subdirs: bool = True) -> iter:
         return glob(os.path.join(file, f'*.{ext}'), recursive=True)
 
 
-
 def save_img(img: np.ndarray, save_example_dirpath: io, name: str):
     """
     Función para almacenar una imagen

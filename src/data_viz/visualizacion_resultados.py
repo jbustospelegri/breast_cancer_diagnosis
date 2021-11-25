@@ -22,10 +22,10 @@ sns.despine()
 
 class DataVisualizer:
 
-    metrics = [f if type(f) is str else f.__name__ for f in METRICS.values()] + ['accuracy', 'loss']
+    metrics = [f.lower() if type(f) is str else f.__name__ for f in METRICS.values()] + ['accuracy', 'loss']
 
     @staticmethod
-    def __get_dataframe_from_logs(dirname: io, metrics: list) -> pd.DataFrame:
+    def get_dataframe_from_logs(dirname: io, metrics: list) -> pd.DataFrame:
         """
 
         Función utilizada para crear gráficas a partir de los historiales generados por keras durante el entrenamiento.
@@ -69,7 +69,7 @@ class DataVisualizer:
         return pd.concat(data_list, ignore_index=True)
 
     @staticmethod
-    def __get_dataframe_from_preds(dirname: io) -> pd.DataFrame:
+    def get_dataframe_from_preds(dirname: io) -> pd.DataFrame:
 
         l = []
         for file in search_files(dirname, 'csv'):
@@ -83,7 +83,7 @@ class DataVisualizer:
         return pd.concat(l, ignore_index=True).groupby(['PREPROCESSED_IMG', 'Weight', 'Layer'], as_index=False).first()
 
     @staticmethod
-    def __plot_model_metrics(plot_params: List[dict], dirname: io = None, filename: io = None, plots_per_line: int = 2):
+    def plot_model_metrics(plot_params: List[dict], dirname: io = None, filename: io = None, plots_per_line: int = 2):
         """
         Función para representar gráficamente las métricas obtenidas especificadas mediante el parámetro plot_params
         :param plot_params: lista de diccionarios que contiene las especificaciones para generar un grafico
@@ -129,7 +129,7 @@ class DataVisualizer:
         figure.savefig(get_path(dirname, filename))
 
     @staticmethod
-    def __plot_confusion_matrix(df: pd.DataFrame, models: list) -> None:
+    def plot_confusion_matrix(df: pd.DataFrame, models: list) -> None:
         # En función del número de modelos, se generan n hileras para graficar los resultados. Cada hilera contendrá
         # dos modelos.
         nrows = (len(models) // 2) + 1
@@ -169,7 +169,7 @@ class DataVisualizer:
                                      f'{XGB_CONFIG}_{mode}.jpg'))
 
     @staticmethod
-    def __plot_metrics_table(df: pd.DataFrame, models: list, class_metric: bool = True) -> None:
+    def plot_metrics_table(df: pd.DataFrame, models: list, class_metric: bool = True) -> None:
         """
         Función utilizada para generar una imagen con una tabla que contiene las métricas de accuracy, precision,
         recall y f1_score para entrenamiento y validación. Las métricas se calculan a partir del log de predicciones
@@ -252,7 +252,7 @@ class DataVisualizer:
                 fig.savefig(get_path(MODEL_FILES.model_viz_results_metrics_dir, w, l, filename))
 
     @staticmethod
-    def __plot_accuracy_plots(df: pd.DataFrame, models: list, hue: str, title: str, img_name: str):
+    def plot_accuracy_plots(df: pd.DataFrame, models: list, hue: str, title: str, img_name: str):
 
         df_grouped = df.groupby(['Weight', 'Layer', 'TRAIN_VAL'], as_index=False). \
             apply(lambda x: pd.Series({m: round(accuracy_score(x.IMG_LABEL, x[m]) * 100, 2) for m in models}))
@@ -308,7 +308,7 @@ class DataVisualizer:
         """
 
         # Se recupera un dataframe a partir del directorio de logs que contendrá las métricas
-        data = self.__get_dataframe_from_logs(logs_dir, self.metrics)
+        data = self.get_dataframe_from_logs(logs_dir, self.metrics)
 
         # Se itera sobre las fases con las que se ha entrenado cada modelo
         for weights, layers, phase in product(data.Weights.unique().tolist(), data.FrozenLayers.unique().tolist(),
@@ -318,7 +318,7 @@ class DataVisualizer:
 
             if len(data_filtered) > 0:
                 # Se crea la gráfica correspondiente
-                self.__plot_model_metrics(
+                self.plot_model_metrics(
                     dirname=MODEL_FILES.model_viz_results_model_history_dir,
                     filename=f'Model_history_train_{phase}_{weights}_{layers}.jpg',
                     plot_params=[
@@ -363,12 +363,12 @@ class DataVisualizer:
        """
 
         # Lectura de los datos
-        df = self.__get_dataframe_from_preds(dirname=predictions_dir)
+        df = self.get_dataframe_from_preds(dirname=predictions_dir)
         models = [c for c in df.columns if c not in ['PREPROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', 'Weight', 'Layer']]
-        self.__plot_confusion_matrix(df, models)
-        self.__plot_metrics_table(df, models, class_metric=True)
-        self.__plot_metrics_table(df, models, class_metric=False)
-        self.__plot_accuracy_plots(df[df.Layer == 'ALL'], models, hue='Weight', img_name='Weight Init Accuracy',
-                                   title='Random Initialization vs Imagenet')
-        self.__plot_accuracy_plots(df[df.Weight == 'imagenet'], models, hue='Layer', img_name='Frozen Layers Accuracy',
-                                   title='Impact of the fraction of convolutional blocks fine-tuned on CNN performance')
+        self.plot_confusion_matrix(df, models)
+        self.plot_metrics_table(df, models, class_metric=True)
+        self.plot_metrics_table(df, models, class_metric=False)
+        self.plot_accuracy_plots(df[df.Layer == 'ALL'], models, hue='Weight', img_name='Weight Init Accuracy',
+                                 title='Random Initialization vs Imagenet')
+        self.plot_accuracy_plots(df[df.Weight == 'imagenet'], models, hue='Layer', img_name='Frozen Layers Accuracy',
+                                 title='Impact of the fraction of convolutional blocks fine-tuned on CNN performance')

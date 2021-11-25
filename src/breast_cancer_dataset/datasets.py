@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import cv2
 import random
 import pandas as pd
 import numpy as np
@@ -11,7 +10,7 @@ from glob import glob
 from collections import defaultdict
 from multiprocessing import Pool, cpu_count
 from typing import io, Callable, List
-from keras_preprocessing.image import ImageDataGenerator, array_to_img, load_img, img_to_array, DataFrameIterator
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array, Iterator
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
@@ -21,10 +20,11 @@ from utils.config import (
     CBIS_DDSM_MASS_CASE_DESC_TRAIN, CBIS_DDSM_CONVERTED_DATA_PATH, CBIS_DDSM_PREPROCESSED_DATA_PATH,
     MIAS_DB_PATH, MIAS_CASE_DESC, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH,
     INBREAST_DB_PATH, INBREAST_CASE_DESC, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH,
-    MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS
+    MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, IMG_SHAPE
 )
 from utils.functions import get_filename, get_dirname, get_path, search_files
-from utils.image_processing import convert_img, image_processing
+from preprocessing.image_processing import image_processing
+from preprocessing.image_conversion import convert_img
 
 INFO_COLS = [
     'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
@@ -36,14 +36,14 @@ class BreastCancerDataset:
 
     def __init__(self, preprocesing_conf):
         self.databases = [DatasetMIAS, DatasetINBreast, DatasetCBISDDSM]
-        self.df = self.__get_data_from_databases(preprocesing_conf)
+        self.df = self.get_data_from_databases(preprocesing_conf)
         self.class_dict = {x: l for x, l in enumerate(self.df.IMG_LABEL.unique())}
-        self.__split_dataset(train_prop=TRAIN_DATA_PROP, stratify=True)
-        self.__get_eda_from_df(dir=MODEL_FILES.model_viz_eda_dir)
-        self.__bulk_data_desc_to_files(df=self.df, conf=preprocesing_conf)
+        self.split_dataset(train_prop=TRAIN_DATA_PROP, stratify=True)
+        self.get_eda_from_df(dir=MODEL_FILES.model_viz_eda_dir)
+        self.bulk_data_desc_to_files(df=self.df, conf=preprocesing_conf)
 
-    def get_dataset_generator(self, batch_size: int, size: tuple = (224, 224), directory: io = None,
-                              preprocessing_function: Callable = None):
+    def get_dataset_generator(self, batch_size: int, preprocessing_function: Callable, directory: io = None,
+                              size: tuple = (IMG_SHAPE, IMG_SHAPE)) -> (Iterator, Iterator):
         """
 
         Función que permite recuperar un dataframe iterator para entrenamiento y para validación.
@@ -72,7 +72,7 @@ class BreastCancerDataset:
             seed=SEED,
             batch_size=batch_size,
             class_mode='categorical',
-            directory=None
+            directory=None,
         )
 
         # Parametrización del generador de entrenamiento. Las imagenes de entrenamiento recibirán un conjunto de
@@ -82,7 +82,7 @@ class BreastCancerDataset:
 
         # Se plotea las transformaciones que sufre una imagen en caso de indicarse el parámetro directory
         if directory:
-            self.__get_data_augmentation_examples(
+            self.get_data_augmentation_examples(
                 out_filepath=directory,
                 example_imag=self.df.iloc[random.sample(self.df.index.tolist(), 1)[0]].PREPROCESSED_IMG
             )
@@ -110,7 +110,7 @@ class BreastCancerDataset:
 
         return train_df_iter, val_df_iter
 
-    def __get_data_from_databases(self, preprocessing_conf: str) -> pd.DataFrame:
+    def get_data_from_databases(self, preprocessing_conf: str) -> pd.DataFrame:
 
         l = []
         for database in self.databases:
@@ -119,16 +119,16 @@ class BreastCancerDataset:
             db = database()
 
             # Se realiza la conversión de formato dicom a png.
-            db.convert_images_format()
+            # db.convert_images_format()
 
             # Se realiza el preprocesado de las fotografías.
-            db.preproces_images(conf=preprocessing_conf, show_example=True)
+            # db.preproces_images(conf=preprocessing_conf, show_example=True)
 
             l.append(db.df_desc)
 
         return pd.concat(objs=l, ignore_index=True)
 
-    def __split_dataset(self, train_prop: float, stratify: bool = False):
+    def split_dataset(self, train_prop: float, stratify: bool = True):
         """
         Función que permite dividir el dataset en un subconjunto de entrenamiento y otro de validación. La división
         puede ser estratificada.
@@ -145,7 +145,7 @@ class BreastCancerDataset:
 
         # Se filtran los datos en función de si se desea obtener el conjunto de train y val
         train_x, _, _, _ = train_test_split(
-            self.df.PREPROCESSED_IMG, self.df.IMG_LABEL, random_state=SEED,
+            self.df.PREPROCESSED_IMG, self.df.IMG_LABEL, random_state=SEED, train_size=train_prop,
             stratify=self.df.IMG_LABEL if stratify else None
         )
 
@@ -154,7 +154,7 @@ class BreastCancerDataset:
         self.df.loc[:, 'TRAIN_VAL'] = np.where(self.df.PREPROCESSED_IMG.isin(train_x), 'train', 'val')
 
     @staticmethod
-    def __bulk_data_desc_to_files(df: pd.DataFrame, conf: str) -> None:
+    def bulk_data_desc_to_files(df: pd.DataFrame, conf: str) -> None:
         """
         Función escribe el feedback del dataset en la carpeta de destino de la conversión.
         """
@@ -166,7 +166,7 @@ class BreastCancerDataset:
             json.dump(PREPROCESSING_FUNCS[conf], out, indent=4)
 
     @staticmethod
-    def __get_data_augmentation_examples(out_filepath: io, example_imag: io) -> None:
+    def get_data_augmentation_examples(out_filepath: io, example_imag: io) -> None:
         """
         Función que permite generar un ejemplo de cada tipo de data augmentation aplicado
         :param out_filepath: ruta del archivo de imagen a generar
@@ -205,7 +205,7 @@ class BreastCancerDataset:
         # Se almacena la figura
         plt.savefig(get_path(out_filepath, f'{get_filename(example_imag)}.png'))
 
-    def __get_eda_from_df(self, dir: io) -> None:
+    def get_eda_from_df(self, dir: io) -> None:
         """
         Función que permite representar graficamente el número de observaciones y la proporción de cada una de las
         clases presentes en un dataet. La clase de cada observción debe estar almacenada en una columna cuyo
@@ -364,7 +364,7 @@ class DatasetCBISDDSM:
 
         # Se crea un pool de multihilos para realizar la tarea de conversión de forma paralelizada.
         with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(convert_img, arg_iter), total=len(arg_iter), desc='conversion dcm to png')
+            results = tqdm(pool.imap(convert_img, arg_iter), total=len(arg_iter), desc='conversion to png')
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
@@ -512,6 +512,34 @@ class DatasetMIAS(DatasetCBISDDSM):
             database_info_file_paths=[MIAS_CASE_DESC]
         )
 
+    """
+    def get_data_from_info_files(self) -> pd.DataFrame:
+        
+        # Se obtiene la información del fichero de texto descriptivo del dataset
+        l = []
+
+        # Se iteran los csv con información del set de datos para unificaros
+        for file in search_files(path, ext='jpg'):
+            l.append(pd.DataFrame({
+                'DATASET': 'Test',
+                'BREAST': None,
+                'BREAST_VIEW': None,
+                'ABNORMALITY_TYPE': None,
+                'IMG_TYPE': None,
+                'BREAST_DENSITY': None,
+                'IMG_LABEL': get_filename(get_dirname(file)),
+                'ID': None,
+                'RAW_IMG': None,
+                'PREPROCESSED_IMG': file,
+                'CONVERTED_IMG': None
+            }, index=[0]))
+
+
+        df = pd.concat(objs=l, ignore_index=True)
+
+        return df[INFO_COLS]
+    """
+
     def get_data_from_info_files(self) -> pd.DataFrame:
 
         # Se obtiene la información del fichero de texto descriptivo del dataset
@@ -593,76 +621,3 @@ class DatasetMIAS(DatasetCBISDDSM):
         )
 
         return df_def[INFO_COLS]
-
-
-class TestDataset:
-
-    def __init__(self, path: str, image_format: str = 'jpg'):
-        self.path = path
-        self.image_format = image_format
-
-    def __repr__(self):
-        return f'Dataset formado por {len(self.df)} registros.'
-
-    def get_dataset(self):
-        """
-
-        Función que genera un dataframe con las imagenes almacenadas en la carpeta definida en self.path.
-        Este dataframe estará formado por tres columnas: 'item_path' con el directorio de cada imagen; 'class': no
-        contendrá información pero se incluye por temas de herencia; 'dataset': contendrá el valor fijo 'Test'.
-
-        """
-
-        elements = []
-
-        print('-' * 50 + f'\nLeyendo directorio de imagenes {self.path} para generar datataset')
-
-        # Se itera sobre el directorio de imagenes obteniendo cada imagen
-        for file in search_files(self.path, f'*{self.image_format}'):
-
-            elements.append([file, np.nan, 'Test'])
-
-        # Dataframe que almacenará el nombre de clase, número de imagenes y un ejemplo de cada categoria.
-        self.df = pd.DataFrame(columns=['item_path', 'class', 'dataset'], data=elements)
-
-        print(f'Dataset Leido correctamente - {len(self.df)} Imagenes encontradas para test')
-
-    def get_dataset_generator(self, batch_size: int, size: tuple = (224, 224), preproces_callback: Callable = None) \
-            -> DataFrameIterator:
-        """
-
-        Función que permite recuperar un dataframe iterator para test.
-
-        :param directory: booleano que permite almacenar las imagenes generadas por el ImageDataGenerator en la carpeta
-                          Data/01_procesed.
-        :param batch_size: tamaño de batch con el que se crearán los iteradores.
-        :param size: tamaño de la imagen que servirá de input para los iteradores. Si la imagen tiene un tamaño distinto
-                     se aplicará un resize aplicando la tecnica de interpolación lanzcos. Por defecto es 224, 224.
-        :param preproces_callback: función de preprocesado a aplicar a las imagenes leidas una vez aplicadas las
-                                       técnicas de data augmentation.
-        :return: dataframeIterator de test.
-        """
-
-        # Se comprueba que existe el dataframe en self.df
-        assert self.df is not None, 'Dataframe vacío. Ejecute la función get_dataset()'
-
-        # Se crea un datagenerator en el cual únicamente se aplicará la función de preprocesado introducida por el
-        # usuario.
-        datagen = ImageDataGenerator(
-            preprocessing_function=preproces_callback
-        )
-
-        # Se devuelve un dataframe iterator con la misma configuración que la clase padre Dataset a excepción de que en
-        # este caso, la variable class_mode es None debido a que el dataframe iterator deberá contener exclusivamente
-        # información de las observaciones y no sus clases.
-        return datagen.flow_from_dataframe(
-            dataframe=self.df,
-            x_col='item_path',
-            y_col='class',
-            target_size=size,
-            interpolation='lanczos',
-            shufle=False,
-            seed=SEED,
-            batch_size=batch_size,
-            class_mode=None,
-        )

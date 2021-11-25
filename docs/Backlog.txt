@@ -73,9 +73,15 @@ TODO
 4) Aplicar regularización L2 en la función de pérdidas -> Repasar en qué consiste.
 
 6) Preprocesado de imagenes
-    6.2 -  Aplicar la GCN normalización en las imagenes (este procesado no está aplicado).
+    6.2 - Aplicar la GCN normalización en las imagenes (este procesado no está aplicado).
+    6.3 - Testear otsu thresholding/noise removing/truncation/multi-level thresholding
+          file:///C:/Users/USUARIO/Downloads/3476-Article%20Text-10599-1-10-20171104.pdf,
+    6.4 - Testear imagen sintetizada
 
 7.1) Plot model de la arquitectura de red
+8) Crear función que recorta las imagenes
+9) Parte de predict + UI
+
 
 
 
