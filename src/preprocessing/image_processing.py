@@ -2,12 +2,13 @@ import numpy as np
 import cv2
 import os
 
-from typing import io, Union
+from typing import io, Union, Tuple, Any
 from pathlib import Path
+
+from PIL import Image
 
 from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS
 from utils.functions import get_filename, save_img, get_path, detect_func_err
-from .filters import HomomorphicFilter
 
 
 def image_processing(args) -> None:
@@ -53,69 +54,71 @@ def image_processing(args) -> None:
         except (IndexError, TypeError):
             save_example_dirname = None
 
+        # Se almacena la configuración del preprocesado
+        prep_dict = PREPROCESSING_FUNCS[conf]
+
         # Se lee la imagen original sin procesar.
         img = cv2.cvtColor(cv2.imread(img_filepath), cv2.COLOR_BGR2GRAY)
 
         images = {'ORIGINAL': img}
 
-        for preproces_name, preproces_kwargs in PREPROCESSING_FUNCS[conf].items():
+        # Primero se realiza un crop de las imagenes
+        images['CROPPING 1'] = crop_borders(
+            images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_1', {}))
 
-            input_img = images[list(images.keys())[-1]]
+        # A posteriori se quita el ruido de las imagenes utilizando un filtro medio
+        images['REMOVE NOISE'] = remove_noise(
+            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_NOISE', {}))
 
-            # Se recortan los bordes de las imagenes.
-            if 'CROPPING' in preproces_name.upper():
-                images[preproces_name.upper()] = crop_borders(img=input_img.copy(), **preproces_kwargs)
+        # El siguiente paso consiste en eliminar los artefactos de la imagen
+        images['REMOVE ARTIFACTS'], bin_mask, modified_mask, mask = remove_artifacts(
+            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_ARTIFACTS', {}))
 
-            elif 'NOISE' in preproces_name.upper():
-                images[preproces_name.upper()] = remove_noise(img=input_img.copy(), **preproces_kwargs)
+        # Una vez eliminados los artefactos, se realiza una normalización de la zona del pecho
+        images['IMAGE NORMALIZED'] = \
+            normalize_breast(images[list(images.keys())[-1]].copy(), mask, **prep_dict.get('NORMALIZE_BREAST', {}))
 
-            # Se estandarizan las imagenes con la normalización min_max para reducir el tamaño estas de 16
-            # bits a 8 bits en caso de que sea necesario. El output generado serán imagenes con valores entre 0 y 255
-            elif 'MIN_MAX' in preproces_name.upper():
-                images[preproces_name.upper()] = min_max_normalize(img=input_img.copy(), **preproces_kwargs)
+        # A continuación se realiza aplica un conjunto de ecualizaciones la imagen. El número máximo de ecualizaciones
+        # a aplicar son 3 y serán representadas enc ada canal
+        ecual_imgs = []
+        img_to_ecualize = images[list(images.keys())[-1]].copy()
+        assert 0 < len(prep_dict['ECUALIZATION'].keys()) < 4, 'Número de ecualizaciones incorrecto'
+        for i, (ecual_func, ecual_kwargs) in enumerate(prep_dict['ECUALIZATION'].items(), 1):
 
-            # Se eliminan los artefactos
-            elif 'REMOVE_ARTIFACTS' in preproces_name.upper():
-                images[preproces_name.upper()] = remove_artifacts(img=input_img.copy(), **preproces_kwargs)
+            if 'CLAHE' in ecual_func.upper():
+                images[ecual_func.upper()] = apply_clahe_transform(img=img_to_ecualize, mask=mask, **ecual_kwargs)
+                ecual_imgs.append(images[list(images.keys())[-1]].copy())
 
-            # Se realiza el flip de la imagen en caso de ser necesario:
-            elif 'FLIP_IMG' in preproces_name.upper():
-                images[preproces_name.upper()] = flip_breast(img=input_img.copy(), **preproces_kwargs)
+            elif 'gcn' in ecual_func:
+                pass
 
-            # Se aplica la ecualización del contraste
-            elif 'ECUALIZATION' in preproces_name.upper():
-                ecual_imgs = []
-                for ecual_func, ecual_kwargs in PREPROCESSING_FUNCS[conf][preproces_name].items():
+        if len(prep_dict['ECUALIZATION'].keys()) == 2:
+            images['IMAGES SYNTHESIZED'] = cv2.merge((img_to_ecualize, *ecual_imgs))
+        elif len(prep_dict['ECUALIZATION'].keys()) == 3:
+            images['IMAGES SYNTHESIZED'] = cv2.merge(tuple(ecual_imgs))
 
-                    if 'CLAHE' in ecual_func.upper():
-                        images[ecual_func.upper()] = apply_clahe_transform(img=input_img.copy(), **ecual_kwargs)
-                        ecual_imgs.append(images[ecual_func.upper()])
+        # Se realiza el flip de la imagen en caso de ser necesario:
+        images['IMG_FLIP'] = flip_breast(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('FLIP_IMG', {}))
 
-                    elif 'gcn' in ecual_func:
-                        pass
+        # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
+        if prep_dict.get('SQUARE_PAD', False):
+            images['IMAGE PADDED'] = pad_image_into_square(img=images[list(images.keys())[-1]].copy())
 
-                    else:
-                        KeyError('ECUALIZATION PREPROCESSING FUNC NOT DEFINED')
+        # Se aplica el resize de la imagen:
+        if prep_dict.get('RESIZING', False):
+            images['IMAGE RESIZED'] = \
+                resize_img(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RESIZING', {}))
 
-                if len(PREPROCESSING_FUNCS[conf][preproces_name].keys()) == 2:
-                    images['SYNTHESIZED'] = cv2.merge((input_img.copy(), *ecual_imgs))
-
-            # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
-            elif 'SQUARE_PAD' in preproces_name.upper():
-                images[preproces_name.upper()] = pad_image_into_square(img=input_img.copy())
-
-            # Se aplica el resize de la imagen:
-            elif 'RESIZING' in preproces_name.upper():
-                images[preproces_name.upper()] = resize_img(img=input_img.copy(), **preproces_kwargs)
-
-            else:
-                raise KeyError('PREPROCESSING FUNC NOT DEFINED')
+        # Se aplica el ultimo crop de la parte izquierda
+        # Primero se realiza un crop de las imagenes
+        images['CROPPING LEFT'] = crop_borders(
+            images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {}))
 
         for i, (name, imag) in enumerate(images.items()):
             save_img(imag, save_example_dirname, f'{i}. {name}')
 
         # Se almacena la imagen definitiva
-        assert cv2.imwrite(dest_dirpath, img=images[preproces_name.upper()]), 'Error al guardar la imagen'
+        Image.fromarray(np.uint8(images[list(images.keys())[-1]].copy())).save(dest_dirpath)
 
     except AssertionError as err:
         with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
@@ -132,12 +135,7 @@ def remove_noise(img: np.ndarray, **kwargs) -> np.ndarray:
     img_without_noise = img.copy()
 
     # Se suprime el ruido aditivo
-    if 'additive_noise' in kwargs.keys():
-        img_without_noise = cv2.medianBlur(img_without_noise, **kwargs['additive_noise'])
-
-    # Se suprime el ruido multiplicativo mediante
-    if 'multiplicative_noise' in kwargs.keys():
-        img_without_noise = HomomorphicFilter().filter(img_without_noise,  **kwargs['multiplicative_noise'])
+    img_without_noise = cv2.medianBlur(img_without_noise, **kwargs)
 
     return img_without_noise
 
@@ -163,20 +161,35 @@ def crop_borders(img: np.ndarray, left: float = 0.01, right: float = 0.01, top: 
 
 
 @detect_func_err
-def min_max_normalize(img: np.ndarray, min: int = 0, max: int = 255) -> np.ndarray:
+def normalize_breast(img: np.ndarray, mask: np.ndarray, type_norm: str = 'min_max') -> np.ndarray:
     """
 
     :param img:
     :return:
     """
-    # Se normaliza las imagenes para poder realizar la ecualización del histograma. Para ello, se aplica
-    # como valor mínimo el 0 y como máximo el valor 255.
-    return cv2.normalize(img.copy(), None, min, max, cv2.NORM_MINMAX)
+
+    # Se transforma la imagen a float para no perder informacion
+    img_float = img.copy().astype(float)
+
+    if type_norm == 'min_max':
+        min = img_float[mask != 0].min()
+        max = img_float[mask != 0].max()
+
+    elif type_norm == 'truncation':
+        min = np.percentile(img_float[mask != 0], 10)
+        max = np.percentile(img_float[mask != 0], 99)
+
+    else:
+        raise ValueError(f'{type_norm} not implemented in normalize_breast')
+
+    img_norm = ((np.clip(img_float, min, max) - min) / (max - min)) * 255
+    img_norm[mask == 0] = 0
+
+    return np.uint8(img_norm)
 
 
 @detect_func_err
-def binarize(img: np.ndarray, thresh: str = 'adaptative', method: int = cv2.ADAPTIVE_THRESH_GAUSSIAN_C, size: int = 11,
-             c: int = 2, threshval: int = 1) -> np.ndarray:
+def binarize(img: np.ndarray, thresh: str = 'otsu', threshval: int = 1) -> np.ndarray:
     """
 
     Función utilizada para asignar el valor maxval a todos aquellos píxeles cuyo valor sea superior al threshold
@@ -189,10 +202,8 @@ def binarize(img: np.ndarray, thresh: str = 'adaptative', method: int = cv2.ADAP
     """
 
     # Primero se aplica un filtro adaptativo para crear una binarización por thresholding
-    if thresh == 'adaptative':
-        return cv2.adaptiveThreshold(img, 255, method, cv2.THRESH_BINARY_INV, size, c)
-    elif thresh == 'otsu':
-        return cv2.threshold(img, 0, 255, method)[1]
+    if thresh == 'otsu':
+        return cv2.threshold(img, threshval, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     elif thresh == 'constant':
         return cv2.threshold(img, threshval, 255, cv2.THRESH_BINARY)[1]
     else:
@@ -221,7 +232,7 @@ def edit_mask(mask: np.ndarray, operations: tuple, kernel_size: tuple = (23, 23)
 
 
 @detect_func_err
-def get_breast_zone(mask: np.ndarray) -> Union[np.ndarray, tuple]:
+def get_breast_zone(mask: np.ndarray, convex_contour: bool = False) -> Union[np.ndarray, tuple]:
 
     """
     Función encargada de encontrar los contornos de la imagen y retornar los top_x más grandes.
@@ -236,21 +247,25 @@ def get_breast_zone(mask: np.ndarray) -> Union[np.ndarray, tuple]:
     contours, _ = cv2.findContours(image=mask, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE)
 
     # Se obtiene el contorno más grande a partir del area que contiene
-    largest_countour = sorted(contours, key=cv2.contourArea, reverse=True)[0:1]
+    largest_countour = sorted(contours, key=cv2.contourArea, reverse=True)[0]
+
+    if convex_contour:
+        largest_countour = cv2.convexHull(largest_countour)
 
     # Se crea la máscara con el area y el contorno obtenidos.
     breast_zone = cv2.drawContours(
-        image=np.zeros(mask.shape, np.uint8), contours=largest_countour, contourIdx=-1, color=(1, 1, 1), thickness=-1
+        image=np.zeros(mask.shape, np.uint8), contours=[largest_countour], contourIdx=-1, color=(255, 255, 255),
+        thickness=-1
     )
 
     # Se obtiene el rectangulo que contiene el pecho
-    x, y, w, h = cv2.boundingRect(largest_countour[0])
+    x, y, w, h = cv2.boundingRect(largest_countour)
 
     return breast_zone, (x, y, w, h)
 
 
 @detect_func_err
-def remove_artifacts(img: np.ndarray, **kwargs) -> np.ndarray:
+def remove_artifacts(img: np.ndarray, **kwargs) -> Tuple[Any, np.ndarray, np.ndarray, Any]:
     """
 
     :param img:
@@ -273,12 +288,12 @@ def remove_artifacts(img: np.ndarray, **kwargs) -> np.ndarray:
 
     # Una vez identificados con un 1 tanto artefactos como el seno, se debe de identificar cual es la región
     # perteneciente al seno. Esta será la que tenga un área mayor.
-    mask, (x, y, w, h) = get_breast_zone(mask=modified_mask)
+    mask, (x, y, w, h) = get_breast_zone(mask=modified_mask, **kwargs.get('contour_kwargs', {}))
 
     # Se aplica y se devuelve la mascara.
     img[mask == 0] = 0
 
-    return img[y:y+h, x:x+w]
+    return img[y:y + h, x:x + w], bin_mask, modified_mask, mask[y:y + h, x:x + w]
 
 
 @detect_func_err
@@ -325,7 +340,7 @@ def flip_breast(img: np.ndarray, orient: str = 'left') -> np.ndarray:
 
 
 @detect_func_err
-def apply_clahe_transform(img: np.ndarray, clip: int = 1) -> np.ndarray:
+def apply_clahe_transform(img: np.ndarray, mask: np. ndarray, clip: int = 1) -> np.ndarray:
     """
     función que aplica una ecualización sobre la intensidad de píxeles de la imagen para mejorar el contraste
     de estas.
@@ -336,6 +351,8 @@ def apply_clahe_transform(img: np.ndarray, clip: int = 1) -> np.ndarray:
     # Se aplica la ecualización adaptativa del histograma de píxeles.
     clahe_create = cv2.createCLAHE(clipLimit=clip, tileGridSize=(8, 8))
     clahe_img = clahe_create.apply(img)
+
+    clahe_img[mask == 0] = 0
 
     return clahe_img
 

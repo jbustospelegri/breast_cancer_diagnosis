@@ -19,7 +19,11 @@ DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': True,
     'vertical_flip': True,
     'shear_range': 0.1,
-    'zoom_range': 0.2,
+    'rotation_range': 270,
+    'width_shift_range': 0.1,
+    'height_shift_range': 0.1,
+    'brightness_range': (0.6, 1),
+    'zoom_range': [0.8, 1.2],
 }
 
 """
@@ -28,7 +32,8 @@ DATA_AUGMENTATION_FUNCS: dict = {
 
 EPOCHS: int = 100
 WARM_UP_EPOCHS: int = 30
-LEARNING_RATE: float = 1e-3
+WARM_UP_LEARNING_RATE: float = 1e-3
+LEARNING_RATE: float = 1e-4
 
 BATCH_SIZE: int = 16
 SEED: int = 81
@@ -54,9 +59,9 @@ XGB_COLS = {
 """
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
-IMG_SHAPE: int = 512
+IMG_SHAPE: int = 300
 PREPROCESSING_CONFIG: str = 'CONF1'
-PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[str, int, float, tuple, dict]]]]] = {
+PREPROCESSING_FUNCS: dict = {
     'CONF1': {
         'CROPPING_1': {
             'left': 0.01,
@@ -64,114 +69,51 @@ PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[st
             'top': 0.04,
             'bottom': 0.04
         },
-        'MIN_MAX_NORM': {
-            'min': 0,
-            'max': 255
-        },
-        'REMOVE_ARTIFACTS_BLACK_BORDERS': {
-            'bin_kwargs': {
-                'thresh': 'constant',
-                'threshval': 1
-            },
-            'mask_kwargs': {
-                'kernel_shape': cv2.MORPH_RECT,
-                'kernel_size': (20, 20),
-                'operations': [(cv2.MORPH_CLOSE, None)]
-            }
+        'REMOVE_NOISE': {
+            'ksize': 3
         },
         'REMOVE_ARTIFACTS': {
             'bin_kwargs': {
-                'thresh': 'adaptative',
-                'size': 7,
-                'method': cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                'c': 2
+                'thresh': 'otsu',
+                'threshval': 30
             },
             'mask_kwargs': {
                 'kernel_shape': cv2.MORPH_ELLIPSE,
-                'kernel_size': (20, 20),
-                'operations': [(cv2.MORPH_CLOSE, None), (cv2.MORPH_OPEN, 2)]
-            }
+                'kernel_size': (20, 10),
+                'operations': [(cv2.MORPH_OPEN, None), (cv2.MORPH_DILATE, 2)]
+            },
+            'contour_kwargs': {
+                'convex_contour': True,
+            },
+            'crop_box': True,
+        },
+        'NORMALIZE_BREAST': {
+            'type_norm': 'truncation'
         },
         'FLIP_IMG': {
             'orient': 'left'
         },
-        # 'REMOVE_NOISE': {
-        #     # 'additive_noise': {
-        #     #     'ksize': 3
-        #     # },
-        #     # 'multiplicative_noise': {
-        #     #     'gh': 2,
-        #     #     'gl': 0.5,
-        #     #     'd0': 30,
-        #     #     'c': 1
-        #     # },
-        # },
         'ECUALIZATION': {
-            'clahe_1': {'clip': 2}
+            'clahe_1': {'clip': 2},
+            'clahe_2': {'clip': 3},
+        },
+        'CROPPING_LEFT': {
+            'left': 0.04,
+            'right': 0,
+            'top': 0,
+            'bottom': 0
         },
         'SQUARE_PAD': True,
         'RESIZING': {
             'size': (IMG_SHAPE, IMG_SHAPE)
-        }
+        },
+        'CROPPING_2': {
+            'left': 0.05,
+            'right': 0,
+            'top': 0,
+            'bottom': 0
+        },
     },
-    'CONF2': {
-        'CROPPING_1': {
-            'left': 0.01,
-            'right': 0.01,
-            'top': 0.04,
-            'bottom': 0.04
-        },
-        'MIN_MAX_NORM': {
-            'min': 0,
-            'max': 255
-        },
-        'REMOVE_ARTIFACTS_BLACK_BORDERS': {
-            'bin_kwargs': {
-                'thresh': 'constant',
-                'threshval': 1
-            },
-            'mask_kwargs': {
-                'kernel_shape': cv2.MORPH_RECT,
-                'kernel_size': (20, 20),
-                'operations': [(cv2.MORPH_CLOSE, None)]
-            }
-        },
-        'REMOVE_ARTIFACTS': {
-            'bin_kwargs': {
-                'thresh': 'adaptative',
-                'size': 7,
-                'method': cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                'c': 2
-            },
-            'mask_kwargs': {
-                'kernel_shape': cv2.MORPH_ELLIPSE,
-                'kernel_size': (20, 20),
-                'operations': [(cv2.MORPH_CLOSE, None), (cv2.MORPH_OPEN, 2)]
-            }
-        },
-        'FLIP_IMG': {
-            'orient': 'left'
-        },
-        # 'REMOVE_NOISE': {
-        #     # 'additive_noise': {
-        #     #     'ksize': 3
-        #     # },
-        #     # 'multiplicative_noise': {
-        #     #     'gh': 2,
-        #     #     'gl': 0.5,
-        #     #     'd0': 30,
-        #     #     'c': 1
-        #     # },
-        # },
-        'ECUALIZATION': {
-            'clahe_1': {'clip': 1},
-            'clahe_2': {'clip': 2}
-        },
-        'SQUARE_PAD': True,
-        'RESIZING': {
-            'size': (512, 512)
-        }
-    }
 }
 
 
@@ -250,7 +192,7 @@ class ModelConstants:
 
         self.model_data_viz_dir: io = get_path(self.model_root_dir, 'DATA_VIZ')
 
-        self.model_viz_preprocesing_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'PREPROCESSING')
+        self.model_viz_preprocesing_dir: io = get_path(self.model_root_dir, 'PREPROCESSING_VIZ', PREPROCESSING_CONFIG)
         self.model_viz_eda_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'DATASET_EDA')
         self.model_viz_train_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'TRAIN_PHASE')
         self.model_viz_data_augm_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'DATA_AUGMENTATION_EXAMPLES')

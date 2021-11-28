@@ -1,5 +1,6 @@
 import os
 import pickle
+from itertools import product
 
 import pandas as pd
 import numpy as np
@@ -67,8 +68,18 @@ class GradientBoosting:
         for file in search_files(cnn_predictions_dir, 'csv', in_subdirs=False):
             model_name = get_filename(file)
             df = pd.read_csv(file, sep=';')[['PREPROCESSED_IMG', 'PREDICTION']]
-            df_dumy = pd.get_dummies(df.rename(columns={'PREDICTION': model_name}), columns=[model_name])
-            cols += df_dumy.columns[-2:].tolist()
+            df_dumy = pd.concat(
+                objs=[
+                    pd.DataFrame(
+                        data=[['0', '0', '0']],
+                        columns=['PREPROCESSED_IMG',
+                                 *[f'{n}_{l}' for n, l in list(product([model_name], data.IMG_LABEL.unique()))]]
+                    ),
+                    pd.get_dummies(df.rename(columns={'PREDICTION': model_name}), columns=[model_name]).astype(str)
+                ],
+                ignore_index=True
+            ).ffill()
+            cols += [f'{n}_{l}' for n, l in list(product([model_name], data.IMG_LABEL.unique()))]
             data = pd.merge(left=data, right=df_dumy, on='PREPROCESSED_IMG', how='left')
 
         # generación del conjunto de datos de train para gradient boosting

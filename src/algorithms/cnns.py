@@ -13,6 +13,7 @@ from tensorflow.python.keras.preprocessing.image import DataFrameIterator
 from tensorflow.keras.layers import (
     Conv2D, BatchNormalization, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input
 )
+from tensorflow.keras.losses import CategoricalCrossentropy
 
 from utils.functions import get_path, get_number_of_neurons
 
@@ -133,7 +134,7 @@ class GeneralModel:
         self.set_trainable_layers(unfrozen_layers=unfrozen_layers)
 
         # Se compila el modelo
-        self.model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=self.metrics)
+        self.model.compile(optimizer=opt, loss=CategoricalCrossentropy(), metrics=self.metrics)
 
         start = process_time()
         self.history = self.model.fit(

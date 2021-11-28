@@ -13,7 +13,6 @@ from data_viz.visualizacion_resultados import DataVisualizer
 from utils.config import MODEL_FILES, PREPROCESSING_CONFIG, XGB_CONFIG
 from utils.functions import bulk_data, get_path, get_filename, get_dirname
 
-from preprocessing.image_processing import image_processing
 
 
 if __name__ == '__main__':
@@ -24,7 +23,7 @@ if __name__ == '__main__':
     print("GPU available: ", tensorflow.config.list_physical_devices('GPU'))
 
     # Parámetros de entrada que serán sustituidos por las variables del usuario
-    experiment = 'COMPLETE_IMAG_HOJAS'
+    experiment = 'COMPLETE_IMAG'
 
     # Se setean las carpetas para almacenar las variables del modelo en función del experimento.
     model_config = MODEL_FILES
@@ -40,11 +39,10 @@ if __name__ == '__main__':
         # Diccionario en el que se almacenarán las predicciones de cada modelo. Estas serán utilizadas para aplicar el
         # algorítmo de gradient boosting.
         for cnn in [VGG16Model, InceptionV3Model, Resnet50Model, DenseNetModel]:
-
             q = Queue()
 
             # Se rea el proceso
-            p = Process(target=training_pipe, args=(cnn, db, q, model_config, weight_init, frozen_layers,), daemon=True)
+            p = Process(target=training_pipe, args=(cnn, db, q, model_config, weight_init, frozen_layers))
 
             # Se lanza el proceso
             p.start()
@@ -54,7 +52,7 @@ if __name__ == '__main__':
 
             # Se almacenan los resultados de cada modelo.
             path = get_path(model_config.model_predictions_cnn_dir, weight_init, frozen_layers,
-                            f'{cnn.__class__.__name__}.csv')
+                            f'{cnn.__name__.replace("Model", "")}.csv')
             bulk_data(path, **predictions.to_dict())
 
         # Se crea el gradient boosting

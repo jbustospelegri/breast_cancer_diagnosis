@@ -34,13 +34,31 @@ INFO_COLS = [
 
 class BreastCancerDataset:
 
-    def __init__(self, preprocesing_conf):
+    def __init__(self, preprocesing_conf, excel_path: io = None):
         self.databases = [DatasetMIAS, DatasetINBreast, DatasetCBISDDSM]
         self.df = self.get_data_from_databases(preprocesing_conf)
         self.class_dict = {x: l for x, l in enumerate(self.df.IMG_LABEL.unique())}
         self.split_dataset(train_prop=TRAIN_DATA_PROP, stratify=True)
         self.get_eda_from_df(dir=MODEL_FILES.model_viz_eda_dir)
         self.bulk_data_desc_to_files(df=self.df, conf=preprocesing_conf)
+
+    def get_data_from_databases(self, preprocessing_conf: str) -> pd.DataFrame:
+
+        l = []
+        for database in self.databases:
+
+            # Se inicializa la base de datos
+            db = database()
+
+            # Se realiza la conversión de formato dicom a png.
+            # db.convert_images_format()
+
+            # Se realiza el preprocesado de las fotografías.
+            # db.preproces_images(conf=preprocessing_conf, show_example=True)
+
+            l.append(db.df_desc)
+
+        return pd.concat(objs=l, ignore_index=True)
 
     def get_dataset_generator(self, batch_size: int, preprocessing_function: Callable, directory: io = None,
                               size: tuple = (IMG_SHAPE, IMG_SHAPE)) -> (Iterator, Iterator):
@@ -78,7 +96,9 @@ class BreastCancerDataset:
         # Parametrización del generador de entrenamiento. Las imagenes de entrenamiento recibirán un conjunto de
         # modificaciones aleatorias con el objetivo de aumentar el set de datos de entrenamiento y evitar de esta forma
         # el over fitting.
-        train_datagen = ImageDataGenerator(**DATA_AUGMENTATION_FUNCS, preprocessing_function=preprocessing_function)
+        train_datagen = ImageDataGenerator(
+            **DATA_AUGMENTATION_FUNCS, fill_mode='constant', cval=0, preprocessing_function=preprocessing_function
+        )
 
         # Se plotea las transformaciones que sufre una imagen en caso de indicarse el parámetro directory
         if directory:
@@ -109,24 +129,6 @@ class BreastCancerDataset:
             val_df_iter = val_datagen.flow_from_dataframe(dataframe=self.df[self.df.TRAIN_VAL == 'val'], **params)
 
         return train_df_iter, val_df_iter
-
-    def get_data_from_databases(self, preprocessing_conf: str) -> pd.DataFrame:
-
-        l = []
-        for database in self.databases:
-
-            # Se inicializa la base de datos
-            db = database()
-
-            # Se realiza la conversión de formato dicom a png.
-            # db.convert_images_format()
-
-            # Se realiza el preprocesado de las fotografías.
-            # db.preproces_images(conf=preprocessing_conf, show_example=True)
-
-            l.append(db.df_desc)
-
-        return pd.concat(objs=l, ignore_index=True)
 
     def split_dataset(self, train_prop: float, stratify: bool = True):
         """
@@ -186,7 +188,7 @@ class BreastCancerDataset:
         elements = len(DATA_AUGMENTATION_FUNCS.keys())
         cols = 3
         rows = elements // cols + elements % cols
-        fig = plt.figure(figsize=(15, 5 * rows))
+        fig = plt.figure(figsize=(15, 4 * rows))
 
         # Se representa la imagen original en el primer subplot.
         plot_image(img=image_ori, title='Imagen Original', ax_=fig.add_subplot(rows, cols, 1))
@@ -195,7 +197,7 @@ class BreastCancerDataset:
         for i, (k, v) in enumerate(DATA_AUGMENTATION_FUNCS.items(), 2):
 
             # Se crea al datagenerator con exclusivamente la transformación a aplicar.
-            datagen = ImageDataGenerator(**{k: v})
+            datagen = ImageDataGenerator(**{k: v}, fill_mode='constant', cval=0)
             # Se recupera la imagen transformada mediante next() del método flow del objeto datagen
             plot_image(img=next(datagen.flow(image_ori)), title=k, ax_=fig.add_subplot(rows, cols, i))
 
@@ -225,6 +227,10 @@ class BreastCancerDataset:
         title = 'Distribución clases segun train-val'
         file = get_path(dir, f'{title}.png')
         create_countplot(x='TRAIN_VAL', hue='IMG_LABEL', data=self.df, title=title, file=file, norm=True)
+
+        title = 'Distribución clases segun patología'
+        file = get_path(dir, f'{title}.png')
+        create_countplot(x='ABNORMALITY_TYPE', hue='IMG_LABEL', data=self.df, title=title, file=file, norm=True)
         print(f'{"-" * 75}\n\tAnálisis del dataset finalizado en {dir}\n{"-" * 75}')
 
 
@@ -512,33 +518,6 @@ class DatasetMIAS(DatasetCBISDDSM):
             database_info_file_paths=[MIAS_CASE_DESC]
         )
 
-    """
-    def get_data_from_info_files(self) -> pd.DataFrame:
-        
-        # Se obtiene la información del fichero de texto descriptivo del dataset
-        l = []
-
-        # Se iteran los csv con información del set de datos para unificaros
-        for file in search_files(path, ext='jpg'):
-            l.append(pd.DataFrame({
-                'DATASET': 'Test',
-                'BREAST': None,
-                'BREAST_VIEW': None,
-                'ABNORMALITY_TYPE': None,
-                'IMG_TYPE': None,
-                'BREAST_DENSITY': None,
-                'IMG_LABEL': get_filename(get_dirname(file)),
-                'ID': None,
-                'RAW_IMG': None,
-                'PREPROCESSED_IMG': file,
-                'CONVERTED_IMG': None
-            }, index=[0]))
-
-
-        df = pd.concat(objs=l, ignore_index=True)
-
-        return df[INFO_COLS]
-    """
 
     def get_data_from_info_files(self) -> pd.DataFrame:
 
