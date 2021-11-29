@@ -14,7 +14,7 @@ from tensorflow.keras.callbacks import CSVLogger, EarlyStopping, ReduceLROnPlate
 from tensorflow.keras.optimizers import Adam
 
 from utils.functions import get_path, bulk_data
-from breast_cancer_dataset.datasets import BreastCancerDataset
+from breast_cancer_dataset.general import BreastCancerDataset
 
 
 def get_predictions(keras_model: models, data: Iterator, class_labels: dict, **kwargs) -> pd.DataFrame:
@@ -91,7 +91,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
     # Se registran los callbacks del modelo:
     cnn.register_callback(
         early_stopping=EarlyStopping(monitor='val_loss', mode='min', patience=20, restore_best_weights=True),
-        # lr_reduce_on_plateau=ReduceLROnPlateau(monitor='val_loss', mode='min', factor=0.1, patience=5)
+        lr_reduce_on_plateau=ReduceLROnPlateau(monitor='val_loss', mode='min', factor=0.1, patience=5)
     )
 
     # Queue que servirá para recuparar las predicciones de cada modelo.

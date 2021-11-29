@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS
+from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG
 from utils.functions import get_filename, save_img, get_path, detect_func_err
 
 
@@ -32,14 +32,12 @@ def image_processing(args) -> None:
 
     try:
         # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
-        assert len(args) >= 3, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
+        assert len(args) >= 2, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
 
-        conf: str = args[0]
-        img_filepath: io = args[1]
-        dest_dirpath: io = args[2]
+        img_filepath: io = args[0]
+        dest_dirpath: io = args[1]
 
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
-        assert conf in PREPROCESSING_FUNCS.keys(), f'{conf} not valid as a preprocessing function'
         assert os.path.isfile(img_filepath), f'The image {img_filepath} does not exists.'
         assert os.path.splitext(dest_dirpath)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
         assert not os.path.isfile(dest_dirpath), f'Processing file exists: {dest_dirpath}'
@@ -47,7 +45,7 @@ def image_processing(args) -> None:
         # Se asigna el cuarto argumento en función de su existencia. En caso contrario se asignan valores por
         # defecto
         try:
-            save_example_dirname: io = args[3]
+            save_example_dirname: io = args[2]
             assert os.path.isdir(save_example_dirname)
         except AssertionError:
             Path(save_example_dirname).mkdir(parents=True, exist_ok=True)
@@ -55,7 +53,7 @@ def image_processing(args) -> None:
             save_example_dirname = None
 
         # Se almacena la configuración del preprocesado
-        prep_dict = PREPROCESSING_FUNCS[conf]
+        prep_dict = PREPROCESSING_FUNCS[PREPROCESSING_CONFIG]
 
         # Se lee la imagen original sin procesar.
         img = cv2.cvtColor(cv2.imread(img_filepath), cv2.COLOR_BGR2GRAY)

@@ -1,10 +1,15 @@
-from typing import Mapping, io, Union
+from typing import io
 
 from algorithms.metrics import f1_score
 from utils.functions import get_path
 
 import cv2
 
+"""
+    CONFIGURACION DEL EXPERIMENTO
+"""
+# Los valores disponibles son PATCHES, COMPLETE_IMAGE, MASK
+EXPERIMENT = 'PATCHES'
 
 """
     CONFIGURACION DEL DATASET
@@ -14,7 +19,6 @@ TRAIN_DATA_PROP: float = 0.8
 """
     CONFIGURACION DATA AUGMENTATION
 """
-
 DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': True,
     'vertical_flip': True,
@@ -29,7 +33,6 @@ DATA_AUGMENTATION_FUNCS: dict = {
 """
     CONFIGURACION DE EJECUCIONES DE LOS MODELOS
 """
-
 EPOCHS: int = 100
 WARM_UP_EPOCHS: int = 30
 WARM_UP_LEARNING_RATE: float = 1e-3
@@ -97,12 +100,6 @@ PREPROCESSING_FUNCS: dict = {
             'clahe_1': {'clip': 2},
             'clahe_2': {'clip': 3},
         },
-        'CROPPING_LEFT': {
-            'left': 0.04,
-            'right': 0,
-            'top': 0,
-            'bottom': 0
-        },
         'SQUARE_PAD': True,
         'RESIZING': {
             'size': (IMG_SHAPE, IMG_SHAPE)
@@ -116,6 +113,13 @@ PREPROCESSING_FUNCS: dict = {
     },
 }
 
+"""
+    COLUMNAS DEL CSV PARA REALIZAR PREDICCIONES
+"""
+DF_COLS = [
+    'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
+    'CONVERTED_IMG', 'PREPROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL'
+]
 
 """
     CARPETAS PRINCIPALES DEL PROGRAMA
@@ -202,7 +206,6 @@ class ModelConstants:
         self.model_viz_results_confusion_matrix_dir: io = get_path(self.model_viz_results_dir, 'CONFUSION_MATRIX')
         self.model_viz_results_accuracy_dir: io = get_path(self.model_viz_results_dir, 'ACCURACY')
         self.model_viz_results_metrics_dir: io = get_path(self.model_viz_results_dir, 'METRICS')
-
 
 
 MODEL_FILES = ModelConstants()

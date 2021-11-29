@@ -5,14 +5,13 @@ import tensorflow
 from multiprocessing import Queue, Process
 
 from algorithms.model_ensambling import GradientBoosting
-from breast_cancer_dataset.datasets import BreastCancerDataset
+from breast_cancer_dataset.general import BreastCancerDataset
 from algorithms.cnns import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
 from algorithms.functions import training_pipe
 from data_viz.visualizacion_resultados import DataVisualizer
 
 from utils.config import MODEL_FILES, PREPROCESSING_CONFIG, XGB_CONFIG
 from utils.functions import bulk_data, get_path, get_filename, get_dirname
-
 
 
 if __name__ == '__main__':
@@ -30,11 +29,11 @@ if __name__ == '__main__':
     model_config.set_model_name(name=experiment)
 
     # Se inicializa el procesado de las imagenes para los distintos datasets.
-    db = BreastCancerDataset(preprocesing_conf=PREPROCESSING_CONFIG)
+    db = BreastCancerDataset(excel_path=model_config.model_db_desc_csv)
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
-    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['1FT', '2FT', '3FT', '4FT', '0FT',
+    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['1FT', '2FT', '3FT', '4FT', '0FT', #
                                                                                'ALL', 'ALL']):
         # Diccionario en el que se almacenarán las predicciones de cada modelo. Estas serán utilizadas para aplicar el
         # algorítmo de gradient boosting.
