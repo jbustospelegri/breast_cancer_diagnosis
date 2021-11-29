@@ -1,4 +1,5 @@
 import os
+import random
 import numpy as np
 import pandas as pd
 
@@ -7,11 +8,11 @@ from multiprocessing import Pool, cpu_count
 
 from tqdm import tqdm
 
-from preprocessing import image_processing
+from preprocessing.image_processing import image_pipeline
 from preprocessing.image_conversion import convert_img
 from utils.config import (
     CBIS_DDSM_DB_PATH, CBIS_DDSM_CONVERTED_DATA_PATH, CBIS_DDSM_PREPROCESSED_DATA_PATH, CBIS_DDSM_MASS_CASE_DESC_TRAIN,
-    CBIS_DDSM_MASS_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TRAIN, MODEL_FILES,
+    CBIS_DDSM_MASS_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TRAIN, MODEL_FILES, DF_COLS,
 )
 from utils.functions import get_dirname, search_files, get_path, get_filename
 
@@ -20,6 +21,8 @@ class DatasetCBISDDSM:
 
     __name__ = 'CBIS-DDSM'
     IMG_TYPE: str = 'FULL'
+    ID_COL: str = 'image file path'
+    BINARY: bool = False
 
     def __init__(
             self,
@@ -60,19 +63,19 @@ class DatasetCBISDDSM:
         """
 
         # Se recupera la información de los csv de información
-        df = self.__get_df_from_info_files()
+        df = self.get_df_from_info_files()
 
         # Se obtienen las imagenes full de cada tipología.
-        df.drop_duplicates(subset='image file path', inplace=True)
+        df.drop_duplicates(subset=self.ID_COL, inplace=True)
 
         # Se crea la columna ID para poder linkar la información del excel con la información de las imagenes
         # almacenadas en la carpeta RAW. En este caso, se utilizará la jerarquía de carpetas en la que se almacena
         # cada imagen
-        df.loc[:, 'ID'] = df['image file path'].apply(lambda x: get_dirname(x))
+        df.loc[:, 'ID'] = df[self.ID_COL].apply(lambda x: get_dirname(x))
 
         # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
         # una zona benigna y otra maligna).
-        duplicated_tags = df.groupby(['image file path']).IMG_LABEL.nunique()
+        duplicated_tags = df.groupby([self.ID_COL]).IMG_LABEL.nunique()
         print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1])} images for ambiguous pathologys')
         df.drop(index=df[df.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index, inplace=True)
 
@@ -106,9 +109,9 @@ class DatasetCBISDDSM:
 
         print(f'\t{len(df_def.RAW_IMG.unique())} image paths available in database')
 
-        return df_def[self.DF_COLS]
+        return df_def[DF_COLS]
 
-    def __get_df_from_info_files(self) -> pd.DataFrame:
+    def get_df_from_info_files(self) -> pd.DataFrame:
 
         # Se crea una lista que contendrá la información de los archivos csv del set de datos
         l = []
@@ -137,12 +140,12 @@ class DatasetCBISDDSM:
         df.loc[:, 'IMG_LABEL'] = df.pathology
 
         # Se añaden las columnas adicionales para el dataframe
-        self.__add_extra_columns(df)
+        self.add_extra_columns(df)
 
         return df
 
     @staticmethod
-    def __add_extra_columns(df: pd.DataFrame):
+    def add_extra_columns(df: pd.DataFrame):
         # Se crea la columna Breast que indicará si se trata de una imagen del seno derecho (Right) o izquierdo (Left).
         df.loc[:, 'BREAST'] = df['left or right breast']
 
@@ -164,7 +167,7 @@ class DatasetCBISDDSM:
               f'{self.ori_extension} files finded.')
 
         # Se crea el iterador con los argumentos necesarios para realizar la función a través de un multiproceso.
-        arg_iter = [(row.RAW_IMG, row.CONVERTED_IMG) for _, row in self.df_desc.iterrows()]
+        arg_iter = [(row.RAW_IMG, row.CONVERTED_IMG, self.BINARY) for _, row in self.df_desc.iterrows()]
 
         # Se crea un pool de multihilos para realizar la tarea de conversión de forma paralelizada.
         with Pool(processes=cpu_count() - 2) as pool:
@@ -172,8 +175,12 @@ class DatasetCBISDDSM:
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
-        converted_imgs = list(search_files(file=self.conversion_dir, ext=self.dest_extension))
-        print(f"\tConverted {len(converted_imgs)} images to {self.dest_extension} format.\n{'-' * 75}")
+        converted_imgs = pd.DataFrame(
+            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension),
+            columns=['CONVERTED_IMG']
+        )
+        print(f"\tConverted {len(converted_imgs.CONVERTED_IMG.unique())} images to {self.dest_extension} "
+              f"format.\n{'-' * 75}")
 
     def preproces_images(self, show_example: bool = False) -> None:
         """
@@ -185,23 +192,29 @@ class DatasetCBISDDSM:
         full_img_df = self.df_desc.assign(example_dir=None).copy()
 
         if show_example:
-            photos = np.random.sample(full_img_df.index.tolist(), 5)
+            photos = random.sample(full_img_df.index.tolist(), 5)
             full_img_df.loc[photos, 'example_dir'] = full_img_df.loc[photos, :].apply(
                 lambda x: get_path(MODEL_FILES.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG)),
                 axis=1
             )
 
-        conv_imgs = list(search_files(file=self.conversion_dir, ext=self.dest_extension))
-        print(f'{"-" * 75}\n\tStarting preprocessing of {len(conv_imgs)} images')
+        converted_imgs = pd.DataFrame(
+            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension),
+            columns=['CONVERTED_IMG']
+        )
+        print(f'{"-" * 75}\n\tStarting preprocessing of {len(converted_imgs)} images')
 
-        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, row.example_dir) for _, row in full_img_df.iterrows()]
+        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, self.IMG_TYPE, row.example_dir) for _, row in
+                full_img_df.iterrows()]
 
         with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(image_processing, args), total=len(args), desc='preprocessing full images')
+            results = tqdm(pool.imap(image_pipeline, args), total=len(args), desc='preprocessing full images')
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
-        proc_imgs = list(search_files(file=self.procesed_dir, ext=self.dest_extension))
+        proc_imgs = list(
+            search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
+        )
         print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
 
     def start_pipeline(self):
@@ -211,11 +224,14 @@ class DatasetCBISDDSM:
 
 class DatasetCBISDDSMCrop(DatasetCBISDDSM):
 
-    IMG_TYPE = 'CROP'
+    IMG_TYPE: str = 'CROP'
+    ID_COL: str = 'cropped image file path'
+    BINARY: bool = False
 
-    def get_dataframe(self) -> pd.DataFrame:
+    def start_pipeline(self):
+        self.convert_images_format()
+        self.clean_dataframe()
+        self.preproces_images(show_example=True)
 
-        # Se recupera la información de los csv de información
-        df = self.__get_df_from_info_files()
-
-        return df
+    def clean_dataframe(self):
+        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()

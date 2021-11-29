@@ -10,7 +10,7 @@ from typing import io, Callable
 from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array, Iterator
 from sklearn.model_selection import train_test_split
 
-from breast_cancer_dataset.cbis_ddsm import DatasetCBISDDSM
+from breast_cancer_dataset.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from breast_cancer_dataset.inbreast import DatasetINBreast
 from breast_cancer_dataset.mias import DatasetMIAS
 from data_viz.functions import create_countplot, plot_image
@@ -25,7 +25,7 @@ class BreastCancerDataset:
 
     DBS = {
             'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetMIAS, DatasetINBreast],
-            'PATCHES': [],
+            'PATCHES': [DatasetCBISDDSMCrop],
             'MASK': []
         }
 
@@ -37,7 +37,9 @@ class BreastCancerDataset:
             self.bulk_data_desc_to_files(df=self.df)
             self.get_eda_from_df(dirname=MODEL_FILES.model_viz_eda_dir)
         else:
-            self.df = pd.read_excel(excel_path, header=None, skiprows=1, names=DF_COLS, dtype=object, index_col=None)
+            self.df = pd.read_excel(
+                excel_path, header=None, skiprows=1, names=[*DF_COLS, 'TRAIN_VAL'], dtype=object, index_col=None
+            )
 
         if get_class:
             self.class_dict = {x: l for x, l in enumerate(self.df.IMG_LABEL.unique())}
@@ -219,7 +221,7 @@ class BreastCancerDataset:
         create_countplot(x='DATASET', hue='IMG_LABEL', data=self.df, title=title, file=file)
 
         title = 'Distribución clases'
-        get_path(dirname, f'{title}.png')
+        file = get_path(dirname, f'{title}.png')
         create_countplot(x='IMG_LABEL', data=self.df, title=title, file=file)
 
         title = 'Distribución clases segun train-val'

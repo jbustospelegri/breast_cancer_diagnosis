@@ -28,10 +28,10 @@ class GeneralModel:
     shape = (255, 255, 3)
     LAYERS_DICT = {
         '0FT': [],
-        '1FT': ['block4_dropout', 'block4_maxpool', 'block4_bn3', 'block4_conv2', 'block4_bn1', 'block4_conv1'],
-        '2FT': ['block3_dropout', 'block3_maxpool', 'block3_bn3', 'block3_conv2', 'block3_bn1', 'block3_conv1'],
-        '3FT': ['block2_dropout', 'block2_maxpool', 'block2_bn2', 'block2_conv2', 'block2_bn1', 'block2_conv1'],
-        '4FT': ['block1_dropout', 'block1_maxpool', 'block1_bn1', 'block1_conv1']
+        '1FT': ['block3_maxpool1', 'block3_maxpool2', 'block3_conv1'],
+        '2FT': ['block2_maxpool', 'block2_conv1'],
+        '3FT': ['block1_maxpool', 'block1_conv1'],
+        '4FT': []
     }
 
     def __init__(self, n: int, baseline: Model = None, preprocess_func: Callable = None):
@@ -47,31 +47,15 @@ class GeneralModel:
         """
         baseline = Sequential()
 
-        baseline.add(Conv2D(32, (3, 3), padding="same", activation='relu', name='block1_conv1'))
-        baseline.add(BatchNormalization(axis=1, name='block1_bn1'))
-        baseline.add(MaxPooling2D(pool_size=(3, 3), name='block1_maxpool'))
-        baseline.add(Dropout(0.25, name='block1_dropout'))
+        baseline.add(Conv2D(16, (5, 5), strides=(1, 1), padding="valid", activation='relu', name='block1_conv1'))
+        baseline.add(MaxPooling2D(pool_size=(2, 2), name='block1_maxpool'))
 
-        baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu', name='block2_conv1'))
-        baseline.add(BatchNormalization(axis=1, name='block2_bn1'))
-        baseline.add(Conv2D(64, (3, 3), padding="same", activation='relu', name='block2_conv2'))
-        baseline.add(BatchNormalization(axis=1, name='block2_bn2'))
+        baseline.add(Conv2D(16, (5, 5), strides=(1, 1), padding="valid", activation='relu', name='block2_conv1'))
         baseline.add(MaxPooling2D(pool_size=(2, 2), name='block2_maxpool'))
-        baseline.add(Dropout(0.25, name='block2_dropout'))
 
-        baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu', name='block3_conv1'))
-        baseline.add(BatchNormalization(axis=1, name='block3_bn1'))
-        baseline.add(Conv2D(128, (3, 3), padding="same", activation='relu', name='block3_conv2'))
-        baseline.add(BatchNormalization(axis=1, name='block3_bn3'))
-        baseline.add(MaxPooling2D(pool_size=(2, 2), name='block3_maxpool'))
-        baseline.add(Dropout(0.25, name='block3_dropout'))
-
-        baseline.add(Conv2D(256, (3, 3), padding="same", activation='relu', name='block4_conv1'))
-        baseline.add(BatchNormalization(axis=1, name='block4_bn1'))
-        baseline.add(Conv2D(256, (3, 3), padding="same", activation='relu', name='block4_conv2'))
-        baseline.add(BatchNormalization(axis=1, name='block4_bn3'))
-        baseline.add(MaxPooling2D(pool_size=(2, 2), name='block4_maxpool'))
-        baseline.add(Dropout(0.25, name='block4_dropout'))
+        baseline.add(Conv2D(14, (3, 3), strides=(1, 1), padding="same", activation='relu', name='block3_conv1'))
+        baseline.add(MaxPooling2D(pool_size=(2, 2), name='block3_maxpool1'))
+        baseline.add(MaxPooling2D(pool_size=(2, 2), name='block3_maxpool2'))
 
         return baseline
 

@@ -21,7 +21,7 @@ class DatasetMIAS(DatasetCBISDDSM):
             database_info_file_paths=[MIAS_CASE_DESC]
         )
 
-    def __get_df_from_info_files(self) -> pd.DataFrame:
+    def get_df_from_info_files(self) -> pd.DataFrame:
 
         # Se obtiene la información del fichero de texto descriptivo del dataset
         l = []
@@ -46,10 +46,12 @@ class DatasetMIAS(DatasetCBISDDSM):
         # Se crea la columna IMG_LABEL que contendrá las tipologías 'BENIGNA' y 'MALIGNA'.
         df.loc[:, 'IMG_LABEL'] = df.PATHOLOGY.map(defaultdict(lambda: None, {'B': 'BENIGN', 'M': 'MALIGNANT'}))
 
+        self.add_extra_columns(df)
+
         return df
 
     @staticmethod
-    def __add_extra_columns(df: pd.DataFrame):
+    def add_extra_columns(df: pd.DataFrame):
 
         # Se crea la columna Breast que indicará si se trata de una imagen del seno derecho (Right) o izquierdo (Left).
         # En este caso, no se dispone de dicha información
@@ -68,9 +70,9 @@ class DatasetMIAS(DatasetCBISDDSM):
         # - 'D' (Dense-Glandular): 3
         df.loc[:, 'BREAST_DENSITY'] = df.BREAST_TISSUE.map(defaultdict(lambda: None, {'F': '1', 'G': '2', 'D': '3'}))
 
-    def get_data_from_info_files(self) -> pd.DataFrame:
+    def get_dataframe(self) -> pd.DataFrame:
 
-        df = self.__get_df_from_info_files()
+        df = self.get_df_from_info_files()
 
         # Se suprimen los casos que no contienen ninguna patología
         print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')

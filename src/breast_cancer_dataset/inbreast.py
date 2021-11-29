@@ -20,7 +20,7 @@ class DatasetINBreast(DatasetCBISDDSM):
             database_info_file_paths=[INBREAST_CASE_DESC]
         )
 
-    def __get_df_from_info_files(self) -> pd.DataFrame:
+    def get_df_from_info_files(self) -> pd.DataFrame:
         # Se crea una lista que contendrá la información de los archivos csv del set de datos
         l = []
 
@@ -51,9 +51,12 @@ class DatasetINBreast(DatasetCBISDDSM):
         print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
         df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
 
+        self.add_extra_columns(df)
+
         return df
 
-    def __add_extra_columns(df: pd.DataFrame):
+    @staticmethod
+    def add_extra_columns(df: pd.DataFrame):
         # Se crea la columna Breast que indicará si se trata de una imagen del seno derecho (Right) o izquierdo (Left).
         df.loc[:, 'BREAST'] = np.where(df.Laterality == 'R', 'RIGHT', 'LEFT')
 
@@ -67,12 +70,12 @@ class DatasetINBreast(DatasetCBISDDSM):
         # Se crea la columna BREAST_DENSITY que indicará la densidad del seno
         df.loc[:, 'BREAST_DENSITY'] = df.ACR
 
-    def get_data_from_info_files(self) -> pd.DataFrame:
+    def get_dataframe(self) -> pd.DataFrame:
         """
 
         :return:
         """
-        df = self.__get_df_from_info_files()
+        df = self.get_df_from_info_files()
 
         # Se crea la columna ID para poder linkar la información del excel con la información de las imagenes
         # almacenadas en la carpeta RAW. En este caso, se utilizará el campo File Name

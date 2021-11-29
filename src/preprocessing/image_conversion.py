@@ -31,8 +31,13 @@ def convert_img(args) -> None:
         assert os.path.splitext(img_path)[1] in ['.pgm', '.dcm'], f'Conversion only available for: png, jpg'
         assert not os.path.isfile(dest_path), f'Image converted {dest_path} currently exists'
 
+        try:
+            filter_binary: bool = args[2]
+        except IndexError:
+            filter_binary: bool = False
+
         if os.path.splitext(img_path)[1] == '.dcm':
-            convert_dcm_imgs(ori_path=img_path, dest_path=dest_path)
+            convert_dcm_imgs(ori_path=img_path, dest_path=dest_path, filter_binary=filter_binary)
         elif os.path.splitext(img_path)[1] == '.pgm':
             convert_pgm_imgs(ori_path=img_path, dest_path=dest_path)
         else:
@@ -47,7 +52,7 @@ def convert_img(args) -> None:
             f.write(f'{"=" * 100}\n{get_filename(img_path)}\n{err}\n{"=" * 100}')
 
 
-def convert_dcm_imgs(ori_path: io, dest_path: io) -> None:
+def convert_dcm_imgs(ori_path: io, dest_path: io, filter_binary: bool) -> None:
     """
     Función encargada de leer imagenes en formato dcm y convertirlas al formato especificado por el usuario.
     """
@@ -63,6 +68,11 @@ def convert_dcm_imgs(ori_path: io, dest_path: io) -> None:
 
         # Se convierte las imagenes a formato de array
         img_array = img.pixel_array.astype(float)
+
+        if filter_binary:
+            assert len(np.unique(img_array)) == 2, f'{ori_path} excluded. Not binary Image'
+        else:
+            assert len(np.unique(img_array)) > 2, f'{ori_path} excluded. Binary Image.'
 
         # Se realiza un reescalado de la imagen para obtener los valores entre 0 y 255
         rescaled_image = (np.maximum(img_array, 0) / img_array.max()) * 255

@@ -11,7 +11,7 @@ from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_C
 from utils.functions import get_filename, save_img, get_path, detect_func_err
 
 
-def image_processing(args) -> None:
+def image_pipeline(args) -> None:
     """
     Función utilizada para realizar el preprocesado de las mamografías. Este preprocesado consiste en:
         1 - Recortar los bordes de las imagenes.
@@ -36,6 +36,7 @@ def image_processing(args) -> None:
 
         img_filepath: io = args[0]
         dest_dirpath: io = args[1]
+        mode: str = args[2]
 
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
         assert os.path.isfile(img_filepath), f'The image {img_filepath} does not exists.'
@@ -45,7 +46,7 @@ def image_processing(args) -> None:
         # Se asigna el cuarto argumento en función de su existencia. En caso contrario se asignan valores por
         # defecto
         try:
-            save_example_dirname: io = args[2]
+            save_example_dirname: io = args[3]
             assert os.path.isdir(save_example_dirname)
         except AssertionError:
             Path(save_example_dirname).mkdir(parents=True, exist_ok=True)
@@ -60,17 +61,21 @@ def image_processing(args) -> None:
 
         images = {'ORIGINAL': img}
 
-        # Primero se realiza un crop de las imagenes
-        images['CROPPING 1'] = crop_borders(
-            images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_1', {}))
+        # Primero se realiza un crop de las imagenes en el caso de que sean imagenes completas
+        if mode == 'FULL':
+            images['CROPPING 1'] = crop_borders(
+                images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_1', {}))
 
         # A posteriori se quita el ruido de las imagenes utilizando un filtro medio
         images['REMOVE NOISE'] = remove_noise(
             img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_NOISE', {}))
 
-        # El siguiente paso consiste en eliminar los artefactos de la imagen
-        images['REMOVE ARTIFACTS'], bin_mask, modified_mask, mask = remove_artifacts(
-            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_ARTIFACTS', {}))
+        # El siguiente paso consiste en eliminar los artefactos de la imagen. Solo aplica a imagenes completas
+        if mode == 'FULL':
+            images['REMOVE ARTIFACTS'], bin_mask, modified_mask, mask = remove_artifacts(
+                img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_ARTIFACTS', {}))
+        else:
+            mask = np.ones(images[list(images.keys())[-1]].shape)
 
         # Una vez eliminados los artefactos, se realiza una normalización de la zona del pecho
         images['IMAGE NORMALIZED'] = \
@@ -96,10 +101,13 @@ def image_processing(args) -> None:
             images['IMAGES SYNTHESIZED'] = cv2.merge(tuple(ecual_imgs))
 
         # Se realiza el flip de la imagen en caso de ser necesario:
-        images['IMG_FLIP'] = flip_breast(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('FLIP_IMG', {}))
+        if mode == 'FULL':
+            images['IMG_FLIP'] = flip_breast(
+                img=images[list(images.keys())[-1]].copy(), **prep_dict.get('FLIP_IMG', {})
+            )
 
         # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
-        if prep_dict.get('SQUARE_PAD', False):
+        if (mode == 'FULL') and (prep_dict.get('SQUARE_PAD', False)):
             images['IMAGE PADDED'] = pad_image_into_square(img=images[list(images.keys())[-1]].copy())
 
         # Se aplica el resize de la imagen:
@@ -109,8 +117,9 @@ def image_processing(args) -> None:
 
         # Se aplica el ultimo crop de la parte izquierda
         # Primero se realiza un crop de las imagenes
-        images['CROPPING LEFT'] = crop_borders(
-            images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {}))
+        if mode == 'FULL':
+            images['CROPPING LEFT'] = crop_borders(
+                images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {}))
 
         for i, (name, imag) in enumerate(images.items()):
             save_img(imag, save_example_dirname, f'{i}. {name}')
@@ -159,7 +168,7 @@ def crop_borders(img: np.ndarray, left: float = 0.01, right: float = 0.01, top: 
 
 
 @detect_func_err
-def normalize_breast(img: np.ndarray, mask: np.ndarray, type_norm: str = 'min_max') -> np.ndarray:
+def normalize_breast(img: np.ndarray, mask: np.ndarray = None, type_norm: str = 'min_max') -> np.ndarray:
     """
 
     :param img:
@@ -168,6 +177,9 @@ def normalize_breast(img: np.ndarray, mask: np.ndarray, type_norm: str = 'min_ma
 
     # Se transforma la imagen a float para no perder informacion
     img_float = img.copy().astype(float)
+
+    if mask is None:
+        mask = np.ones(img.shape)
 
     if type_norm == 'min_max':
         min = img_float[mask != 0].min()
@@ -338,7 +350,7 @@ def flip_breast(img: np.ndarray, orient: str = 'left') -> np.ndarray:
 
 
 @detect_func_err
-def apply_clahe_transform(img: np.ndarray, mask: np. ndarray, clip: int = 1) -> np.ndarray:
+def apply_clahe_transform(img: np.ndarray, mask: np.ndarray = None, clip: int = 1) -> np.ndarray:
     """
     función que aplica una ecualización sobre la intensidad de píxeles de la imagen para mejorar el contraste
     de estas.
@@ -346,11 +358,12 @@ def apply_clahe_transform(img: np.ndarray, mask: np. ndarray, clip: int = 1) -> 
     :return: imagen ecualizada
     """
 
-    # Se aplica la ecualización adaptativa del histograma de píxeles.
     clahe_create = cv2.createCLAHE(clipLimit=clip, tileGridSize=(8, 8))
     clahe_img = clahe_create.apply(img)
 
-    clahe_img[mask == 0] = 0
+    if mask is not None:
+        # Se aplica la ecualización adaptativa del histograma de píxeles.
+        clahe_img[mask == 0] = 0
 
     return clahe_img
 
