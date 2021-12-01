@@ -83,6 +83,7 @@ class GradientBoosting:
             data = pd.merge(left=data, right=df_dumy, on='PREPROCESSED_IMG', how='left')
 
         # generación del conjunto de datos de train para gradient boosting
+        data.dropna(how='any', inplace=True)
         train_x, train_y = data.loc[data.TRAIN_VAL == 'train', cols], data.loc[data.TRAIN_VAL == 'train', 'IMG_LABEL']
 
         # entrenamiento del modelo

@@ -110,10 +110,10 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
             filename=get_path(c.model_log_dir, weight_init, frozen_layers, f'{name}_scratch.csv'), separator=';')
         )
 
-        t = cnn.train_from_scratch(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(conf.LEARNING_RATE))
+        t, e = cnn.train_from_scratch(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(conf.LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='Scratch', FT=frozen_layers,
-                  weights=weight_init, time=t, trainable_layers=cnn.get_trainable_layers())
+                  weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
         print(f'{"=" * 75}\nEntrenamiento finalizado.\n{"=" * 75}')
 
     else:
@@ -127,10 +127,10 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
                 separator=';')
         )
 
-        t = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, conf.BATCH_SIZE, Adam(conf.WARM_UP_LEARNING_RATE))
+        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, conf.BATCH_SIZE, Adam(conf.WARM_UP_LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='ExtractFeatures', FT=frozen_layers,
-                  weights=weight_init, time=t, trainable_layers=cnn.get_trainable_layers())
+                  weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
         print(f'{"-" * 75}\n\tEntrenamiento finalizado.\n{"-" * 75}')
 
         print(f'{"-" * 75}\n\tEmpieza proceso de fine-tunning\n{"-" * 75}')
@@ -140,10 +140,10 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
                 separator=';')
         )
 
-        t = cnn.fine_tunning(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(conf.LEARNING_RATE), frozen_layers)
+        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(conf.LEARNING_RATE), frozen_layers)
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='FineTunning', FT=frozen_layers,
-                  weights=weight_init, time=t, trainable_layers=cnn.get_trainable_layers())
+                  weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
         print(f'{"-" * 75}\n\tEntrenamiento finalizado.\n{"-" * 75}')
 
         print(f'{"=" * 75}\nProceso de transfer learning finalizado\n{"=" * 75}')

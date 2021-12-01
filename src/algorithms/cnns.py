@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import Callable, io, Union
+from typing import Callable, io, Union, Tuple
 from time import process_time
 
 from tensorflow.keras import Model, Sequential, optimizers, callbacks
@@ -103,7 +103,7 @@ class GeneralModel:
             raise ValueError(f'Unfrozen layers parametrization for {unfrozen_layers}')
 
     def start_train(self, train_data: DataFrameIterator, val_data: DataFrameIterator, epochs: int, batch_size: int,
-                    opt: optimizers = Adam(1e-3), unfrozen_layers: str = 'ALL') -> float:
+                    opt: optimizers = Adam(1e-3), unfrozen_layers: str = 'ALL') -> Tuple[float, int]:
         """
         Función que compila el modelo, añade los callbacks definidos por el usuario y entrena el modelo
         :param train_data: dataframe iterator con los datos de train
@@ -130,7 +130,7 @@ class GeneralModel:
             steps_per_epoch=train_data.samples // batch_size,
             validation_steps=val_data.samples // batch_size,
         )
-        return process_time() - start
+        return process_time() - start, len(self.history.history['loss'])
 
     def register_metric(self, *args: Union[Callable, str]):
         for arg in args:
@@ -143,16 +143,16 @@ class GeneralModel:
         """
             Función utilizada para entrenar completamente el modelo.
         """
-        t = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='ALL')
-        return t
+        t, e = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='ALL')
+        return t, e
 
     def extract_features(self, train_data, val_data, epochs: int, batch_size: int, opt: optimizers = None):
         """
         Función utilizada para aplicar un proceso de extract features de modo que se conjela la arquitectura definida en
         self.baseline y se entrenan las últimas capas de la arquitectura
         """
-        t = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='0FT')
-        return t
+        t, e = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers='0FT')
+        return t, e
 
     def fine_tunning(self, train_data, val_data, epochs: int, batch_size: int, opt: optimizers = None,
                      unfrozen_layers: str = '1FT'):
@@ -161,8 +161,8 @@ class GeneralModel:
         entrenables en la arquitectura definida por self.baseline se determinarán a partir del método
         set_trainable_layers
         """
-        t = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers=unfrozen_layers)
-        return t
+        t, e = self.start_train(train_data, val_data, epochs, batch_size, opt, unfrozen_layers=unfrozen_layers)
+        return t, e
 
     def save_model(self, dirname: str, model_name: str):
         """
