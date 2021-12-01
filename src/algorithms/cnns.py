@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import Callable, io, Union, Tuple
+from typing import Callable, io, Union
 from time import process_time
 
 from tensorflow.keras import Model, Sequential, optimizers, callbacks
@@ -10,9 +10,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import L2
 from tensorflow.keras.applications import resnet50, densenet, vgg16, inception_v3
 from tensorflow.python.keras.preprocessing.image import DataFrameIterator
-from tensorflow.keras.layers import (
-    Conv2D, BatchNormalization, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input
-)
+from tensorflow.keras.layers import Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input
 from tensorflow.keras.losses import CategoricalCrossentropy
 
 from utils.functions import get_path, get_number_of_neurons

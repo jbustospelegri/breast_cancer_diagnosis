@@ -1,31 +1,28 @@
 import json
 import logging
 import os
-import random
+
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 
 from typing import io, Callable
-from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array, Iterator
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, Iterator
 from sklearn.model_selection import train_test_split
 
 from breast_cancer_dataset.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from breast_cancer_dataset.inbreast import DatasetINBreast
 from breast_cancer_dataset.mias import DatasetMIAS, DatasetMIASCrop
-from data_viz.functions import create_countplot, plot_image
 from utils.config import (
     MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, IMG_SHAPE, PREPROCESSING_CONFIG,
-    EXPERIMENT, DF_COLS
+    EXPERIMENT
 )
-from utils.functions import get_filename, get_path
 
 
 class BreastCancerDataset:
 
     DBS = {
             'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetMIAS, DatasetINBreast],
-            'PATCHES': [DatasetCBISDDSMCrop], # , DatasetMIASCrop],
+            'PATCHES': [DatasetMIASCrop], #DatasetCBISDDSMCrop], # , DatasetMIASCrop],
             'MASK': []
         }
 
@@ -35,11 +32,8 @@ class BreastCancerDataset:
             self.df = self.get_data_from_databases()
             self.split_dataset(train_prop=TRAIN_DATA_PROP if split_data else 1, stratify=True)
             self.bulk_data_desc_to_files(df=self.df)
-            self.get_eda_from_df(dirname=MODEL_FILES.model_viz_eda_dir)
         else:
-            self.df = pd.read_excel(
-                excel_path, header=None, skiprows=1, names=[*DF_COLS, 'TRAIN_VAL'], dtype=object, index_col=None
-            )
+            self.df = pd.read_excel(excel_path, dtype=object, index_col=None)
 
         if get_class:
             self.class_dict = {x: l for x, l in enumerate(self.df.IMG_LABEL.unique())}
@@ -100,13 +94,6 @@ class BreastCancerDataset:
             **DATA_AUGMENTATION_FUNCS, fill_mode='constant', cval=0, preprocessing_function=preprocessing_function
         )
 
-        # Se plotea las transformaciones que sufre una imagen en caso de indicarse el parámetro directory
-        if directory:
-            self.get_data_augmentation_examples(
-                out_filepath=directory,
-                example_imag=self.df.iloc[random.sample(self.df.index.tolist(), 1)[0]].PREPROCESSED_IMG
-            )
-
         # Parametrización del generador de validación. Las imagenes de validación exclusivamente se les aplicará la
         # técnica de preprocesado subministrada por el usuario.
         val_datagen = ImageDataGenerator(preprocessing_function=preprocessing_function)
@@ -165,70 +152,3 @@ class BreastCancerDataset:
         print(f'\tBulking preprocessing functions to {MODEL_FILES.model_db_processing_info_file}\n{"-" * 75}')
         with open(MODEL_FILES.model_db_processing_info_file, 'w') as out:
             json.dump(PREPROCESSING_FUNCS[PREPROCESSING_CONFIG], out, indent=4)
-
-    @staticmethod
-    def get_data_augmentation_examples(out_filepath: io, example_imag: io) -> None:
-        """
-        Función que permite generar un ejemplo de cada tipo de data augmentation aplicado
-        :param out_filepath: ruta del archivo de imagen a generar
-        :param example_imag: nombre de una muestra de ejemplo sobre la que se aplicarán las transformaciones propias del
-                             data augmentation
-        """
-
-        # Se lee la imagen del path de ejemplo
-        image = load_img(example_imag)
-        # Se transforma la imagen a formato array
-        image = img_to_array(image)
-        # Se añade una dimensión para obtener el dato de forma (1, width, height, channels)
-        image_ori = np.expand_dims(image, axis=0)
-
-        # Figura y subplots de matplotlib. Debido a que existen 4 transformaciones de data augmentation, se creará un
-        # grid con 5 columnas que contendrán cada ejemplo de transformación y la imagen original
-        elements = len(DATA_AUGMENTATION_FUNCS.keys())
-        cols = 3
-        rows = elements // cols + elements % cols
-        fig = plt.figure(figsize=(15, 4 * rows))
-
-        # Se representa la imagen original en el primer subplot.
-        plot_image(img=image_ori, title='Imagen Original', ax_=fig.add_subplot(rows, cols, 1))
-
-        # Se iteran las transformaciones
-        for i, (k, v) in enumerate(DATA_AUGMENTATION_FUNCS.items(), 2):
-
-            # Se crea al datagenerator con exclusivamente la transformación a aplicar.
-            datagen = ImageDataGenerator(**{k: v}, fill_mode='constant', cval=0)
-            # Se recupera la imagen transformada mediante next() del método flow del objeto datagen
-            plot_image(img=next(datagen.flow(image_ori)), title=k, ax_=fig.add_subplot(rows, cols, i))
-
-        # Se ajusta la figura
-        fig.tight_layout()
-
-        # Se almacena la figura
-        plt.savefig(get_path(out_filepath, f'{get_filename(example_imag)}.png'))
-
-    def get_eda_from_df(self, dirname: io) -> None:
-        """
-        Función que permite representar graficamente el número de observaciones y la proporción de cada una de las
-        clases presentes en un dataet. La clase de cada observción debe estar almacenada en una columna cuyo
-        nombre sea "class".
-
-        :param dirname: directorio en el que se almacenará la imagen.
-        """
-
-        print(f'{"-" * 75}\n\tGenerando análisis del dataset\n{"-" * 75}')
-        title = 'Distribución clases según orígen'
-        file = get_path(dirname, f'{title}.png')
-        create_countplot(x='DATASET', hue='IMG_LABEL', data=self.df, title=title, file=file)
-
-        title = 'Distribución clases'
-        file = get_path(dirname, f'{title}.png')
-        create_countplot(x='IMG_LABEL', data=self.df, title=title, file=file)
-
-        title = 'Distribución clases segun train-val'
-        file = get_path(dirname, f'{title}.png')
-        create_countplot(x='TRAIN_VAL', hue='IMG_LABEL', data=self.df, title=title, file=file, norm=True)
-
-        title = 'Distribución clases segun patología'
-        file = get_path(dirname, f'{title}.png')
-        create_countplot(x='ABNORMALITY_TYPE', hue='IMG_LABEL', data=self.df, title=title, file=file, norm=True)
-        print(f'{"-" * 75}\n\tAnálisis del dataset finalizado en {dirname}\n{"-" * 75}')

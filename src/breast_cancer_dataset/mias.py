@@ -3,22 +3,20 @@ import numpy as np
 
 from collections import defaultdict
 
-from breast_cancer_dataset.cbis_ddsm import DatasetCBISDDSM
+from breast_cancer_dataset.base import GeneralDataBase
+from preprocessing.image_processing import crop_image_pipeline
 from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, DF_COLS
 from utils.functions import get_filename, search_files, get_path
 
 
-class DatasetMIAS(DatasetCBISDDSM):
+class DatasetMIAS(GeneralDataBase):
 
     __name__ = 'MIAS'
 
     def __init__(self):
         super().__init__(
-            ori_dir=MIAS_DB_PATH,
-            ori_extension='pgm',
-            converted_dir=MIAS_CONVERTED_DATA_PATH,
-            procesed_dir=MIAS_PREPROCESSED_DATA_PATH,
-            database_info_file_paths=[MIAS_CASE_DESC]
+            ori_dir=MIAS_DB_PATH, ori_extension='pgm', dest_extension='png', converted_dir=MIAS_CONVERTED_DATA_PATH,
+            procesed_dir=MIAS_PREPROCESSED_DATA_PATH, database_info_file_paths=[MIAS_CASE_DESC]
         )
 
     def get_df_from_info_files(self) -> pd.DataFrame:
@@ -35,13 +33,6 @@ class DatasetMIAS(DatasetCBISDDSM):
                 )
             )
         df = pd.concat(objs=l, ignore_index=True)
-
-        # Se crea una columna con información acerca de qué dataset se trata.
-        df.loc[:, 'DATASET'] = self.__name__
-
-        # Se crea la columna IMG_TYPE que indicará si se trata de una imagen completa (FULL) o bien de una imagen
-        # recortada (CROP) o mascara (MASK). En este caso, todas las imagenes son FULL
-        df.loc[:, 'IMG_TYPE'] = self.IMG_TYPE
 
         # Se crea la columna IMG_LABEL que contendrá las tipologías 'BENIGNA' y 'MALIGNA'.
         df.loc[:, 'IMG_LABEL'] = df.PATHOLOGY.map(defaultdict(lambda: None, {'B': 'BENIGN', 'M': 'MALIGNANT'}))
@@ -74,9 +65,7 @@ class DatasetMIAS(DatasetCBISDDSM):
         # - 'D' (Dense-Glandular): 3
         df.loc[:, 'BREAST_DENSITY'] = df.BREAST_TISSUE.map(defaultdict(lambda: None, {'F': '1', 'G': '2', 'D': '3'}))
 
-    def get_dataframe(self) -> pd.DataFrame:
-
-        df = self.get_df_from_info_files()
+    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
 
         # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
         # de origen (por defecto INBREAST_DB_PATH)
@@ -100,7 +89,7 @@ class DatasetMIAS(DatasetCBISDDSM):
         # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
         df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
             lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE,
-                                   f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
+                               f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
         )
 
         return df_def[DF_COLS]
@@ -110,11 +99,16 @@ class DatasetMIASCrop(DatasetMIAS):
 
     IMG_TYPE: str = 'CROP'
     BINARY: bool = False
+    PREPROCESS_FUNC = crop_image_pipeline
 
-    def start_pipeline(self):
-        self.convert_images_format()
-        self.clean_dataframe()
-        self.preproces_images(show_example=True)
+    @staticmethod
+    def add_extra_columns(df: pd.DataFrame):
+        super().add_extra_columns(df)
+        df.loc[:, 'XY_MAX'] = (0, 0)
+        df.loc[:, 'XY_MIN'] = (0, 0)
 
     def clean_dataframe(self):
+        super().clean_dataframe()
+        print(f'\tExcluding {len(self.df_desc[self.df_desc.XY_MAX.isnull()])} images without pathology localization.')
+        self.df_desc.drop(index=self.df_desc[self.df_desc.XY_MAX.isnull()])
         self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()

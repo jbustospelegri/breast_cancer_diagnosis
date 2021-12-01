@@ -11,7 +11,128 @@ from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_C
 from utils.functions import get_filename, save_img, get_path, detect_func_err
 
 
-def image_pipeline(args) -> None:
+def full_image_pipeline(args) -> None:
+    """
+    Función utilizada para realizar el preprocesado de las mamografías. Este preprocesado consiste en:
+        1 - Recortar los bordes de las imagenes.
+        2 - Realziar una normalización min-max para estandarizar las imagenes a 8 bits.
+        3 - Quitar anotaciones realziadas sobre las iamgenes.
+        4 - Relizar un flip horizontal para estandarizar la orientacion de los senos.
+        5 - Mejorar el contraste de las imagenes en blanco y negro  mediante CLAHE.
+        6 - Recortar las imagenes para que queden cuadradas.
+        7 - Normalización min-max para estandarizar el valor de los píxeles entre 0 y 255
+        8 - Resize de las imagenes a un tamaño de 300 x 300
+
+    :param args: listado de argumentos cuya posición debe ser:
+        1 - path de la imagen sin procesar.
+        2 - path de destino de la imagen procesada.
+        3 - extensión con la que se debe de almacenar la imagen
+        4 - directorio en el que se deben de almacenar los ejemplos.
+    """
+
+    try:
+        # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
+        assert len(args) >= 2, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
+
+        img_filepath: io = args[0]
+        dest_dirpath: io = args[1]
+
+        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
+        assert os.path.isfile(img_filepath), f'The image {img_filepath} does not exists.'
+        assert os.path.splitext(dest_dirpath)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
+        assert not os.path.isfile(dest_dirpath), f'Processing file exists: {dest_dirpath}'
+
+        # Se asigna el cuarto argumento en función de su existencia. En caso contrario se asignan valores por
+        # defecto
+        try:
+            save_example_dirname: io = args[2]
+            assert os.path.isdir(save_example_dirname)
+        except AssertionError:
+            Path(save_example_dirname).mkdir(parents=True, exist_ok=True)
+        except (IndexError, TypeError):
+            save_example_dirname = None
+
+        # Se almacena la configuración del preprocesado
+        prep_dict = PREPROCESSING_FUNCS[PREPROCESSING_CONFIG]
+
+        # Se lee la imagen original sin procesar.
+        img = cv2.cvtColor(cv2.imread(img_filepath), cv2.COLOR_BGR2GRAY)
+
+        images = {'ORIGINAL': img}
+
+        # Primero se realiza un crop de las imagenes en el caso de que sean imagenes completas
+        images['CROPPING 1'] = crop_borders(
+            images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_1', {})
+        )
+
+        # A posteriori se quita el ruido de las imagenes utilizando un filtro medio
+        images['REMOVE NOISE'] = remove_noise(
+            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_NOISE', {}))
+
+        # El siguiente paso consiste en eliminar los artefactos de la imagen. Solo aplica a imagenes completas
+        images['REMOVE ARTIFACTS'], _, _, mask = remove_artifacts(
+            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_ARTIFACTS', {})
+        )
+
+        # Una vez eliminados los artefactos, se realiza una normalización de la zona del pecho
+        images['IMAGE NORMALIZED'] = \
+            normalize_breast(images[list(images.keys())[-1]].copy(), mask, **prep_dict.get('NORMALIZE_BREAST', {}))
+
+        # A continuación se realiza aplica un conjunto de ecualizaciones la imagen. El número máximo de ecualizaciones
+        # a aplicar son 3 y serán representadas enc ada canal
+        ecual_imgs = []
+        img_to_ecualize = images[list(images.keys())[-1]].copy()
+        assert 0 < len(prep_dict['ECUALIZATION'].keys()) < 4, 'Número de ecualizaciones incorrecto'
+        for i, (ecual_func, ecual_kwargs) in enumerate(prep_dict['ECUALIZATION'].items(), 1):
+
+            if 'CLAHE' in ecual_func.upper():
+                images[ecual_func.upper()] = apply_clahe_transform(img=img_to_ecualize, mask=mask, **ecual_kwargs)
+                ecual_imgs.append(images[list(images.keys())[-1]].copy())
+
+            elif 'gcn' in ecual_func:
+                pass
+
+        if len(prep_dict['ECUALIZATION'].keys()) == 2:
+            images['IMAGES SYNTHESIZED'] = cv2.merge((img_to_ecualize, *ecual_imgs))
+        elif len(prep_dict['ECUALIZATION'].keys()) == 3:
+            images['IMAGES SYNTHESIZED'] = cv2.merge(tuple(ecual_imgs))
+
+        # Se realiza el flip de la imagen en caso de ser necesario:
+        images['IMG_FLIP'] = flip_breast(
+            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('FLIP_IMG', {})
+        )
+
+        # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
+        if prep_dict.get('SQUARE_PAD', False):
+            images['IMAGE PADDED'] = pad_image_into_square(img=images[list(images.keys())[-1]].copy())
+
+        # Se aplica el resize de la imagen:
+        if prep_dict.get('RESIZING', False):
+            images['IMAGE RESIZED'] = \
+                resize_img(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RESIZING', {}))
+
+        # Se aplica el ultimo crop de la parte izquierda
+        # Primero se realiza un crop de las imagenes
+        images['CROPPING LEFT'] = crop_borders(
+            images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {})
+        )
+
+        for i, (name, imag) in enumerate(images.items()):
+            save_img(imag, save_example_dirname, f'{i}. {name}')
+
+        # Se almacena la imagen definitiva
+        Image.fromarray(np.uint8(images[list(images.keys())[-1]].copy())).save(dest_dirpath)
+
+    except AssertionError as err:
+        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
+
+    except Exception as err:
+        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\n{get_filename(img_filepath)}\n{err}\n{"=" * 100}')
+
+
+def crop_image_pipeline(args) -> None:
     """
     Función utilizada para realizar el preprocesado de las mamografías. Este preprocesado consiste en:
         1 - Recortar los bordes de las imagenes.
@@ -61,25 +182,13 @@ def image_pipeline(args) -> None:
 
         images = {'ORIGINAL': img}
 
-        # Primero se realiza un crop de las imagenes en el caso de que sean imagenes completas
-        if mode == 'FULL':
-            images['CROPPING 1'] = crop_borders(
-                images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_1', {}))
-
         # A posteriori se quita el ruido de las imagenes utilizando un filtro medio
         images['REMOVE NOISE'] = remove_noise(
             img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_NOISE', {}))
 
-        # El siguiente paso consiste en eliminar los artefactos de la imagen. Solo aplica a imagenes completas
-        if mode == 'FULL':
-            images['REMOVE ARTIFACTS'], bin_mask, modified_mask, mask = remove_artifacts(
-                img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_ARTIFACTS', {}))
-        else:
-            mask = np.ones(images[list(images.keys())[-1]].shape)
-
         # Una vez eliminados los artefactos, se realiza una normalización de la zona del pecho
         images['IMAGE NORMALIZED'] = \
-            normalize_breast(images[list(images.keys())[-1]].copy(), mask, **prep_dict.get('NORMALIZE_BREAST', {}))
+            normalize_breast(images[list(images.keys())[-1]].copy(), **prep_dict.get('NORMALIZE_BREAST', {}))
 
         # A continuación se realiza aplica un conjunto de ecualizaciones la imagen. El número máximo de ecualizaciones
         # a aplicar son 3 y serán representadas enc ada canal
@@ -89,7 +198,7 @@ def image_pipeline(args) -> None:
         for i, (ecual_func, ecual_kwargs) in enumerate(prep_dict['ECUALIZATION'].items(), 1):
 
             if 'CLAHE' in ecual_func.upper():
-                images[ecual_func.upper()] = apply_clahe_transform(img=img_to_ecualize, mask=mask, **ecual_kwargs)
+                images[ecual_func.upper()] = apply_clahe_transform(img=img_to_ecualize, **ecual_kwargs)
                 ecual_imgs.append(images[list(images.keys())[-1]].copy())
 
             elif 'gcn' in ecual_func:
@@ -100,26 +209,11 @@ def image_pipeline(args) -> None:
         elif len(prep_dict['ECUALIZATION'].keys()) == 3:
             images['IMAGES SYNTHESIZED'] = cv2.merge(tuple(ecual_imgs))
 
-        # Se realiza el flip de la imagen en caso de ser necesario:
-        if mode == 'FULL':
-            images['IMG_FLIP'] = flip_breast(
-                img=images[list(images.keys())[-1]].copy(), **prep_dict.get('FLIP_IMG', {})
-            )
-
-        # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
-        if (mode == 'FULL') and (prep_dict.get('SQUARE_PAD', False)):
-            images['IMAGE PADDED'] = pad_image_into_square(img=images[list(images.keys())[-1]].copy())
 
         # Se aplica el resize de la imagen:
         if prep_dict.get('RESIZING', False):
             images['IMAGE RESIZED'] = \
                 resize_img(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RESIZING', {}))
-
-        # Se aplica el ultimo crop de la parte izquierda
-        # Primero se realiza un crop de las imagenes
-        if mode == 'FULL':
-            images['CROPPING LEFT'] = crop_borders(
-                images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {}))
 
         for i, (name, imag) in enumerate(images.items()):
             save_img(imag, save_example_dirname, f'{i}. {name}')

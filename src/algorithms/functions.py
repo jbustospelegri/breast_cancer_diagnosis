@@ -14,7 +14,7 @@ from tensorflow.keras.callbacks import CSVLogger, EarlyStopping, ReduceLROnPlate
 from tensorflow.keras.optimizers import Adam
 
 from utils.functions import get_path, bulk_data
-from breast_cancer_dataset.general import BreastCancerDataset
+from breast_cancer_dataset.database_generator import BreastCancerDataset
 
 
 def get_predictions(keras_model: models, data: Iterator, class_labels: dict, **kwargs) -> pd.DataFrame:
@@ -100,8 +100,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
     # Se recuperan los generadores de entrenamiento y validación en función del tamaño de entrada definido para cada
     # red y su función de preprocesado.
     train, val = db.get_dataset_generator(
-        batch_size=conf.BATCH_SIZE, directory=c.model_viz_data_augm_dir, preprocessing_function=cnn.preprocess_func,
-        size=cnn.shape[:2]
+        batch_size=conf.BATCH_SIZE, preprocessing_function=cnn.preprocess_func, size=cnn.shape[:2]
     )
 
     if frozen_layers == 'ALL':

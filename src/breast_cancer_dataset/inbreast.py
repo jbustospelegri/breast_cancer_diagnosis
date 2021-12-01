@@ -1,22 +1,21 @@
 import pandas as pd
 import numpy as np
 
-from breast_cancer_dataset.cbis_ddsm import DatasetCBISDDSM
+from breast_cancer_dataset.base import GeneralDataBase
 from utils.config import (
     INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC, DF_COLS
 )
 from utils.functions import search_files, get_filename, get_path
 
 
-class DatasetINBreast(DatasetCBISDDSM):
+class DatasetINBreast(GeneralDataBase):
 
     __name__ = 'INBreast'
 
     def __init__(self):
         super().__init__(
-            ori_dir=INBREAST_DB_PATH,
-            converted_dir=INBREAST_CONVERTED_DATA_PATH,
-            procesed_dir=INBREAST_PREPROCESSED_DATA_PATH,
+            ori_dir=INBREAST_DB_PATH, ori_extension='dcm', dest_extension='png',
+            converted_dir=INBREAST_CONVERTED_DATA_PATH, procesed_dir=INBREAST_PREPROCESSED_DATA_PATH,
             database_info_file_paths=[INBREAST_CASE_DESC]
         )
 
@@ -70,7 +69,7 @@ class DatasetINBreast(DatasetCBISDDSM):
         # Se crea la columna BREAST_DENSITY que indicará la densidad del seno
         df.loc[:, 'BREAST_DENSITY'] = df.ACR
 
-    def get_dataframe(self) -> pd.DataFrame:
+    def process_dataframe(self) -> pd.DataFrame:
         """
 
         :return:

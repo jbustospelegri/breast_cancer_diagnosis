@@ -5,7 +5,7 @@ import tensorflow
 from multiprocessing import Queue, Process
 
 from algorithms.model_ensambling import GradientBoosting
-from breast_cancer_dataset.general import BreastCancerDataset
+from breast_cancer_dataset.database_generator import BreastCancerDataset
 from algorithms.cnns import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
 from algorithms.functions import training_pipe
 from data_viz.visualizacion_resultados import DataVisualizer
@@ -75,3 +75,9 @@ if __name__ == '__main__':
 
     print(f'{"-" * 75}\nGenerando matrices de confusión de los modelos.\n{"-" * 75}')
     data_viz.get_model_predictions_metrics(predictions_dir=model_config.model_predictions_dir)
+
+    print(f'{"-" * 75}\nGenerando ejemplos de Data Augmentation del set de datos.\n{"-" * 75}')
+    data_viz.get_data_augmentation_examples()
+
+    print(f'{"-" * 75}\nGenerando análisis EDA del set de datos.\n{"-" * 75}')
+    data_viz.get_eda_from_df()
