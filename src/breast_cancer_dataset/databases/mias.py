@@ -1,11 +1,17 @@
+import os
+import random
+
 import pandas as pd
 import numpy as np
 
+from multiprocessing import Pool, cpu_count
 from collections import defaultdict
+from tqdm import tqdm
 
 from breast_cancer_dataset.base import GeneralDataBase
 from preprocessing.image_processing import crop_image_pipeline
-from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, DF_COLS
+from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, \
+    MODEL_FILES
 from utils.functions import get_filename, search_files, get_path
 
 
@@ -14,7 +20,7 @@ class DatasetMIAS(GeneralDataBase):
     __name__ = 'MIAS'
 
     def __init__(self):
-        super().__init__(
+        super(DatasetMIAS, self).__init__(
             ori_dir=MIAS_DB_PATH, ori_extension='pgm', dest_extension='png', converted_dir=MIAS_CONVERTED_DATA_PATH,
             procesed_dir=MIAS_PREPROCESSED_DATA_PATH, database_info_file_paths=[MIAS_CASE_DESC]
         )
@@ -41,12 +47,10 @@ class DatasetMIAS(GeneralDataBase):
         print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
         df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
 
-        self.add_extra_columns(df)
 
         return df
 
-    @staticmethod
-    def add_extra_columns(df: pd.DataFrame):
+    def add_extra_columns(self, df: pd.DataFrame):
 
         # Se crea la columna Breast que indicará si se trata de una imagen del seno derecho (Right) o izquierdo (Left).
         # En este caso, no se dispone de dicha información
@@ -92,23 +96,60 @@ class DatasetMIAS(GeneralDataBase):
                                f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
         )
 
-        return df_def[DF_COLS]
+        return df_def[self.DF_COLS]
 
 
 class DatasetMIASCrop(DatasetMIAS):
 
     IMG_TYPE: str = 'CROP'
-    BINARY: bool = False
-    PREPROCESS_FUNC = crop_image_pipeline
+    DF_COLS = [
+        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
+        'CONVERTED_IMG', 'PREPROCESSED_IMG', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN', 'IMG_LABEL'
+    ]
 
-    @staticmethod
-    def add_extra_columns(df: pd.DataFrame):
-        super().add_extra_columns(df)
-        df.loc[:, 'XY_MAX'] = (0, 0)
-        df.loc[:, 'XY_MIN'] = (0, 0)
+    def add_extra_columns(self, df: pd.DataFrame):
+        super(DatasetMIASCrop, self).add_extra_columns(df)
+        df.loc[:, 'X_MAX'] = pd.to_numeric(df.X_CORD, errors='coerce', downcast='integer') + \
+                             pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
+        df.loc[:, 'Y_MAX'] = pd.to_numeric(df.Y_CORD, errors='coerce', downcast='integer') + \
+                             pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
+        df.loc[:, 'X_MIN'] = pd.to_numeric(df.X_CORD, errors='coerce', downcast='integer') - \
+                             pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
+        df.loc[:, 'Y_MIN'] = pd.to_numeric(df.Y_CORD, errors='coerce', downcast='integer') - \
+                             pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
 
     def clean_dataframe(self):
-        super().clean_dataframe()
-        print(f'\tExcluding {len(self.df_desc[self.df_desc.XY_MAX.isnull()])} images without pathology localization.')
-        self.df_desc.drop(index=self.df_desc[self.df_desc.XY_MAX.isnull()])
-        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
+        print(f'\tExcluding {len(self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)])} '
+              f'images without pathology localization.')
+        self.df_desc.drop(
+            index=self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)].index,
+            inplace=True
+        )
+
+    def preproces_images(self, show_example: bool = False) -> None:
+        """
+        Función utilizara para realizar el preprocesado de las imagenes completas.
+
+        :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
+        prueba realizada.
+        """
+
+        preprocessed_imgs = pd.DataFrame(
+            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}',
+                              ext=self.dest_extension),
+            columns=['CONVERTED_IMG']
+        )
+        print(f'{"-" * 75}\n\tStarting preprocessing of {len(preprocessed_imgs)} images')
+
+        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, row.X_MAX, row.Y_MAX, row.X_MIN, row.Y_MIN) for _, row in
+                self.df_desc.iterrows()]
+
+        with Pool(processes=cpu_count() - 2) as pool:
+            results = tqdm(pool.imap(crop_image_pipeline, args), total=len(args), desc='preprocessing crop images')
+            tuple(results)
+
+        # Se recuperan las imagenes modificadas y se crea un dataframe
+        proc_imgs = list(
+            search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
+        )
+        print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')

@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import Callable, io, Union
+from typing import Callable, io, Union, Tuple
 from time import process_time
 
 from tensorflow.keras import Model, Sequential, optimizers, callbacks
@@ -196,8 +196,10 @@ class VGG16Model(GeneralModel):
     shape = (224, 224, 3)
 
     def __init__(self, n: int, weights: Union[str, io] = None):
-        super().__init__(n=n, baseline=vgg16.VGG16(include_top=False, weights=weights, input_shape=self.shape),
-                         preprocess_func=vgg16.preprocess_input)
+        super(VGG16Model, self).__init__(
+            n=n, baseline=vgg16.VGG16(include_top=False, weights=weights, input_shape=self.shape),
+            preprocess_func=vgg16.preprocess_input
+        )
 
 
 class Resnet50Model(GeneralModel):
@@ -229,8 +231,10 @@ class Resnet50Model(GeneralModel):
     shape = (224, 224, 3)
 
     def __init__(self, n: int, weights: Union[str, io] = None):
-        super().__init__(n=n, baseline=resnet50.ResNet50(include_top=False, weights=weights, input_shape=self.shape),
-                         preprocess_func=resnet50.preprocess_input)
+        super(Resnet50Model, self).__init__(
+            n=n, baseline=resnet50.ResNet50(include_top=False, weights=weights, input_shape=self.shape),
+            preprocess_func=resnet50.preprocess_input
+        )
 
 
 class InceptionV3Model(GeneralModel):
@@ -272,7 +276,7 @@ class InceptionV3Model(GeneralModel):
     shape = (299, 299, 3)
 
     def __init__(self, n: int, weights: Union[str, io] = None):
-        super().__init__(
+        super(InceptionV3Model, self).__init__(
             n=n, baseline=inception_v3.InceptionV3(include_top=False, weights=weights, input_shape=self.shape),
             preprocess_func=inception_v3.preprocess_input)
 
@@ -302,5 +306,7 @@ class DenseNetModel(GeneralModel):
     shape = (224, 224, 3)
 
     def __init__(self, n: int, weights: Union[str, io] = None):
-        super().__init__(n=n, baseline=densenet.DenseNet121(include_top=False, weights=weights, input_shape=self.shape),
-                         preprocess_func=densenet.preprocess_input)
+        super(DenseNetModel, self).__init__(
+            n=n, baseline=densenet.DenseNet121(include_top=False, weights=weights, input_shape=self.shape),
+            preprocess_func=densenet.preprocess_input
+        )

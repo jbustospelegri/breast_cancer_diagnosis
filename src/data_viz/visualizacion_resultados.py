@@ -13,7 +13,8 @@ from typing import List
 from collections import defaultdict
 
 from data_viz.functions import render_mpl_table, plot_image, create_countplot
-from utils.config import MODEL_FILES, XGB_CONFIG, METRICS, DATA_AUGMENTATION_FUNCS
+from preprocessing.image_processing import full_image_pipeline, crop_image_pipeline
+from utils.config import MODEL_FILES, XGB_CONFIG, METRICS, DATA_AUGMENTATION_FUNCS, EXPERIMENT
 from utils.functions import get_path, search_files, get_filename
 
 
@@ -451,3 +452,27 @@ class DataVisualizer:
         file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
         create_countplot(x='ABNORMALITY_TYPE', hue='IMG_LABEL', data=df, title=title, file=file, norm=True)
         print(f'{"-" * 75}\n\tAnálisis del dataset finalizado en {MODEL_FILES.model_viz_eda_dir}\n{"-" * 75}')
+
+    def get_preprocessing_examples(self) -> None:
+
+        df = self.get_dataframe_from_dataset_excel().assign(example_dir=None)
+        photos = []
+        for dataset in df.DATASET.unique():
+            photos += random.sample(df[df.DATASET == dataset].index.tolist(), 5)
+
+        df.loc[photos, 'example_dir'] = df.loc[photos, :].apply(
+            lambda x: get_path(MODEL_FILES.model_viz_preprocesing_dir, x.DATASET,
+                               f'{get_filename(x.PREPROCESSED_IMG)}.png'),
+            axis=1
+        )
+
+        if EXPERIMENT == 'COMPLETE_IMAGE':
+            for _, r in df[df.example_dir.notnull()].iterrows():
+                full_image_pipeline([r.CONVERTED_IMG, r.example_dir, True])
+        elif EXPERIMENT == 'PATCHES':
+            for _, r in df[df.example_dir.notnull()].iterrows():
+                crop_image_pipeline([r.CONVERTED_IMG, r.example_dir, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN, True])
+        elif EXPERIMENT == 'MASK':
+            pass
+        else:
+            raise ValueError(f"Function {EXPERIMENT} doesn't defined")

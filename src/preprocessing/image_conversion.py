@@ -9,7 +9,7 @@ from typing import io
 from PIL import Image
 
 from utils.config import LOGGING_DATA_PATH
-from utils.functions import get_path, get_filename, get_dirname
+from utils.functions import get_path, get_filename, get_dirname, get_value_from_args_if_exists
 
 
 def convert_img(args) -> None:
@@ -22,19 +22,21 @@ def convert_img(args) -> None:
     """
     try:
         # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
-        assert len(args) >= 2, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
+        if not (len(args) >= 2):
+            raise ValueError('Not enough arguments for convert_dcm_img function. Minimum required arguments: 3')
+
         img_path: io = args[0]
         dest_path: io = args[1]
 
-        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
-        assert os.path.isfile(img_path), f"{img_path} doesn't exists."
-        assert os.path.splitext(img_path)[1] in ['.pgm', '.dcm'], f'Conversion only available for: png, jpg'
-        assert not os.path.isfile(dest_path), f'Image converted {dest_path} currently exists'
+        filter_binary: bool = get_value_from_args_if_exists(args, 2, False, IndexError, TypeError)
 
-        try:
-            filter_binary: bool = args[2]
-        except IndexError:
-            filter_binary: bool = False
+        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
+        if not os.path.isfile(img_path):
+            raise FileNotFoundError(f"{img_path} doesn't exists.")
+        if os.path.splitext(img_path)[1] not in ['.pgm', '.dcm']:
+            raise ValueError('Conversion only available for: pgm, dcm')
+
+        assert not os.path.isfile(dest_path), f'Image converted {dest_path} currently exists'
 
         if os.path.splitext(img_path)[1] == '.dcm':
             convert_dcm_imgs(ori_path=img_path, dest_path=dest_path, filter_binary=filter_binary)
@@ -44,7 +46,7 @@ def convert_img(args) -> None:
             raise KeyError(f'Conversion function for {os.path.splitext(img_path)} not implemented')
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Asserts).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in convert_img\n{err}\n{"=" * 100}')
 
     except Exception as err:
@@ -58,7 +60,8 @@ def convert_dcm_imgs(ori_path: io, dest_path: io, filter_binary: bool) -> None:
     """
     try:
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
-        assert os.path.splitext(dest_path)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
+        if os.path.splitext(dest_path)[1] not in ['.png', '.jpg']:
+            raise ValueError('Conversion only available for: png, jpg')
 
         # se crea el directorio y sus subdirectorios en caso de no existir
         Path(get_dirname(dest_path)).mkdir(parents=True, exist_ok=True)
@@ -84,7 +87,7 @@ def convert_dcm_imgs(ori_path: io, dest_path: io, filter_binary: bool) -> None:
         Image.fromarray(final_image).save(dest_path)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Asserts).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in convert_dcm_imgs\n{err}\n{"=" * 100}')
 
     except Exception as err:
@@ -98,7 +101,8 @@ def convert_pgm_imgs(ori_path: io, dest_path: io) -> None:
     """
     try:
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
-        assert os.path.splitext(dest_path)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
+        if os.path.splitext(dest_path)[1] not in ['.png', '.jpg']:
+            raise ValueError('Conversion only available for: png, jpg')
 
         # se crea el directorio y sus subdirectorios en caso de no existir
         Path(get_dirname(dest_path)).mkdir(parents=True, exist_ok=True)
@@ -108,7 +112,7 @@ def convert_pgm_imgs(ori_path: io, dest_path: io) -> None:
         img.save(dest_path)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Asserts).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in convert_pgm_imgs\n{err}\n{"=" * 100}')
 
     except Exception as err:

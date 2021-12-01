@@ -1,6 +1,6 @@
 from glob import glob
 from pathlib import Path
-from typing import io, Union
+from typing import io, Union, Any
 
 import os
 import numpy as np
@@ -75,3 +75,10 @@ def bulk_data(file: io, mode: str = 'w', **kwargs) -> None:
     pd.DataFrame.from_dict(kwargs, orient='index').T.\
         to_csv(file, sep=';', decimal=',', header=not os.path.isfile(file) or mode == 'w', mode=mode, encoding='utf-8',
                index=False)
+
+
+def get_value_from_args_if_exists(args: list, pos: int, default: Any, *exceptions):
+    try:
+        return args[pos]
+    except tuple(exceptions):
+        return default

@@ -3,12 +3,11 @@ import cv2
 import os
 
 from typing import io, Union, Tuple, Any
-from pathlib import Path
-
 from PIL import Image
 
 from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG
-from utils.functions import get_filename, save_img, get_path, detect_func_err
+from utils.functions import get_filename, save_img, get_path, detect_func_err, get_value_from_args_if_exists, \
+    get_dirname
 
 
 def full_image_pipeline(args) -> None:
@@ -31,26 +30,23 @@ def full_image_pipeline(args) -> None:
     """
 
     try:
+
         # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
-        assert len(args) >= 2, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
+        if not (len(args) >= 2):
+            raise ValueError('Not enough arguments for convert_dcm_img function. Minimum required arguments: 2')
 
         img_filepath: io = args[0]
         dest_dirpath: io = args[1]
 
-        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
-        assert os.path.isfile(img_filepath), f'The image {img_filepath} does not exists.'
-        assert os.path.splitext(dest_dirpath)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
-        assert not os.path.isfile(dest_dirpath), f'Processing file exists: {dest_dirpath}'
+        save_intermediate_steps = get_value_from_args_if_exists(args, 2, False, IndexError, TypeError)
 
-        # Se asigna el cuarto argumento en función de su existencia. En caso contrario se asignan valores por
-        # defecto
-        try:
-            save_example_dirname: io = args[2]
-            assert os.path.isdir(save_example_dirname)
-        except AssertionError:
-            Path(save_example_dirname).mkdir(parents=True, exist_ok=True)
-        except (IndexError, TypeError):
-            save_example_dirname = None
+        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
+        if not os.path.isfile(img_filepath):
+            raise FileNotFoundError(f'The image {img_filepath} does not exists.')
+        if os.path.splitext(dest_dirpath)[1] not in ['.png', '.jpg']:
+            raise ValueError(f'Conversion only available for: png, jpg')
+
+        assert not os.path.isfile(dest_dirpath), f'Processing file exists: {dest_dirpath}'
 
         # Se almacena la configuración del preprocesado
         prep_dict = PREPROCESSING_FUNCS[PREPROCESSING_CONFIG]
@@ -117,14 +113,15 @@ def full_image_pipeline(args) -> None:
             images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {})
         )
 
-        for i, (name, imag) in enumerate(images.items()):
-            save_img(imag, save_example_dirname, f'{i}. {name}')
+        if save_intermediate_steps:
+            for i, (name, imag) in enumerate(images.items()):
+                save_img(imag, get_dirname(dest_dirpath), f'{i}. {name}')
 
         # Se almacena la imagen definitiva
         Image.fromarray(np.uint8(images[list(images.keys())[-1]].copy())).save(dest_dirpath)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors (Assertions).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
 
     except Exception as err:
@@ -153,26 +150,24 @@ def crop_image_pipeline(args) -> None:
 
     try:
         # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
-        assert len(args) >= 2, 'Not enough arguments for convert_dcm_img function. Minimum required arguments: 3'
+        if not (len(args) >= 5):
+            raise ValueError('Not enough arguments for convert_dcm_img function. Minimum required arguments: 5')
 
         img_filepath: io = args[0]
         dest_dirpath: io = args[1]
-        mode: str = args[2]
+
+        x_max = get_value_from_args_if_exists(args, 2, None, IndexError, TypeError)
+        y_max = get_value_from_args_if_exists(args, 3, None, IndexError, TypeError)
+        x_min = get_value_from_args_if_exists(args, 4, None, IndexError, TypeError)
+        y_min = get_value_from_args_if_exists(args, 5, None, IndexError, TypeError)
+        save_intermediate_steps = get_value_from_args_if_exists(args, 6, False, IndexError, TypeError)
 
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
-        assert os.path.isfile(img_filepath), f'The image {img_filepath} does not exists.'
-        assert os.path.splitext(dest_dirpath)[1] in ['.png', '.jpg'], f'Conversion only available for: png, jpg'
+        if not os.path.isfile(img_filepath):
+            raise FileNotFoundError(f'The image {img_filepath} does not exists.')
+        if os.path.splitext(dest_dirpath)[1] not in ['.png', '.jpg']:
+            raise ValueError(f'Conversion only available for: png, jpg')
         assert not os.path.isfile(dest_dirpath), f'Processing file exists: {dest_dirpath}'
-
-        # Se asigna el cuarto argumento en función de su existencia. En caso contrario se asignan valores por
-        # defecto
-        try:
-            save_example_dirname: io = args[3]
-            assert os.path.isdir(save_example_dirname)
-        except AssertionError:
-            Path(save_example_dirname).mkdir(parents=True, exist_ok=True)
-        except (IndexError, TypeError):
-            save_example_dirname = None
 
         # Se almacena la configuración del preprocesado
         prep_dict = PREPROCESSING_FUNCS[PREPROCESSING_CONFIG]
@@ -181,6 +176,11 @@ def crop_image_pipeline(args) -> None:
         img = cv2.cvtColor(cv2.imread(img_filepath), cv2.COLOR_BGR2GRAY)
 
         images = {'ORIGINAL': img}
+
+        # Se recorta la imagen
+        images['ROI EXTRACTION'] = get_roi_from_coord(
+            img=images[list(images.keys())[-1]].copy(), x_max=x_max, x_min=x_min, y_max=y_max, y_min=y_min
+        )
 
         # A posteriori se quita el ruido de las imagenes utilizando un filtro medio
         images['REMOVE NOISE'] = remove_noise(
@@ -209,20 +209,20 @@ def crop_image_pipeline(args) -> None:
         elif len(prep_dict['ECUALIZATION'].keys()) == 3:
             images['IMAGES SYNTHESIZED'] = cv2.merge(tuple(ecual_imgs))
 
-
         # Se aplica el resize de la imagen:
         if prep_dict.get('RESIZING', False):
             images['IMAGE RESIZED'] = \
                 resize_img(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RESIZING', {}))
 
-        for i, (name, imag) in enumerate(images.items()):
-            save_img(imag, save_example_dirname, f'{i}. {name}')
+        if save_intermediate_steps:
+            for i, (name, imag) in enumerate(images.items()):
+                save_img(imag, get_dirname(dest_dirpath), f'{i}. {name}')
 
         # Se almacena la imagen definitiva
         Image.fromarray(np.uint8(images[list(images.keys())[-1]].copy())).save(dest_dirpath)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors (Assertions).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
 
     except Exception as err:
@@ -379,7 +379,7 @@ def remove_artifacts(img: np.ndarray, **kwargs) -> Tuple[Any, np.ndarray, np.nda
 
     # Se obtiene una mascara que permitirá elimianr los artefactos de la imágene obteniendo exclusivamente la parte
     # del seno. Para ello, primero se realiza una binarización de los datos para:
-    #    1- Poner a negro el fondo de la imágen. Existen partes de la imágen que no son del todo negras y que podrían
+    #    1- Poner a negro el fondo de la imágen. Existen partes de la imágen que no son completamente negras pudiendo
     #       producir errores en el entrenamiento.
     #    2- Detectar las zonas pertenecientes al seno y a los artefactos asignandoles el valor de 1 mediante una
     #       binarización.s.
@@ -496,3 +496,19 @@ def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
     """
 
     return cv2.resize(src=img.copy(), dsize=size, interpolation=cv2.INTER_LANCZOS4)
+
+
+@detect_func_err
+def get_roi_from_coord(img: np.ndarray, x_max: int, x_min: int, y_max: int, y_min: int):
+
+    if x_max is None:
+        x_max = img.shape[1]
+    if x_min is None:
+        x_min = 0
+    if y_max is None:
+        y_max = img.shape[0]
+    if x_max is None:
+        y_min = 0
+
+    return img[int(y_min):int(y_max), int(x_min):int(x_max)]
+

@@ -5,13 +5,13 @@ import os
 import pandas as pd
 import numpy as np
 
-from typing import io, Callable
+from typing import Callable
 from tensorflow.keras.preprocessing.image import ImageDataGenerator, Iterator
 from sklearn.model_selection import train_test_split
 
-from breast_cancer_dataset.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
-from breast_cancer_dataset.inbreast import DatasetINBreast
-from breast_cancer_dataset.mias import DatasetMIAS, DatasetMIASCrop
+from breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
+from breast_cancer_dataset.databases.inbreast import DatasetINBreast
+from breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
 from utils.config import (
     MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, IMG_SHAPE, PREPROCESSING_CONFIG,
     EXPERIMENT
@@ -22,7 +22,7 @@ class BreastCancerDataset:
 
     DBS = {
             'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetMIAS, DatasetINBreast],
-            'PATCHES': [DatasetMIASCrop], #DatasetCBISDDSMCrop], # , DatasetMIASCrop],
+            'PATCHES': [DatasetCBISDDSMCrop, DatasetMIASCrop],
             'MASK': []
         }
 
@@ -54,7 +54,7 @@ class BreastCancerDataset:
 
         return pd.concat(objs=df_list, ignore_index=True)
 
-    def get_dataset_generator(self, batch_size: int, preprocessing_function: Callable, directory: io = None,
+    def get_dataset_generator(self, batch_size: int, preprocessing_function: Callable,
                               size: tuple = (IMG_SHAPE, IMG_SHAPE)) -> (Iterator, Iterator):
         """
 

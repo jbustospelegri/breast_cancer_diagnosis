@@ -1,9 +1,14 @@
+import os
 import pandas as pd
 import numpy as np
 
+from multiprocessing import Pool, cpu_count
+from tqdm import tqdm
+
 from breast_cancer_dataset.base import GeneralDataBase
+from preprocessing.image_processing import crop_image_pipeline
 from utils.config import (
-    INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC, DF_COLS
+    INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC
 )
 from utils.functions import search_files, get_filename, get_path
 
@@ -29,14 +34,6 @@ class DatasetINBreast(GeneralDataBase):
             l.append(pd.read_excel(path, skipfooter=2))
         df = pd.concat(objs=l, ignore_index=True)
 
-
-        # Se crea una columna con información acerca de qué dataset se trata.
-        df.loc[:, 'DATASET'] = self.__name__
-
-        # Se crea la columna IMG_TYPE que indicará si se trata de una imagen completa (FULL) o bien de una imagen
-        # recortada (CROP) o mascara (MASK). En este caso, todas las imagenes son FULL
-        df.loc[:, 'IMG_TYPE'] = self.IMG_TYPE
-
         # Se crea la columna IMG_LABEL que contendrá las tipologías 'BENIGNA' y 'MALIGNA' en función de la puntición
         # asignada por BIRADS. Los codigos 2 se asignan a la clase benigna; los 4b, 4c, 5 y 6 a la clase maligna.
         # Se excluyen los códigos 0 (Incompletos), 3 (Probablemente benigno), 4a (Probablemente maligno (2-9%).
@@ -50,12 +47,9 @@ class DatasetINBreast(GeneralDataBase):
         print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
         df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
 
-        self.add_extra_columns(df)
-
         return df
 
-    @staticmethod
-    def add_extra_columns(df: pd.DataFrame):
+    def add_extra_columns(self, df: pd.DataFrame):
         # Se crea la columna Breast que indicará si se trata de una imagen del seno derecho (Right) o izquierdo (Left).
         df.loc[:, 'BREAST'] = np.where(df.Laterality == 'R', 'RIGHT', 'LEFT')
 
@@ -69,12 +63,11 @@ class DatasetINBreast(GeneralDataBase):
         # Se crea la columna BREAST_DENSITY que indicará la densidad del seno
         df.loc[:, 'BREAST_DENSITY'] = df.ACR
 
-    def process_dataframe(self) -> pd.DataFrame:
+    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
 
         :return:
         """
-        df = self.get_df_from_info_files()
 
         # Se crea la columna ID para poder linkar la información del excel con la información de las imagenes
         # almacenadas en la carpeta RAW. En este caso, se utilizará el campo File Name
@@ -105,4 +98,50 @@ class DatasetINBreast(GeneralDataBase):
                                f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
         )
 
-        return df_def[DF_COLS]
+        return df_def[self.DF_COLS]
+
+
+class DatasetINBreastCROP(DatasetINBreast):
+
+    IMG_TYPE: str = 'CROP'
+    DF_COLS = [
+        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
+        'CONVERTED_IMG', 'PREPROCESSED_IMG', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN', 'IMG_LABEL'
+    ]
+
+    def add_extra_columns(self, df: pd.DataFrame):
+        super(DatasetINBreastCROP, self).add_extra_columns(df)
+        for col in ['X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN']:
+            df.loc[:, col] = None
+
+    def clean_dataframe(self):
+        super(DatasetINBreastCROP, self).clean_dataframe()
+        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
+
+    def preproces_images(self, show_example: bool = False) -> None:
+        """
+        Función utilizara para realizar el preprocesado de las imagenes completas.
+
+        :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
+        prueba realizada.
+        """
+
+        preprocessed_imgs = pd.DataFrame(
+            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}',
+                              ext=self.dest_extension),
+            columns=['CONVERTED_IMG']
+        )
+        print(f'{"-" * 75}\n\tStarting preprocessing of {len(preprocessed_imgs)} images')
+
+        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, row.X_MAX, row.Y_MAX, row.X_MIN, row.Y_MIN) for _, row in
+                self.df_desc.iterrows()]
+
+        with Pool(processes=cpu_count() - 2) as pool:
+            results = tqdm(pool.imap(crop_image_pipeline, args), total=len(args), desc='preprocessing crop images')
+            tuple(results)
+
+        # Se recuperan las imagenes modificadas y se crea un dataframe
+        proc_imgs = list(
+            search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
+        )
+        print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')

@@ -11,8 +11,7 @@ from tqdm import tqdm
 
 from preprocessing.image_conversion import convert_img
 from preprocessing.image_processing import full_image_pipeline
-from utils.config import MODEL_FILES
-from utils.functions import search_files, get_path, get_filename
+from utils.functions import search_files
 
 
 class GeneralDataBase:
@@ -20,7 +19,6 @@ class GeneralDataBase:
     __name__ = 'GeneralDataBase'
     IMG_TYPE: str = 'FULL'
     BINARY: bool = False
-    PREPROCESS_FUNC = full_image_pipeline
     DF_COLS = [
         'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
         'CONVERTED_IMG', 'PREPROCESSED_IMG', 'IMG_LABEL'
@@ -45,8 +43,7 @@ class GeneralDataBase:
     def get_df_from_info_files(self) -> pd.DataFrame:
        pass
 
-    @staticmethod
-    def add_extra_columns(df: pd.DataFrame):
+    def add_extra_columns(self, df: pd.DataFrame):
         pass
 
     def add_dataset_columns(self, df: pd.DataFrame):
@@ -108,34 +105,23 @@ class GeneralDataBase:
         print(f"\tConverted {len(converted_imgs.CONVERTED_IMG.unique())} images to {self.dest_extension} "
               f"format.\n{'-' * 75}")
 
-    def preproces_images(self, show_example: bool = False) -> None:
+    def preproces_images(self) -> None:
         """
         Función utilizara para realizar el preprocesado de las imagenes completas.
 
         :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
         prueba realizada.
         """
-        full_img_df = self.df_desc.assign(example_dir=None).copy()
-
-        if show_example:
-            photos = random.sample(full_img_df.index.tolist(), 5)
-            full_img_df.loc[photos, 'example_dir'] = full_img_df.loc[photos, :].apply(
-                lambda x: get_path(MODEL_FILES.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG)),
-                axis=1
-            )
-
-        converted_imgs = pd.DataFrame(
-            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}',
-                              ext=self.dest_extension),
+        processed_imgs = pd.DataFrame(
+            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension),
             columns=['CONVERTED_IMG']
         )
-        print(f'{"-" * 75}\n\tStarting preprocessing of {len(converted_imgs)} images')
+        print(f'{"-" * 75}\n\tStarting preprocessing of {len(processed_imgs)} images')
 
-        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, self.IMG_TYPE, row.example_dir) for _, row in
-                full_img_df.iterrows()]
+        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG) for _, row in self.df_desc.iterrows()]
 
         with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(self.PREPROCESS_FUNC, args), total=len(args), desc='preprocessing full images')
+            results = tqdm(pool.imap(full_image_pipeline, args), total=len(args), desc='preprocessing full images')
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
@@ -143,6 +129,13 @@ class GeneralDataBase:
             search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
         )
         print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
+
+    def delete_observations(self):
+        proc_imgs = list(
+            search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
+        )
+        print(f'Failed processing of {len(self.df_desc[~self.df_desc.PREPROCESSED_IMG.isin(proc_imgs)])} images')
+        self.df_desc.drop(index=self.df_desc[~self.df_desc.PREPROCESSED_IMG.isin(proc_imgs)].index, inplace=True)
 
     def start_pipeline(self):
 
@@ -165,5 +158,7 @@ class GeneralDataBase:
         self.clean_dataframe()
 
         # Se preprocesan las imagenes.
-        self.preproces_images(show_example=True)
+        self.preproces_images()
 
+        # Se eliminan las imagenes que no hayan podido ser procesadas
+        self.delete_observations()

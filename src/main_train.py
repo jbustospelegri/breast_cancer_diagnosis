@@ -10,8 +10,8 @@ from algorithms.cnns import VGG16Model, InceptionV3Model, DenseNetModel, Resnet5
 from algorithms.functions import training_pipe
 from data_viz.visualizacion_resultados import DataVisualizer
 
-from utils.config import MODEL_FILES, PREPROCESSING_CONFIG, XGB_CONFIG
-from utils.functions import bulk_data, get_path, get_filename, get_dirname
+from utils.config import MODEL_FILES, XGB_CONFIG
+from utils.functions import bulk_data, get_path
 
 
 if __name__ == '__main__':
@@ -22,7 +22,7 @@ if __name__ == '__main__':
     print("GPU available: ", tensorflow.config.list_physical_devices('GPU'))
 
     # Parámetros de entrada que serán sustituidos por las variables del usuario
-    experiment = 'CROPPED_IMAG'
+    experiment = 'CHECK_DATABASES'
 
     # Se setean las carpetas para almacenar las variables del modelo en función del experimento.
     model_config = MODEL_FILES
@@ -30,6 +30,18 @@ if __name__ == '__main__':
 
     # Se inicializa el procesado de las imagenes para los distintos datasets.
     db = BreastCancerDataset(excel_path=model_config.model_db_desc_csv)
+
+    # Se generarán algunos ejemplos de la base de datos
+    data_viz = DataVisualizer()
+
+    print(f'{"-" * 75}\nGenerando ejemplos de Data Augmentation del set de datos.\n{"-" * 75}')
+    data_viz.get_data_augmentation_examples()
+
+    print(f'{"-" * 75}\nGenerando análisis EDA del set de datos.\n{"-" * 75}')
+    data_viz.get_eda_from_df()
+
+    print(f'{"-" * 75}\nGenerando imagenes de ejemplo de preprocesado del set de datos.\n{"-" * 75}')
+    data_viz.get_preprocessing_examples()
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
@@ -65,7 +77,6 @@ if __name__ == '__main__':
         print('-' * 50 + f'\nProceso de entrenamiento finalizado\n' + '-' * 50)
 
     print(f'{"="* 75}\nGeneradando visualización de resultados.\n{"="* 75}')
-    data_viz = DataVisualizer()
 
     print(f'{"-" * 75}\nRepresentando métricas del entrenamiento.\n{"-" * 75}')
     data_viz.get_model_logs_metrics(logs_dir=model_config.model_log_dir)
@@ -76,8 +87,4 @@ if __name__ == '__main__':
     print(f'{"-" * 75}\nGenerando matrices de confusión de los modelos.\n{"-" * 75}')
     data_viz.get_model_predictions_metrics(predictions_dir=model_config.model_predictions_dir)
 
-    print(f'{"-" * 75}\nGenerando ejemplos de Data Augmentation del set de datos.\n{"-" * 75}')
-    data_viz.get_data_augmentation_examples()
 
-    print(f'{"-" * 75}\nGenerando análisis EDA del set de datos.\n{"-" * 75}')
-    data_viz.get_eda_from_df()
