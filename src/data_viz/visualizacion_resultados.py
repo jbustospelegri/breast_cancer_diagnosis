@@ -185,7 +185,7 @@ class DataVisualizer:
 
         metrics = ['accuracy', 'precision', 'recall', 'f1']
 
-        for w, l in zip(df.Weight.unique(), df.Layer.unique()):
+        for w, l in product(df.Weight.unique(), df.Layer.unique()):
 
             df_ = df[(df.Weight == w) & (df.Layer == l)].copy()
 
@@ -204,6 +204,8 @@ class DataVisualizer:
 
                 for phase, model in product(df_.TRAIN_VAL.unique(), models):
 
+                    df_2 = df_[df_.TRAIN_VAL == phase]
+
                     if class_metric:
                         # En caso de querer obtener las metricas de cada clase se itera sobre cada una de estas.
                         for class_label in df_.IMG_LABEL.unique():
@@ -214,22 +216,22 @@ class DataVisualizer:
 
                             # Creación del dataset de métricas
                             metric_df.loc[(phase,), (model, class_label)] = [
-                                round(accuracy_score(df_.IMG_LABEL.map(map_dict), df_[model].map(map_dict)) * 100, 2),
-                                round(precision_score(df_.IMG_LABEL.map(map_dict), df_[model].map(map_dict),
+                                round(accuracy_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict)) * 100, 2),
+                                round(precision_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
                                                       zero_division=0, average='weighted') * 100, 2),
-                                round(recall_score(df_.IMG_LABEL.map(map_dict), df_[model].map(map_dict),
+                                round(recall_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
                                                    zero_division=0, average='weighted') * 100, 2),
-                                round(f1_score(df_.IMG_LABEL.map(map_dict), df_[model].map(map_dict),
+                                round(f1_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
                                                zero_division=0, average='weighted') * 100, 2)]
                     else:
                         # Creación del dataset de métricas
                         metric_df.loc[(phase,), model] = [
-                            round(accuracy_score(df_.IMG_LABEL.tolist(), df_[model].tolist()) * 100, 2),
-                            round(precision_score(df_.IMG_LABEL.tolist(), df_[model].tolist(), zero_division=0,
+                            round(accuracy_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist()) * 100, 2),
+                            round(precision_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
                                                   average='weighted') * 100, 2),
-                            round(recall_score(df_.IMG_LABEL.tolist(), df_[model].tolist(), zero_division=0,
+                            round(recall_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
                                                average='weighted') * 100, 2),
-                            round(f1_score(df_.IMG_LABEL.tolist(), df_[model].tolist(), zero_division=0,
+                            round(f1_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
                                            average='weighted') * 100, 2)]
 
                 # se resetea el índice para poder mostrar en la tabla si las métricas son de entrenamiento o de
@@ -366,7 +368,7 @@ class DataVisualizer:
         df = self.get_dataframe_from_preds(dirname=predictions_dir)
         models = [c for c in df.columns if c not in ['PREPROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', 'Weight', 'Layer']]
         self.plot_confusion_matrix(df, models)
-        self.plot_metrics_table(df, models, class_metric=True)
+        # self.plot_metrics_table(df, models, class_metric=True)
         self.plot_metrics_table(df, models, class_metric=False)
         self.plot_accuracy_plots(df[df.Layer == 'ALL'], models, hue='Weight', img_name='Weight Init Accuracy',
                                  title='Random Initialization vs Imagenet')

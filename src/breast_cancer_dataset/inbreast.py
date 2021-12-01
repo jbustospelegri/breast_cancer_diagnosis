@@ -81,15 +81,6 @@ class DatasetINBreast(DatasetCBISDDSM):
         # almacenadas en la carpeta RAW. En este caso, se utilizará el campo File Name
         df.loc[:, 'ID'] = df['File Name'].astype(str)
 
-        print(f'\tExcluding {len(df[df.ID.duplicated()])} samples duplicated pathologys')
-        df.drop(index=df[df.ID.duplicated()].index, inplace=True)
-
-        # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
-        # una zona benigna y otra maligna).
-        duplicated_tags = df.groupby(['ID']).IMG_LABEL.nunique()
-        print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1])} images for ambiguous pathologys')
-        df.drop(index=df[df.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index, inplace=True)
-
         # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
         # de origen (por defecto INBREAST_DB_PATH)
         db_files_df = pd.DataFrame(data=search_files(self.ori_dir, self.ori_extension), columns=['RAW_IMG'])

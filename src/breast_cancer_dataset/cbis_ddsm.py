@@ -73,15 +73,6 @@ class DatasetCBISDDSM:
         # cada imagen
         df.loc[:, 'ID'] = df[self.ID_COL].apply(lambda x: get_dirname(x))
 
-        # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
-        # una zona benigna y otra maligna).
-        duplicated_tags = df.groupby([self.ID_COL]).IMG_LABEL.nunique()
-        print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1])} images for ambiguous pathologys')
-        df.drop(index=df[df.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index, inplace=True)
-
-        print(f'\tExcluding {len(df[df.ID.duplicated()])} samples duplicated pathologys')
-        df.drop(index=df[df.ID.duplicated()].index, inplace=True)
-
         # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
         # de origen (por defecto INBREAST_DB_PATH)
         db_files_df = pd.DataFrame(data=search_files(file=self.ori_dir, ext=self.ori_extension), columns=['RAW_IMG'])
@@ -219,7 +210,21 @@ class DatasetCBISDDSM:
 
     def start_pipeline(self):
         self.convert_images_format()
-        self.preproces_images()
+        self.clean_dataframe()
+        self.preproces_images(show_example=True)
+
+    def clean_dataframe(self):
+        # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
+        # una zona benigna y otra maligna).
+        duplicated_tags = self.df_desc.groupby('ID').IMG_LABEL.nunique()
+        print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1])} images for ambiguous pathologys')
+        self.df_desc.drop(
+            index=self.df_desc[self.df_desc.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index,
+            inplace=True
+        )
+
+        print(f'\tExcluding {len(self.df_desc[self.df_desc.ID.duplicated()])} samples duplicated pathologys')
+        self.df_desc.drop(index=self.df_desc[self.df_desc.ID.duplicated()].index, inplace=True)
 
 
 class DatasetCBISDDSMCrop(DatasetCBISDDSM):
@@ -228,10 +233,17 @@ class DatasetCBISDDSMCrop(DatasetCBISDDSM):
     ID_COL: str = 'cropped image file path'
     BINARY: bool = False
 
-    def start_pipeline(self):
-        self.convert_images_format()
-        self.clean_dataframe()
-        self.preproces_images(show_example=True)
+    def clean_dataframe(self):
+        super().clean_dataframe()
+        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
+
+
+class DatasetCBISSDDMMask(DatasetCBISDDSM):
+
+    IMG_TYPE: str = 'MASK'
+    ID_COL: str = 'mask image file path'
+    BINARY: bool = True
 
     def clean_dataframe(self):
+        super().clean_dataframe()
         self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()

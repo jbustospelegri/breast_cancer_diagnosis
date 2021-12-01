@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 
 from breast_cancer_dataset.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from breast_cancer_dataset.inbreast import DatasetINBreast
-from breast_cancer_dataset.mias import DatasetMIAS
+from breast_cancer_dataset.mias import DatasetMIAS, DatasetMIASCrop
 from data_viz.functions import create_countplot, plot_image
 from utils.config import (
     MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, IMG_SHAPE, PREPROCESSING_CONFIG,
@@ -25,7 +25,7 @@ class BreastCancerDataset:
 
     DBS = {
             'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetMIAS, DatasetINBreast],
-            'PATCHES': [DatasetCBISDDSMCrop],
+            'PATCHES': [DatasetCBISDDSMCrop], # , DatasetMIASCrop],
             'MASK': []
         }
 

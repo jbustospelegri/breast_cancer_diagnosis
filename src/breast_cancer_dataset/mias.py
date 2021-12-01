@@ -46,6 +46,10 @@ class DatasetMIAS(DatasetCBISDDSM):
         # Se crea la columna IMG_LABEL que contendrá las tipologías 'BENIGNA' y 'MALIGNA'.
         df.loc[:, 'IMG_LABEL'] = df.PATHOLOGY.map(defaultdict(lambda: None, {'B': 'BENIGN', 'M': 'MALIGNANT'}))
 
+        # Se suprimen los casos que no contienen ninguna patología
+        print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
+        df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
+
         self.add_extra_columns(df)
 
         return df
@@ -74,19 +78,6 @@ class DatasetMIAS(DatasetCBISDDSM):
 
         df = self.get_df_from_info_files()
 
-        # Se suprimen los casos que no contienen ninguna patología
-        print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
-        df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
-
-        # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
-        # una zona benigna y otra maligna).
-        duplicated_tags = df.groupby(['ID']).IMG_LABEL.nunique()
-        print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1])} images for ambiguous pathologys')
-        df.drop(index=df[df.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index, inplace=True)
-
-        print(f'\tExcluding {len(df[df.ID.duplicated()])} samples duplicated pathologys')
-        df.drop(index=df[df.ID.duplicated()].index, inplace=True)
-
         # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
         # de origen (por defecto INBREAST_DB_PATH)
         db_files_df = pd.DataFrame(data=search_files(self.ori_dir, self.ori_extension), columns=['RAW_IMG'])
@@ -113,3 +104,17 @@ class DatasetMIAS(DatasetCBISDDSM):
         )
 
         return df_def[DF_COLS]
+
+
+class DatasetMIASCrop(DatasetMIAS):
+
+    IMG_TYPE: str = 'CROP'
+    BINARY: bool = False
+
+    def start_pipeline(self):
+        self.convert_images_format()
+        self.clean_dataframe()
+        self.preproces_images(show_example=True)
+
+    def clean_dataframe(self):
+        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
