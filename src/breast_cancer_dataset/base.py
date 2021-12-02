@@ -128,13 +128,14 @@ class GeneralDataBase:
         proc_imgs = list(
             search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
         )
-        print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
+        print(f'\tProcessed {len(proc_imgs)} images.')
 
     def delete_observations(self):
         proc_imgs = list(
             search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
         )
-        print(f'Failed processing of {len(self.df_desc[~self.df_desc.PREPROCESSED_IMG.isin(proc_imgs)])} images')
+        print(f'\tFailed processing of {len(self.df_desc[~self.df_desc.PREPROCESSED_IMG.isin(proc_imgs)])} images\n'
+              f'{"-" * 75}')
         self.df_desc.drop(index=self.df_desc[~self.df_desc.PREPROCESSED_IMG.isin(proc_imgs)].index, inplace=True)
 
     def start_pipeline(self):

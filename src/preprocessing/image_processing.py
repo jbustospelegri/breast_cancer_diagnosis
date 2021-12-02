@@ -501,13 +501,13 @@ def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
 @detect_func_err
 def get_roi_from_coord(img: np.ndarray, x_max: int, x_min: int, y_max: int, y_min: int):
 
-    if x_max is None:
+    if (x_max is None) or (x_max is np.NaN):
         x_max = img.shape[1]
-    if x_min is None:
+    if (x_min is None) or (x_min is np.NaN):
         x_min = 0
-    if y_max is None:
+    if (y_max is None) or (y_max is np.NaN):
         y_max = img.shape[0]
-    if x_max is None:
+    if (y_min is None) or (y_min is np.NaN):
         y_min = 0
 
     return img[int(y_min):int(y_max), int(x_min):int(x_max)]

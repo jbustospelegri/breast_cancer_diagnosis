@@ -22,7 +22,7 @@ class BreastCancerDataset:
 
     DBS = {
             'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetMIAS, DatasetINBreast],
-            'PATCHES': [DatasetCBISDDSMCrop, DatasetMIASCrop],
+            'PATCHES': [DatasetCBISDDSMCrop], #DatasetMIASCrop],
             'MASK': []
         }
 

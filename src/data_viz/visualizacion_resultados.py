@@ -461,7 +461,7 @@ class DataVisualizer:
             photos += random.sample(df[df.DATASET == dataset].index.tolist(), 5)
 
         df.loc[photos, 'example_dir'] = df.loc[photos, :].apply(
-            lambda x: get_path(MODEL_FILES.model_viz_preprocesing_dir, x.DATASET,
+            lambda x: get_path(MODEL_FILES.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG),
                                f'{get_filename(x.PREPROCESSED_IMG)}.png'),
             axis=1
         )
