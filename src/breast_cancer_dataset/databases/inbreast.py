@@ -5,12 +5,12 @@ import numpy as np
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 
-from breast_cancer_dataset.base import GeneralDataBase
-from preprocessing.image_processing import crop_image_pipeline
-from utils.config import (
+from src.breast_cancer_dataset.base import GeneralDataBase
+from src.preprocessing.image_processing import crop_image_pipeline
+from src.utils.config import (
     INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC
 )
-from utils.functions import search_files, get_filename, get_path
+from src.utils.functions import search_files, get_filename, get_path
 
 
 class DatasetINBreast(GeneralDataBase):

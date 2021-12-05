@@ -1,7 +1,9 @@
+import os
+import sys
 from typing import io
 
-from algorithms.metrics import f1_score
-from utils.functions import get_path
+from src.algorithms.metrics import f1_score
+from src.utils.functions import get_path
 
 import cv2
 
@@ -117,12 +119,18 @@ PREPROCESSING_FUNCS: dict = {
 """
     CARPETAS PRINCIPALES DEL PROGRAMA
 """
-RAW_DATA_PATH: io = get_path('..', 'data', '00_RAW')
-CONVERTED_DATA_PATH: io = get_path('..', 'data', '01_CONVERTED')
-PROCESSED_DATA_PATH: io = get_path('..', 'data', '02_PROCESED')
-OUTPUT_DATA_PATH: io = get_path('..', 'data', '03_OUTPUT')
-MODEL_DATA_PATH: io = get_path('..', 'models')
-LOGGING_DATA_PATH: io = get_path('..', 'logging')
+WORKING_DIRECTORY = sys._MEIPASS if getattr(sys, 'frozen', False) else os.getcwd()
+RAW_DATA_PATH: io = get_path(WORKING_DIRECTORY, 'data', '00_RAW') if getattr(sys, 'frozen', False) else \
+    get_path('..', 'data', '00_RAW')
+CONVERTED_DATA_PATH: io = get_path(WORKING_DIRECTORY, 'data', '01_CONVERTED') if getattr(sys, 'frozen', False) \
+    else get_path('..', 'data', '01_CONVERTED')
+PROCESSED_DATA_PATH: io = get_path(WORKING_DIRECTORY, 'data', '02_PROCESSED') if getattr(sys, 'frozen', False) \
+    else get_path('..', 'data', '02_PROCESED')
+OUTPUT_DATA_PATH: io = get_path(os.getcwd(), 'OUTPUTS') if getattr(sys, 'frozen', False) \
+    else get_path('..', 'data', '03_OUTPUT')
+MODEL_DATA_PATH: io = get_path(WORKING_DIRECTORY, 'models') if getattr(sys, 'frozen', False) \
+    else get_path('..', 'models')
+LOGGING_DATA_PATH: io = get_path(os.getcwd(), 'LOGS') if getattr(sys, 'frozen', False) else get_path('..', 'logging')
 
 """
     CARPETAS CON LOS DATASETS
@@ -161,6 +169,12 @@ INBREAST_CONVERTED_DATA_PATH: io = get_path(CONVERTED_DATA_PATH, 'INBreast')
 CBIS_DDSM_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'CBIS_DDSM')
 MIAS_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'MIAS')
 INBREAST_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'INBreast')
+
+"""
+    CARPETAS DE LA INTERFAZ GRÁFICA
+"""
+GUI_CSS_PATH = get_path(WORKING_DIRECTORY, 'static', 'css')
+
 
 """
     CARPETAS DE RESULTADOS DEL MODELO 

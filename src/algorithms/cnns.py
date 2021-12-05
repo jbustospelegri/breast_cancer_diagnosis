@@ -13,7 +13,7 @@ from tensorflow.python.keras.preprocessing.image import DataFrameIterator
 from tensorflow.keras.layers import Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input
 from tensorflow.keras.losses import CategoricalCrossentropy
 
-from utils.functions import get_path, get_number_of_neurons
+from src.utils.functions import get_path, get_number_of_neurons
 
 
 class GeneralModel:

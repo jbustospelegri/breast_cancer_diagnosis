@@ -4,14 +4,14 @@ import tensorflow
 
 from multiprocessing import Queue, Process
 
-from algorithms.model_ensambling import GradientBoosting
-from breast_cancer_dataset.database_generator import BreastCancerDataset
-from algorithms.cnns import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
-from algorithms.functions import training_pipe
-from data_viz.visualizacion_resultados import DataVisualizer
+from src.algorithms.model_ensambling import GradientBoosting
+from src.breast_cancer_dataset.database_generator import BreastCancerDataset
+from src.algorithms.cnns import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
+from src.algorithms.functions import training_pipe
+from src.data_viz.visualizacion_resultados import DataVisualizer
 
-from utils.config import MODEL_FILES, XGB_CONFIG
-from utils.functions import bulk_data, get_path
+from src.utils.config import MODEL_FILES, XGB_CONFIG
+from src.utils.functions import bulk_data, get_path
 
 
 if __name__ == '__main__':

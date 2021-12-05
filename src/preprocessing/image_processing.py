@@ -5,9 +5,10 @@ import os
 from typing import io, Union, Tuple, Any
 from PIL import Image
 
-from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG
-from utils.functions import get_filename, save_img, get_path, detect_func_err, get_value_from_args_if_exists, \
-    get_dirname
+from src.utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG
+from src.utils.functions import (
+    get_filename, save_img, get_path, detect_func_err, get_value_from_args_if_exists, get_dirname
+)
 
 
 def full_image_pipeline(args) -> None:

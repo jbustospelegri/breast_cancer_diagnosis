@@ -9,9 +9,9 @@ from typing import io, List
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 
-from preprocessing.image_conversion import convert_img
-from preprocessing.image_processing import full_image_pipeline
-from utils.functions import search_files
+from src.preprocessing.image_conversion import convert_img
+from src.preprocessing.image_processing import full_image_pipeline
+from src.utils.functions import search_files
 
 
 class GeneralDataBase:

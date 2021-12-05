@@ -9,8 +9,8 @@ from tensorflow.keras.preprocessing.image import Iterator
 from sklearn.ensemble import GradientBoostingClassifier
 from typing import io
 
-from utils.config import SEED, XGB_COLS, XGB_CONFIG, N_ESTIMATORS, MAX_DEPTH, MODEL_FILES
-from utils.functions import get_path, bulk_data, search_files, get_filename
+from src.utils.config import SEED, XGB_COLS, XGB_CONFIG, N_ESTIMATORS, MAX_DEPTH, MODEL_FILES
+from src.utils.functions import get_path, bulk_data, search_files, get_filename
 
 
 class GradientBoosting:

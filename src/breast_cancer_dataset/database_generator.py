@@ -9,10 +9,10 @@ from typing import Callable
 from tensorflow.keras.preprocessing.image import ImageDataGenerator, Iterator
 from sklearn.model_selection import train_test_split
 
-from breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
-from breast_cancer_dataset.databases.inbreast import DatasetINBreast
-from breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
-from utils.config import (
+from src.breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
+from src.breast_cancer_dataset.databases.inbreast import DatasetINBreast
+from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
+from src.utils.config import (
     MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, IMG_SHAPE, PREPROCESSING_CONFIG,
     EXPERIMENT
 )
