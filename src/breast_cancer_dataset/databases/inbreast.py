@@ -1,7 +1,11 @@
 import os
+from typing import io
+
 import pandas as pd
 import numpy as np
+import plistlib
 
+from skimage.draw import polygon
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 
@@ -145,3 +149,80 @@ class DatasetINBreastCROP(DatasetINBreast):
             search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
         )
         print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
+
+
+class DatasetINBreastSegmentation(DatasetINBreast):
+
+    IMG_TYPE: str = 'Segmentation'
+    DF_COLS = [
+        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
+        'CONVERTED_IMG', 'PREPROCESSED_IMG', 'IMG_LABEL'
+    ]
+
+    def add_extra_columns(self, df: pd.DataFrame):
+        super(DatasetINBreast, self).add_extra_columns(df)
+        for col in ['X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN']:
+            df.loc[:, col] = None
+
+    def clean_dataframe(self):
+        super(DatasetINBreast, self).clean_dataframe()
+        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
+
+    def preproces_images(self, show_example: bool = False) -> None:
+        """
+        Función utilizara para realizar el preprocesado de las imagenes completas.
+
+        :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
+        prueba realizada.
+        """
+
+        preprocessed_imgs = pd.DataFrame(
+            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}',
+                              ext=self.dest_extension),
+            columns=['CONVERTED_IMG']
+        )
+        print(f'{"-" * 75}\n\tStarting preprocessing of {len(preprocessed_imgs)} images')
+
+        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, row.X_MAX, row.Y_MAX, row.X_MIN, row.Y_MIN) for _, row in
+                self.df_desc.iterrows()]
+
+        with Pool(processes=cpu_count() - 2) as pool:
+            results = tqdm(pool.imap(crop_image_pipeline, args), total=len(args), desc='preprocessing crop images')
+            tuple(results)
+
+        # Se recuperan las imagenes modificadas y se crea un dataframe
+        proc_imgs = list(
+            search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
+        )
+        print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
+
+    @staticmethod
+    def load_inbreast_mask(mask_path: io, imshape: tuple):
+        """
+        This function loads a osirix xml region as a binary numpy array for INBREAST
+        dataset
+        @mask_path : Path to the xml file
+        @imshape : The shape of the image as an array e.g. [4084, 3328]
+        return: numpy array where positions in the roi are assigned a value of 1.
+        """
+
+        def load_point(point_string):
+            x, y = tuple([float(num) for num in point_string.strip('()').split(',')])
+            return y, x
+
+        mask = np.zeros(imshape)
+        with open(mask_path, 'rb') as mask_file:
+            plist_dict = plistlib.load(mask_file, fmt=plistlib.FMT_XML)['Images'][0]
+            assert plist_dict['NumberOfROIs'] == len(plist_dict['ROIs'])
+            for roi in plist_dict['ROIs']:
+                assert roi['NumberOfPoints'] == len(roi['Point_px'])
+                points = [load_point(point) for point in roi['Point_px']]
+                if len(points) <= 2:
+                    for point in points:
+                        mask[int(point[0]), int(point[1])] = 1
+                else:
+                    x, y = zip(*points)
+                    x, y = np.array(x), np.array(y)
+                    poly_x, poly_y = polygon(x, y, shape=imshape)
+                    mask[poly_x, poly_y] = 1
+        return mask
