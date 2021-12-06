@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from src.preprocessing.image_conversion import convert_img
 from src.preprocessing.image_processing import full_image_pipeline
-from src.utils.functions import search_files
+from src.utils.functions import search_files, get_filename, get_path
 
 
 class GeneralDataBase:
@@ -43,8 +43,8 @@ class GeneralDataBase:
     def get_df_from_info_files(self) -> pd.DataFrame:
        pass
 
-    def add_extra_columns(self, df: pd.DataFrame):
-        pass
+    def add_extra_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        return df
 
     def add_dataset_columns(self, df: pd.DataFrame):
         # Se crea una columna con información acerca de qué dataset se trata.
@@ -54,7 +54,7 @@ class GeneralDataBase:
         # recortada (CROP) o mascara (MASK). En este caso, todas las imagenes son FULL
         df.loc[:, 'IMG_TYPE'] = self.IMG_TYPE
 
-    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+    def process_dataframe(self, df: pd.DataFrame, get_id_func: callable = lambda x: get_filename(x)) -> pd.DataFrame:
         """
         Función que creará un dataframe con información del dataset CBIS-DDSM. Para cada imagen, se pretende recuperar
         la tipología (clase) detectada, el path de origen de la imagen y su nombre, el tipo de patología (massa o
@@ -64,7 +64,30 @@ class GeneralDataBase:
 
         :return: Pandas dataframe con las columnas especificadas en la descripción
         """
-        return pd.DataFrame(index=[0], columns=[*self.DF_COLS, 'TRAIN_VAL'])
+        # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
+        # de origen (por defecto INBREAST_DB_PATH)
+        db_files_df = pd.DataFrame(data=search_files(self.ori_dir, self.ori_extension), columns=['RAW_IMG'])
+
+        # Se procesa la columna ori path para poder lincar cada path con los datos del excel. Para ello, se separa
+        # los nombres de cara archivo a partir del símbolo _ y se obtiene la primera posición.
+        db_files_df.loc[:, 'File Name'] = db_files_df.RAW_IMG.apply(get_id_func)
+
+        # Se crea la columna RAW_IMG con el path de la imagen original
+        df_def = pd.merge(left=df, right=db_files_df, on='File Name', how='left')
+
+        print(f'\t{len(df_def)} image paths available in database')
+
+        # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
+        df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
+            lambda x: get_path(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID}.{self.dest_extension}'), axis=1
+        )
+
+        # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
+        df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
+            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID}.{self.dest_extension}'), axis=1
+        )
+
+        return df_def[self.DF_COLS]
 
     def clean_dataframe(self):
 
@@ -103,12 +126,10 @@ class GeneralDataBase:
         )
         print(f"\tConverted {len(converted_imgs)} images to {self.dest_extension} format.\n{'-' * 75}")
 
-    def preproces_images(self) -> None:
+    def preproces_images(self, args: list = None, func: callable = full_image_pipeline) -> None:
         """
         Función utilizara para realizar el preprocesado de las imagenes completas.
 
-        :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
-        prueba realizada.
         """
         processed_imgs = pd.DataFrame(
             data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension),
@@ -116,10 +137,11 @@ class GeneralDataBase:
         )
         print(f'{"-" * 75}\n\tStarting preprocessing of {len(processed_imgs)} images')
 
-        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG) for _, row in self.df_desc.iterrows()]
+        if args is None:
+            args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG) for _, row in self.df_desc.iterrows()]
 
         with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(full_image_pipeline, args), total=len(args), desc='preprocessing full images')
+            results = tqdm(pool.imap(func, args), total=len(args), desc='preprocessing full images')
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
@@ -145,12 +167,12 @@ class GeneralDataBase:
         print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
         df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
 
-        # Se añaden columnas adicionales para completar las columnas del dataframe
-        self.add_extra_columns(df)
-
         # Se suprimen los casos cuya patología no sea massas
         print(f'\tExcluding {len(df[df.ABNORMALITY_TYPE != "MASS"].index.drop_duplicates())} non mass pathologies.')
         df.drop(index=df[df.ABNORMALITY_TYPE != 'MASS'].index, inplace=True)
+
+        # Se añaden columnas adicionales para completar las columnas del dataframe
+        df = self.add_extra_columns(df)
 
         # Se añaden columnas informativas sobre la base de datos utilizada
         self.add_dataset_columns(df)

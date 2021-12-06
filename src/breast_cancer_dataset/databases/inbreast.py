@@ -12,9 +12,10 @@ from tqdm import tqdm
 from src.breast_cancer_dataset.base import GeneralDataBase
 from src.preprocessing.image_processing import crop_image_pipeline
 from src.utils.config import (
-    INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC
+    INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC,
+    INBREAST_DB_XML_ROI_PATH, IMG_SHAPE
 )
-from src.utils.functions import search_files, get_filename, get_path
+from src.utils.functions import search_files, get_filename, get_path, get_patch_from_center
 
 
 class DatasetINBreast(GeneralDataBase):
@@ -47,9 +48,9 @@ class DatasetINBreast(GeneralDataBase):
             np.where(df['Bi-Rads'].astype(str).isin(['4b', '4c', '5', '6']), 'MALIGNANT', None)
         )
 
-        # Se suprimen los casos que no contienen ninguna patología
-        print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
-        df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
+        # Se exluyen aquellos casos en los que no haya una patología de masa
+        # Se crea la columna ABNORMALITY_TYPE que indicará si se trata de una calcificación o de una masa.
+        df.loc[:, 'ABNORMALITY_TYPE'] = np.where(df['Mass '] == 'X', 'MASS', None)
 
         return df
 
@@ -60,52 +61,20 @@ class DatasetINBreast(GeneralDataBase):
         # Se crea la columna BREAST_VIEW que indicará si se trata de una imagen CC o MLO
         df.loc[:, 'BREAST_VIEW'] = df.View
 
-        # Se crea la columna ABNORMALITY_TYPE que indicará si se trata de una calcificación o de una masa.
-        # noinspection PyTypeChecker
-        df.loc[:, 'ABNORMALITY_TYPE'] = np.where(df['Mass '] == 'X', 'MASS', np.where(df.Micros == 'X', 'CALC', None))
-
         # Se crea la columna BREAST_DENSITY que indicará la densidad del seno
         df.loc[:, 'BREAST_DENSITY'] = df.ACR
 
-    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-
-        :return:
-        """
-
-        # Se crea la columna ID para poder linkar la información del excel con la información de las imagenes
-        # almacenadas en la carpeta RAW. En este caso, se utilizará el campo File Name
+        # Se crea la columna de ID
         df.loc[:, 'ID'] = df['File Name'].astype(str)
 
-        # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
-        # de origen (por defecto INBREAST_DB_PATH)
-        db_files_df = pd.DataFrame(data=search_files(self.ori_dir, self.ori_extension), columns=['RAW_IMG'])
+        return df
 
-        # Se procesa la columna ori path para poder lincar cada path con los datos del excel. Para ello, se separa
-        # los nombres de cara archivo a partir del símbolo _ y se obtiene la primera posición.
-        db_files_df.loc[:, 'ID'] = db_files_df.RAW_IMG.apply(lambda x: get_filename(x).split('_')[0])
-
-        # Se crea la columna RAW_IMG con el path de la imagen original
-        df_def = pd.merge(left=df, right=db_files_df, on='ID', how='left')
-
-        print(f'\t{len(df_def.RAW_IMG.unique())} image paths available in database')
-
-        # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
-        df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
-            lambda x: get_path(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE,
-                               f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
-        )
-
-        # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
-        df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
-            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE,
-                               f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
-        )
-
-        return df_def[self.DF_COLS]
+    def process_dataframe(self, df: pd.DataFrame, f: callable = lambda x: int(get_filename(x).split('_')[0])) \
+            -> pd.DataFrame:
+        return super(DatasetINBreast, self).process_dataframe(df=df, get_id_func=f)
 
 
-class DatasetINBreastCROP(DatasetINBreast):
+class DatasetINBreastCrop(DatasetINBreast):
 
     IMG_TYPE: str = 'CROP'
     DF_COLS = [
@@ -113,42 +82,75 @@ class DatasetINBreastCROP(DatasetINBreast):
         'CONVERTED_IMG', 'PREPROCESSED_IMG', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN', 'IMG_LABEL'
     ]
 
-    def add_extra_columns(self, df: pd.DataFrame):
-        super(DatasetINBreastCROP, self).add_extra_columns(df)
-        for col in ['X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN']:
-            df.loc[:, col] = None
+    def add_extra_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = super(DatasetINBreastCrop, self).add_extra_columns(df)
+        df = pd.merge(left=df, right=self.get_inbreast_roi(), on='File Name', how='left')
 
-    def clean_dataframe(self):
-        super(DatasetINBreastCROP, self).clean_dataframe()
-        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
+        # Debido a que una imagen puede contener más de un recorte, se modifica la columna de ID para tener un identifi
+        # cador unico
+        df.loc[:, 'ID'] = df.ID + '_' + df.groupby('ID').cumcount().astype(str)
 
-    def preproces_images(self, show_example: bool = False) -> None:
+        return df
+
+    def preproces_images(self, args: list = None, func: callable = crop_image_pipeline) -> None:
         """
         Función utilizara para realizar el preprocesado de las imagenes completas.
 
         :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
         prueba realizada.
         """
-
-        preprocessed_imgs = pd.DataFrame(
-            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}',
-                              ext=self.dest_extension),
-            columns=['CONVERTED_IMG']
+        super(DatasetINBreastCrop, self).preproces_images(
+            args=[
+                (r.CONVERTED_IMG, r.PREPROCESSED_IMG, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN) for _, r in
+                self.df_desc.iterrows()
+            ], func=func
         )
-        print(f'{"-" * 75}\n\tStarting preprocessing of {len(preprocessed_imgs)} images')
 
-        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, row.X_MAX, row.Y_MAX, row.X_MIN, row.Y_MIN) for _, row in
-                self.df_desc.iterrows()]
-
-        with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(crop_image_pipeline, args), total=len(args), desc='preprocessing crop images')
-            tuple(results)
-
-        # Se recuperan las imagenes modificadas y se crea un dataframe
-        proc_imgs = list(
-            search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
+    def clean_dataframe(self):
+        print(f'\tExcluding {len(self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)])} '
+              f'images without pathology localization.')
+        self.df_desc.drop(
+            index=self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)].index,
+            inplace=True
         )
-        print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
+
+    @staticmethod
+    def get_inbreast_roi():
+        """
+        This function loads a osirix xml region as a binary numpy array for INBREAST
+        dataset
+        @mask_path : Path to the xml file
+        @imshape : The shape of the image as an array e.g. [4084, 3328]
+        return: numpy array where positions in the roi are assigned a value of 1.
+        """
+
+        def load_point(point_string):
+            x, y = tuple([int(round(float(num), 0)) for num in point_string.strip('()').split(',')])
+            return y, x
+
+        l = []
+        for path in search_files(file=INBREAST_DB_XML_ROI_PATH, ext='xml', in_subdirs=False):
+            plist_dict = plistlib.load(open(path, 'rb'), fmt=plistlib.FMT_XML)['Images'][0]
+            for roi in plist_dict['ROIs']:
+                if roi['Name'] in ['Mass']:
+                    p = pd.DataFrame(data=[load_point(point) for point in roi['Point_px']], columns=['Y', 'X'])
+                    l.append(pd.DataFrame(
+                        data=[[int(get_filename(path)), p.X.max(), p.X.min(), p.Y.max(), p.Y.min()]],
+                        columns=['File Name', 'X_MAX', 'X_MIN', 'Y_MAX', 'Y_MIN'])
+                    )
+
+        df = pd.concat(l, ignore_index=True)
+
+        df.loc[:, 'RAD'] = df.apply(
+            lambda x: round(max([(x.X_MAX - x.X_MIN), (x.Y_MAX - x.Y_MIN), IMG_SHAPE]) / 2), axis=1
+        )
+
+        for axis in ['X', 'Y']:
+            df.loc[:, f'{axis}_CORD'] = round(df[[f'{axis}_MAX', f'{axis}_MIN']].sum(axis=1) / 2)
+
+        get_patch_from_center(df=df)
+
+        return df[['File Name', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN']]
 
 
 class DatasetINBreastSegmentation(DatasetINBreast):
