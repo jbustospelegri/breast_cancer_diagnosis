@@ -168,3 +168,14 @@ def log_error(module, file_path, **kwargs_msg):
     for hdlr in logger.handlers:
         hdlr.close()
         logger.removeHandler(hdlr)
+
+
+def get_patch_from_center(df: pd.DataFrame):
+    df.loc[:, 'X_MAX'] = pd.to_numeric(df.X_CORD, errors='coerce', downcast='integer') + \
+                         pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
+    df.loc[:, 'Y_MAX'] = pd.to_numeric(df.Y_CORD, errors='coerce', downcast='integer') + \
+                         pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
+    df.loc[:, 'X_MIN'] = pd.to_numeric(df.X_CORD, errors='coerce', downcast='integer') - \
+                         pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
+    df.loc[:, 'Y_MIN'] = pd.to_numeric(df.Y_CORD, errors='coerce', downcast='integer') - \
+                         pd.to_numeric(df.RAD, errors='coerce', downcast='integer')

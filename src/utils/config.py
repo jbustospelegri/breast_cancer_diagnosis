@@ -65,7 +65,7 @@ XGB_COLS = {
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
 IMG_SHAPE: int = 300
-PREPROCESSING_CONFIG: str = 'CONF1'
+PREPROCESSING_CONFIG: str = 'CONF2'
 PREPROCESSING_FUNCS: dict = {
     'CONF1': {
         'CROPPING_1': {
@@ -101,6 +101,51 @@ PREPROCESSING_FUNCS: dict = {
         'ECUALIZATION': {
             'clahe_1': {'clip': 2},
             'clahe_2': {'clip': 3},
+        },
+        'SQUARE_PAD': True,
+        'RESIZING': {
+            'size': (IMG_SHAPE, IMG_SHAPE)
+        },
+        'CROPPING_2': {
+            'left': 0.05,
+            'right': 0,
+            'top': 0,
+            'bottom': 0
+        },
+    },
+    'CONF2': {
+        'CROPPING_1': {
+            'left': 0.01,
+            'right': 0.01,
+            'top': 0.04,
+            'bottom': 0.04
+        },
+        'REMOVE_NOISE': {
+            'ksize': 3
+        },
+        'REMOVE_ARTIFACTS': {
+            'bin_kwargs': {
+                'thresh': 'constant',
+                'threshval': 30
+            },
+            'mask_kwargs': {
+                'kernel_shape': cv2.MORPH_ELLIPSE,
+                'kernel_size': (20, 10),
+                'operations': [(cv2.MORPH_OPEN, None), (cv2.MORPH_DILATE, 2)]
+            },
+            'contour_kwargs': {
+                'convex_contour': False,
+            },
+            'crop_box': True,
+        },
+        'NORMALIZE_BREAST': {
+            'type_norm': 'min_max'
+        },
+        'FLIP_IMG': {
+            'orient': 'left'
+        },
+        'ECUALIZATION': {
+            'clahe_1': {'clip': 2},
         },
         'SQUARE_PAD': True,
         'RESIZING': {
@@ -155,6 +200,11 @@ MIAS_CASE_DESC: io = get_path(MIAS_PATH, 'Info.txt')
 CBIS_DDSM_DB_PATH: io = get_path(CBIS_DDSM_PATH, 'ALL')
 MIAS_DB_PATH: io = get_path(MIAS_PATH, 'ALL')
 INBREAST_DB_PATH: io = get_path(INBREAST_PATH, 'ALL')
+
+"""
+    CARPETA CON INFORMACIÓN DE LOS ROI's
+"""
+INBREAST_DB_XML_ROI_PATH = get_path(INBREAST_PATH, 'AllXML')
 
 """
     CARPETAS CON IMAGENES CONVERTIDAS

@@ -10,9 +10,8 @@ from tqdm import tqdm
 
 from breast_cancer_dataset.base import GeneralDataBase
 from preprocessing.image_processing import crop_image_pipeline
-from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, \
-    MODEL_FILES
-from utils.functions import get_filename, search_files, get_path
+from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, IMG_SHAPE
+from utils.functions import get_filename, search_files, get_path, get_patch_from_center
 
 
 class DatasetMIAS(GeneralDataBase):
@@ -35,7 +34,7 @@ class DatasetMIAS(GeneralDataBase):
             l.append(
                 pd.read_csv(
                     path, sep=' ', skiprows=102, skipfooter=2, engine='python',
-                    names=['ID', 'BREAST_TISSUE', 'ABNORMALITY_TYPE', 'PATHOLOGY', 'X_CORD', 'Y_CORD', 'RAD']
+                    names=['File Name', 'BREAST_TISSUE', 'ABNORMALITY_TYPE', 'PATHOLOGY', 'X_CORD', 'Y_CORD', 'RAD']
                 )
             )
         df = pd.concat(objs=l, ignore_index=True)
@@ -43,10 +42,12 @@ class DatasetMIAS(GeneralDataBase):
         # Se crea la columna IMG_LABEL que contendrá las tipologías 'BENIGNA' y 'MALIGNA'.
         df.loc[:, 'IMG_LABEL'] = df.PATHOLOGY.map(defaultdict(lambda: None, {'B': 'BENIGN', 'M': 'MALIGNANT'}))
 
-        # Se suprimen los casos que no contienen ninguna patología
-        print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
-        df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
+        # Se procesa la columna RAD estableciendo un tamaño minimo de IMG_SHAPE / 2
+        df.loc[:, 'RAD'] = df.RAD.apply(lambda x: np.max([float(IMG_SHAPE / 2), float(x)]))
 
+        # Debido a que el sistema de coordenadas se centra en el borde inferior izquierdo se deben de modificar las
+        # coordenadas Y para adecuarlas al sistema de coordenadas centrado en el borde superior izquerdo.
+        df.loc[:, 'Y_CORD'] = 1024 - pd.to_numeric(df.Y_CORD, downcast='float', errors='coerce')
 
         return df
 
@@ -61,13 +62,18 @@ class DatasetMIAS(GeneralDataBase):
         df.loc[:, 'BREAST_VIEW'] = None
 
         # Se crea la columna ABNORMALITY_TYPE que indicará si se trata de una calcificación o de una masa.
-        df.loc[:, 'ABNORMALITY_TYPE'] = np.where(df.ABNORMALITY_TYPE == 'CALC', 'CALC', 'MASS')
+        df.loc[:, 'ABNORMALITY_TYPE'] = np.where(
+            df.ABNORMALITY_TYPE.isin(['CIRC', 'SPIC', 'MISC', 'ASYM']), 'MASS', None
+        )
 
         # Se crea la columna BREAST_DENSITY que indicará la densidad del seno. Para ello se mapean los valores:
         # - 'F' (Fatty): 1
         # - 'G' (Fatty-Glandular): 2
         # - 'D' (Dense-Glandular): 3
         df.loc[:, 'BREAST_DENSITY'] = df.BREAST_TISSUE.map(defaultdict(lambda: None, {'F': '1', 'G': '2', 'D': '3'}))
+
+        # Se crea la columna de ID
+        df.loc[:, 'ID'] = df['File Name']
 
     def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
 
@@ -77,23 +83,21 @@ class DatasetMIAS(GeneralDataBase):
 
         # Se procesa la columna ori path para poder lincar cada path con los datos del excel. Para ello, se separa
         # los nombres de cara archivo a partir del símbolo _ y se obtiene la primera posición.
-        db_files_df.loc[:, 'ID'] = db_files_df.RAW_IMG.apply(lambda x: get_filename(x))
+        db_files_df.loc[:, 'File Name'] = db_files_df.RAW_IMG.apply(lambda x: get_filename(x))
 
         # Se crea la columna RAW_IMG con el path de la imagen original
-        df_def = pd.merge(left=df, right=db_files_df, on='ID', how='left')
+        df_def = pd.merge(left=df, right=db_files_df, on='File Name', how='left')
 
-        print(f'\t{len(df_def.RAW_IMG.unique())} image paths available in database')
+        print(f'\t{len(df_def)} image paths available in database')
 
         # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
         df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
-            lambda x: get_path(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE,
-                               f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
+            lambda x: get_path(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID}.{self.dest_extension}'), axis=1
         )
 
         # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
         df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
-            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE,
-                               f'{get_filename(x.RAW_IMG)}.{self.dest_extension}'), axis=1
+            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID}.{self.dest_extension}'), axis=1
         )
 
         return df_def[self.DF_COLS]
@@ -103,20 +107,19 @@ class DatasetMIASCrop(DatasetMIAS):
 
     IMG_TYPE: str = 'CROP'
     DF_COLS = [
-        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
-        'CONVERTED_IMG', 'PREPROCESSED_IMG', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN', 'IMG_LABEL'
+        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'IMG_TYPE', 'RAW_IMG', 'CONVERTED_IMG',
+        'PREPROCESSED_IMG', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN', 'IMG_LABEL'
     ]
 
     def add_extra_columns(self, df: pd.DataFrame):
         super(DatasetMIASCrop, self).add_extra_columns(df)
-        df.loc[:, 'X_MAX'] = pd.to_numeric(df.X_CORD, errors='coerce', downcast='integer') + \
-                             pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
-        df.loc[:, 'Y_MAX'] = pd.to_numeric(df.Y_CORD, errors='coerce', downcast='integer') + \
-                             pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
-        df.loc[:, 'X_MIN'] = pd.to_numeric(df.X_CORD, errors='coerce', downcast='integer') - \
-                             pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
-        df.loc[:, 'Y_MIN'] = pd.to_numeric(df.Y_CORD, errors='coerce', downcast='integer') - \
-                             pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
+
+        # A partir de las coordenadas y el radio, se obtienen los extremos de un cuadrado para realizar los recortes.
+        get_patch_from_center(df=df)
+
+        # Debido a que una imagen puede contener más de un recorte, se modifica la columna de ID para tener un identifi
+        # cador unico
+        df.loc[:, 'ID'] = df.ID + '_' + df.groupby('ID').cumcount().astype(str)
 
     def clean_dataframe(self):
         print(f'\tExcluding {len(self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)])} '

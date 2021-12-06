@@ -20,8 +20,8 @@ class GeneralDataBase:
     IMG_TYPE: str = 'FULL'
     BINARY: bool = False
     DF_COLS = [
-        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
-        'CONVERTED_IMG', 'PREPROCESSED_IMG', 'IMG_LABEL'
+        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'IMG_TYPE', 'RAW_IMG', 'CONVERTED_IMG',
+        'PREPROCESSED_IMG', 'IMG_LABEL'
     ]
     df_desc = pd.DataFrame(columns=DF_COLS, index=[0])
 
@@ -85,8 +85,7 @@ class GeneralDataBase:
         Función para convertir las imagenes del formato de origen al formato de destino.
         """
 
-        print(f'{"-" * 75}\n\tStarting conversion of file format: {len(self.df_desc.RAW_IMG.unique())} '
-              f'{self.ori_extension} files finded.')
+        print(f'{"-" * 75}\n\tStarting conversion of file format: {len(self.df_desc)} {self.ori_extension} files.')
 
         # Se crea el iterador con los argumentos necesarios para realizar la función a través de un multiproceso.
         arg_iter = [(row.RAW_IMG, row.CONVERTED_IMG, self.BINARY) for _, row in self.df_desc.iterrows()]
@@ -102,8 +101,7 @@ class GeneralDataBase:
                               ext=self.dest_extension),
             columns=['CONVERTED_IMG']
         )
-        print(f"\tConverted {len(converted_imgs.CONVERTED_IMG.unique())} images to {self.dest_extension} "
-              f"format.\n{'-' * 75}")
+        print(f"\tConverted {len(converted_imgs)} images to {self.dest_extension} format.\n{'-' * 75}")
 
     def preproces_images(self) -> None:
         """
@@ -143,8 +141,16 @@ class GeneralDataBase:
         # Funciones para obtener el dataframe de los ficheros planos
         df = self.get_df_from_info_files()
 
+        # Se suprimen los casos que no contienen ninguna patología
+        print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
+        df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
+
         # Se añaden columnas adicionales para completar las columnas del dataframe
         self.add_extra_columns(df)
+
+        # Se suprimen los casos cuya patología no sea massas
+        print(f'\tExcluding {len(df[df.ABNORMALITY_TYPE != "MASS"].index.drop_duplicates())} non mass pathologies.')
+        df.drop(index=df[df.ABNORMALITY_TYPE != 'MASS'].index, inplace=True)
 
         # Se añaden columnas informativas sobre la base de datos utilizada
         self.add_dataset_columns(df)
@@ -152,11 +158,11 @@ class GeneralDataBase:
         # Se preprocesan la columnas del dataframe
         self.df_desc = self.process_dataframe(df)
 
-        # Se realiza la conversión de las imagenes
-        self.convert_images_format()
-
         # Se limpia el dataframe de posibles duplicidades y imagenes no convertidas
         self.clean_dataframe()
+
+        # Se realiza la conversión de las imagenes
+        self.convert_images_format()
 
         # Se preprocesan las imagenes.
         self.preproces_images()

@@ -179,13 +179,18 @@ def crop_image_pipeline(args) -> None:
         images = {'ORIGINAL': img}
 
         # Se recorta la imagen
-        images['ROI EXTRACTION'] = get_roi_from_coord(
+        images['ROI EXTRACTION'] = get_roi_from_coord(name=img_filepath,
             img=images[list(images.keys())[-1]].copy(), x_max=x_max, x_min=x_min, y_max=y_max, y_min=y_min
         )
 
         # A posteriori se quita el ruido de las imagenes utilizando un filtro medio
         images['REMOVE NOISE'] = remove_noise(
             img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_NOISE', {}))
+
+        # El siguiente paso consiste en eliminar los artefactos de la imagen. Solo aplica a imagenes completas
+        images['REMOVE ARTIFACTS'], _, _, mask = remove_artifacts(
+            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_ARTIFACTS', {})
+        )
 
         # Una vez eliminados los artefactos, se realiza una normalización de la zona del pecho
         images['IMAGE NORMALIZED'] = \
@@ -500,15 +505,31 @@ def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
 
 
 @detect_func_err
-def get_roi_from_coord(img: np.ndarray, x_max: int, x_min: int, y_max: int, y_min: int):
+def get_roi_from_coord(name, img: np.ndarray, x_max: int, x_min: int, y_max: int, y_min: int):
 
-    if (x_max is None) or (x_max is np.NaN):
+    if x_max is None:
         x_max = img.shape[1]
-    if (x_min is None) or (x_min is np.NaN):
+    if x_min is None:
         x_min = 0
-    if (y_max is None) or (y_max is np.NaN):
+    if y_max is None:
         y_max = img.shape[0]
-    if (y_min is None) or (y_min is np.NaN):
+    if y_min is None:
+        y_min = 0
+
+    if x_max > img.shape[1]:
+        x_min -= x_max - img.shape[1]
+        x_max = img.shape[1]
+
+    if x_min < 0:
+        x_max += abs(x_min)
+        x_min = 0
+
+    if y_max > img.shape[0]:
+        y_min -= y_max - img.shape[0]
+        y_max = img.shape[0]
+
+    if y_min < 0:
+        y_max += abs(y_min)
         y_min = 0
 
     return img[int(y_min):int(y_max), int(x_min):int(x_max)]
