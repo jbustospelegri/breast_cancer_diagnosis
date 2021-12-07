@@ -45,7 +45,7 @@ def get_predictions(keras_model: models, data: Iterator, class_labels: dict, **k
     true_labels = []
     # En caso de que exista la clase verdadera, se recupera y se añade al dataset
     if hasattr(data, 'classes'):
-        for idx in range(0, (data.samples // data.batch_size) + 1):
+        for idx in range(0, len(data)):
             true_labels += [class_labels[label] for label in data[idx][1].argmax(axis=-1).tolist()]
 
     # Se predicen los datos. Debido a que la salida del modelo para cada muestra es un vector de probabilidades,

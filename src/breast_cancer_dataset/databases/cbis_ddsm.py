@@ -1,19 +1,16 @@
 import os
-import random
 
 import numpy as np
 import pandas as pd
 
-from tqdm import tqdm
-from multiprocessing import cpu_count, Pool
 
 from breast_cancer_dataset.base import GeneralDataBase
 from preprocessing.image_processing import crop_image_pipeline
 from utils.config import (
     CBIS_DDSM_DB_PATH, CBIS_DDSM_CONVERTED_DATA_PATH, CBIS_DDSM_PREPROCESSED_DATA_PATH, CBIS_DDSM_MASS_CASE_DESC_TRAIN,
-    CBIS_DDSM_MASS_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TRAIN, MODEL_FILES,
+    CBIS_DDSM_MASS_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TRAIN,
 )
-from utils.functions import get_dirname, search_files, get_path, get_filename
+from utils.functions import get_dirname
 
 
 class DatasetCBISDDSM(GeneralDataBase):
@@ -45,9 +42,8 @@ class DatasetCBISDDSM(GeneralDataBase):
         # patologias 'benign without callback'.
         df.loc[:, 'IMG_LABEL'] = df.pathology.where(df.pathology != 'BENIGN_WITHOUT_CALLBACK', np.nan)
 
-        # Se suprimen los casos que no contienen ninguna patología
-        print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
-        df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
+        # Se crea la columna ABNORMALITY_TYPE que indicará si se trata de una calcificación o de una masa.
+        df.loc[:, 'ABNORMALITY_TYPE'] = np.where(df['abnormality type'] == 'calcification', 'CALC', 'MASS')
 
         # Se obtienen las imagenes full de cada tipología.
         df.drop_duplicates(subset=self.ID_COL, inplace=True)
@@ -61,13 +57,19 @@ class DatasetCBISDDSM(GeneralDataBase):
         # Se crea la columna BREAST_VIEW que indicará si se trata de una imagen CC o MLO
         df.loc[:, 'BREAST_VIEW'] = df['image view']
 
-        # Se crea la columna ABNORMALITY_TYPE que indicará si se trata de una calcificación o de una masa.
-        df.loc[:, 'ABNORMALITY_TYPE'] = np.where(df['abnormality type'] == 'calcification', 'CALC', 'MASS')
-
         # Se crea la columna BREAST_DENSITY que indicará la densidad del seno
         df.loc[:, 'BREAST_DENSITY'] = df.breast_density
 
-    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Se crea la columna filename para realizar el join
+        df.loc[:, 'File Name'] = df[self.ID_COL].apply(lambda x: get_dirname(x))
+
+        # Se crea una columna identificadora
+        df.loc[:, 'ID'] = df[self.ID_COL].apply(lambda x: get_dirname(x).split("/")[0])
+
+        return df
+
+    def process_dataframe(self, df: pd.DataFrame, f: callable = lambda x: "/".join(get_dirname(x).split(os.sep)[-3:])) \
+            -> pd.DataFrame:
         """
         Función que creará un dataframe con información del dataset CBIS-DDSM. Para cada imagen, se pretende recuperar
         la tipología (clase) detectada, el path de origen de la imagen y su nombre, el tipo de patología (massa o
@@ -77,40 +79,7 @@ class DatasetCBISDDSM(GeneralDataBase):
 
         :return: Pandas dataframe con las columnas especificadas en la descripción
         """
-
-        # Se crea la columna ID para poder linkar la información del excel con la información de las imagenes
-        # almacenadas en la carpeta RAW. En este caso, se utilizará la jerarquía de carpetas en la que se almacena
-        # cada imagen
-        df.loc[:, 'ID'] = df[self.ID_COL].apply(lambda x: get_dirname(x))
-
-        # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
-        # de origen (por defecto INBREAST_DB_PATH)
-        db_files_df = pd.DataFrame(data=search_files(file=self.ori_dir, ext=self.ori_extension), columns=['RAW_IMG'])
-
-        # Se procesa la columna ori path para poder lincar cada path con los datos del excel. Para ello, se
-        # obtiene la jerarquía de directorios de cada imagen.
-        db_files_df.loc[:, 'ID'] = db_files_df.RAW_IMG.apply(lambda x: "/".join(get_dirname(x).split(os.sep)[-3:]))
-
-        # Se crea la columna RAW_IMG con el path de la imagen original
-        df_def = pd.merge(left=df, right=db_files_df, on='ID', how='left')
-
-        # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
-        df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
-            lambda x: get_path(
-                self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID.split("/")[0]}.{self.dest_extension}'
-            ), axis=1
-        )
-
-        # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
-        df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
-            lambda x: get_path(
-                self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID.split("/")[0]}.{self.dest_extension}'
-            ), axis=1
-        )
-
-        print(f'\t{len(df_def.RAW_IMG.unique())} image paths available in database')
-
-        return df_def[self.DF_COLS]
+        return super(DatasetCBISDDSM, self).process_dataframe(df=df, get_id_func=f)
 
 
 class DatasetCBISDDSMCrop(DatasetCBISDDSM):
@@ -124,42 +93,28 @@ class DatasetCBISDDSMCrop(DatasetCBISDDSM):
     ]
 
     def add_extra_columns(self, df: pd.DataFrame):
-        super(DatasetCBISDDSMCrop, self).add_extra_columns(df)
+        df = super(DatasetCBISDDSMCrop, self).add_extra_columns(df)
         for col in ['X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN']:
             df.loc[:, col] = None
+        return df
 
     def clean_dataframe(self):
         super(DatasetCBISDDSMCrop, self).clean_dataframe()
         self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
 
-    def preproces_images(self, show_example: bool = False) -> None:
+    def preproces_images(self, args: list = None, func: callable = crop_image_pipeline) -> None:
         """
         Función utilizara para realizar el preprocesado de las imagenes completas.
 
         :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
         prueba realizada.
         """
-
-        preprocessed_imgs = pd.DataFrame(
-            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}',
-                              ext=self.dest_extension),
-            columns=['CONVERTED_IMG']
+        super(DatasetCBISDDSMCrop, self).preproces_images(
+            args=[
+                (r.CONVERTED_IMG, r.PREPROCESSED_IMG, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN) for _, r in
+                self.df_desc.iterrows()
+            ], func=func
         )
-        print(f'{"-" * 75}\n\tStarting preprocessing of {len(preprocessed_imgs)} images')
-
-        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, row.X_MAX, row.Y_MAX, row.X_MIN, row.Y_MIN) for _, row in
-                self.df_desc.iterrows()]
-
-        with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(crop_image_pipeline, args), total=len(args), desc='preprocessing crop images')
-            tuple(results)
-
-        # Se recuperan las imagenes modificadas y se crea un dataframe
-        proc_imgs = list(
-            search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
-        )
-        print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
-
 
 
 class DatasetCBISSDDMask(DatasetCBISDDSM):
