@@ -1,5 +1,5 @@
 from itertools import product
-from keras_preprocessing.image import array_to_img
+from tensorflow.keras.preprocessing.image import array_to_img
 from pandas import DataFrame
 from typing import io, List
 
@@ -20,10 +20,10 @@ def create_countplot(data: DataFrame, file: io, x: str, hue: str = None, title: 
     # Se realizan las anotaciones de los valores de frecuencia y frecuencia normalizda para cada valor de la
     # variable objetivo.
     if annotate:
-        ax.patches.sort(key=lambda x: x.get_x())
-        for p, (l, _) in zip(ax.patches, product(ax.xaxis.get_ticklabels(),
-                                                 [*ax.get_legend_handles_labels()[1],
-                                                  *ax.xaxis.get_ticklabels()][:data[x].nunique()])):
+        ax_ = list(ax.patches)
+        ax_.sort(key=lambda x: x.get_x())
+        for p, (l, _) in zip(ax_, product(ax.xaxis.get_ticklabels(), [*ax.get_legend_handles_labels()[1],
+                                                                      *ax.xaxis.get_ticklabels()][:data[x].nunique()])):
             txt = '{a:.0f} ({b:.2f} %)'.format(
                 a=p.get_height(),
                 b=(p.get_height() / (len(data[data[x] == l.get_text()]) if norm else len(data))) * 100

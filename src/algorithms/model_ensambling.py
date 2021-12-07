@@ -1,15 +1,16 @@
 import os
 import pickle
+from itertools import product
 
 import pandas as pd
 import numpy as np
 
-from keras_preprocessing.image import DataFrameIterator
+from tensorflow.keras.preprocessing.image import Iterator
 from sklearn.ensemble import GradientBoostingClassifier
 from typing import io
 
-from utils.config import SEED, XGB_COLS, XGB_CONFIG, N_ESTIMATORS, MAX_DEPTH, MODEL_FILES
-from utils.functions import get_path, bulk_data, search_files, get_filename
+from src.utils.config import SEED, XGB_COLS, XGB_CONFIG, N_ESTIMATORS, MAX_DEPTH, MODEL_FILES
+from src.utils.functions import get_path, bulk_data, search_files, get_filename
 
 
 class GradientBoosting:
@@ -25,7 +26,7 @@ class GradientBoosting:
         self.model_gb = pickle.load(open(model_filepath, 'rb'))
 
     @staticmethod
-    def __get_dataframe_from_kwargs(data: pd.DataFrame, **model_inputs):
+    def get_dataframe_from_kwargs(data: pd.DataFrame, **model_inputs):
         """
         Función utilizada para generar un set de datos unificado a partir de las predicciones generadas por cada modelo
         :param data: dataframe con el nombre de archivo
@@ -67,11 +68,22 @@ class GradientBoosting:
         for file in search_files(cnn_predictions_dir, 'csv', in_subdirs=False):
             model_name = get_filename(file)
             df = pd.read_csv(file, sep=';')[['PREPROCESSED_IMG', 'PREDICTION']]
-            df_dumy = pd.get_dummies(df.rename(columns={'PREDICTION': model_name}), columns=[model_name])
-            cols += df_dumy.columns[-2:].tolist()
+            df_dumy = pd.concat(
+                objs=[
+                    pd.DataFrame(
+                        data=[['0', '0', '0']],
+                        columns=['PREPROCESSED_IMG',
+                                 *[f'{n}_{l}' for n, l in list(product([model_name], data.IMG_LABEL.unique()))]]
+                    ),
+                    pd.get_dummies(df.rename(columns={'PREDICTION': model_name}), columns=[model_name]).astype(str)
+                ],
+                ignore_index=True
+            ).ffill()
+            cols += [f'{n}_{l}' for n, l in list(product([model_name], data.IMG_LABEL.unique()))]
             data = pd.merge(left=data, right=df_dumy, on='PREPROCESSED_IMG', how='left')
 
         # generación del conjunto de datos de train para gradient boosting
+        data.dropna(how='any', inplace=True)
         train_x, train_y = data.loc[data.TRAIN_VAL == 'train', cols], data.loc[data.TRAIN_VAL == 'train', 'IMG_LABEL']
 
         # entrenamiento del modelo
@@ -86,8 +98,7 @@ class GradientBoosting:
         # se almacena el modelo en caso de que el usuario haya definido un nombre de archivo
         pickle.dump(self.model_gb, open(get_path(save_model_dir, f'{self.__name__}.sav'), 'wb'))
 
-    def predict(self, dirname: str, filename: str, data: DataFrameIterator, return_model_predictions: bool = False,
-                **input_models):
+    def predict(self, dirname: str, filename: str, data: Iterator, return_model_predictions: bool = False, **kwargs):
         """
         Función utilizada para realizar la predicción del algorítmo de graadient boosting a partir de las predicciones
         del conjunto de redes convolucionales
@@ -106,10 +117,10 @@ class GradientBoosting:
         gb_dataset.index.name = 'image'
 
         # Se unifica el set de datos obteniendo las predicciones de cada modelo representadas por input_models
-        df = self.__get_dataframe_from_kwargs(gb_dataset, **input_models)
+        df = self.get_dataframe_from_kwargs(gb_dataset, **kwargs)
 
         # Se añaden las predicciones
-        df.loc[:, 'label'] = self.model_gb.predict(pd.get_dummies(df[input_models.keys()]))
+        df.loc[:, 'label'] = self.model_gb.predict(pd.get_dummies(df[kwargs.keys()]))
 
         # se escribe el log de errores con las predicciones individuales de cada arquitectura de red o únicamente las
         # generadas por gradient boosting

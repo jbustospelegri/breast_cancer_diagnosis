@@ -1,8 +1,17 @@
-from typing import Mapping, io, Union
+import os
+import sys
+from typing import io
 
-from algorithms.metrics import f1_score
-from utils.functions import get_path
+from src.algorithms.metrics import f1_score
+from src.utils.functions import get_path
 
+import cv2
+
+"""
+    CONFIGURACION DEL EXPERIMENTO
+"""
+# Los valores disponibles son PATCHES, COMPLETE_IMAGE, MASK
+EXPERIMENT = 'PATCHES'
 
 """
     CONFIGURACION DEL DATASET
@@ -12,31 +21,32 @@ TRAIN_DATA_PROP: float = 0.8
 """
     CONFIGURACION DATA AUGMENTATION
 """
-
 DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': True,
     'vertical_flip': True,
     'shear_range': 0.1,
-    'zoom_range': 0.2,
-    # 'rotation_range': 40,
+    'rotation_range': 270,
+    'width_shift_range': 0.1,
+    'height_shift_range': 0.1,
+    'brightness_range': (0.6, 1),
+    'zoom_range': [0.8, 1.2],
 }
 
 """
     CONFIGURACION DE EJECUCIONES DE LOS MODELOS
 """
-
-EPOCHS: int = 5#100
-WARM_UP_EPOCHS: int = 2#30
-LEARNING_RATE: float = 1e-4
+EPOCHS: int = 100
+WARM_UP_EPOCHS: int = 30
 WARM_UP_LEARNING_RATE: float = 1e-3
+LEARNING_RATE: float = 1e-4
 
 BATCH_SIZE: int = 16
 SEED: int = 81
 
 METRICS = {
-    'AUC': 'auc',
-    'Precision': 'precision',
-    'Recall': 'recall',
+    'AUC': 'AUC',
+    'Precision': 'Precision',
+    'Recall': 'Recall',
     'F1 Score': f1_score
 }
 
@@ -54,8 +64,9 @@ XGB_COLS = {
 """
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
-PREPROCESSING_CONFIG: str = 'CONF1'
-PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[str, int, float, tuple, dict]]]]] = {
+IMG_SHAPE: int = 300
+PREPROCESSING_CONFIG: str = 'CONF2'
+PREPROCESSING_FUNCS: dict = {
     'CONF1': {
         'CROPPING_1': {
             'left': 0.01,
@@ -63,25 +74,37 @@ PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[st
             'top': 0.04,
             'bottom': 0.04
         },
-        'MIN_MAX_NORM': {
-            'min': 0,
-            'max': 255
+        'REMOVE_NOISE': {
+            'ksize': 3
         },
         'REMOVE_ARTIFACTS': {
             'bin_kwargs': {
-                'thresh': 30,
-                'maxval': 1,
+                'thresh': 'otsu',
+                'threshval': 30
             },
             'mask_kwargs': {
-                'kernel_size': (60, 60)
-            }
+                'kernel_shape': cv2.MORPH_ELLIPSE,
+                'kernel_size': (20, 10),
+                'operations': [(cv2.MORPH_OPEN, None), (cv2.MORPH_DILATE, 2)]
+            },
+            'contour_kwargs': {
+                'convex_contour': True,
+            },
+            'crop_box': True,
+        },
+        'NORMALIZE_BREAST': {
+            'type_norm': 'truncation'
         },
         'FLIP_IMG': {
             'orient': 'left'
         },
         'ECUALIZATION': {
-            'clahe_1': {'clip': 1},
-            'clahe_2': {'clip': 2}
+            'clahe_1': {'clip': 2},
+            'clahe_2': {'clip': 3},
+        },
+        'SQUARE_PAD': True,
+        'RESIZING': {
+            'size': (IMG_SHAPE, IMG_SHAPE)
         },
         'CROPPING_2': {
             'left': 0.05,
@@ -89,10 +112,6 @@ PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[st
             'top': 0,
             'bottom': 0
         },
-        'SQUARE_PAD': True,
-        'RESIZING': {
-            'size': (1024, 1024)
-        }
     },
     'CONF2': {
         'CROPPING_1': {
@@ -101,24 +120,36 @@ PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[st
             'top': 0.04,
             'bottom': 0.04
         },
-        'MIN_MAX_NORM': {
-            'min': 0,
-            'max': 255
+        'REMOVE_NOISE': {
+            'ksize': 3
         },
         'REMOVE_ARTIFACTS': {
             'bin_kwargs': {
-                'thresh': 30,
-                'maxval': 1,
+                'thresh': 'constant',
+                'threshval': 30
             },
             'mask_kwargs': {
-                'kernel_size': (60, 60)
-            }
+                'kernel_shape': cv2.MORPH_ELLIPSE,
+                'kernel_size': (20, 10),
+                'operations': [(cv2.MORPH_OPEN, None), (cv2.MORPH_DILATE, 2)]
+            },
+            'contour_kwargs': {
+                'convex_contour': False,
+            },
+            'crop_box': True,
+        },
+        'NORMALIZE_BREAST': {
+            'type_norm': 'min_max'
         },
         'FLIP_IMG': {
             'orient': 'left'
         },
         'ECUALIZATION': {
-            'clahe_1': {'clip': 1}
+            'clahe_1': {'clip': 2},
+        },
+        'SQUARE_PAD': True,
+        'RESIZING': {
+            'size': (IMG_SHAPE, IMG_SHAPE)
         },
         'CROPPING_2': {
             'left': 0.05,
@@ -126,23 +157,25 @@ PREPROCESSING_FUNCS: Mapping[str, Mapping[str, Union[bool, Mapping[str, Union[st
             'top': 0,
             'bottom': 0
         },
-        'SQUARE_PAD': True,
-        'RESIZING': {
-            'size': (1024, 1024)
-        }
-    }
+    },
 }
 
 
 """
     CARPETAS PRINCIPALES DEL PROGRAMA
 """
-RAW_DATA_PATH: io = get_path('..', 'data', '00_RAW')
-CONVERTED_DATA_PATH: io = get_path('..', 'data', '01_CONVERTED')
-PROCESSED_DATA_PATH: io = get_path('..', 'data', '02_PROCESED')
-OUTPUT_DATA_PATH: io = get_path('..', 'data', '03_OUTPUT')
-MODEL_DATA_PATH: io = get_path('..', 'models')
-LOGGING_DATA_PATH: io = get_path('..', 'logging')
+WORKING_DIRECTORY = sys._MEIPASS if getattr(sys, 'frozen', False) else os.getcwd()
+RAW_DATA_PATH: io = get_path(WORKING_DIRECTORY, 'data', '00_RAW') if getattr(sys, 'frozen', False) else \
+    get_path('..', 'data', '00_RAW')
+CONVERTED_DATA_PATH: io = get_path(WORKING_DIRECTORY, 'data', '01_CONVERTED') if getattr(sys, 'frozen', False) \
+    else get_path('..', 'data', '01_CONVERTED')
+PROCESSED_DATA_PATH: io = get_path(WORKING_DIRECTORY, 'data', '02_PROCESSED') if getattr(sys, 'frozen', False) \
+    else get_path('..', 'data', '02_PROCESED')
+OUTPUT_DATA_PATH: io = get_path(os.getcwd(), 'OUTPUTS') if getattr(sys, 'frozen', False) \
+    else get_path('..', 'data', '03_OUTPUT')
+MODEL_DATA_PATH: io = get_path(WORKING_DIRECTORY, 'models') if getattr(sys, 'frozen', False) \
+    else get_path('..', 'models')
+LOGGING_DATA_PATH: io = get_path(os.getcwd(), 'LOGS') if getattr(sys, 'frozen', False) else get_path('..', 'logging')
 
 """
     CARPETAS CON LOS DATASETS
@@ -169,6 +202,11 @@ MIAS_DB_PATH: io = get_path(MIAS_PATH, 'ALL')
 INBREAST_DB_PATH: io = get_path(INBREAST_PATH, 'ALL')
 
 """
+    CARPETA CON INFORMACIÓN DE LOS ROI's
+"""
+INBREAST_DB_XML_ROI_PATH = get_path(INBREAST_PATH, 'AllXML')
+
+"""
     CARPETAS CON IMAGENES CONVERTIDAS
 """
 CBIS_DDSM_CONVERTED_DATA_PATH: io = get_path(CONVERTED_DATA_PATH, 'CBIS_DDSM')
@@ -181,6 +219,12 @@ INBREAST_CONVERTED_DATA_PATH: io = get_path(CONVERTED_DATA_PATH, 'INBreast')
 CBIS_DDSM_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'CBIS_DDSM')
 MIAS_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'MIAS')
 INBREAST_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'INBreast')
+
+"""
+    CARPETAS DE LA INTERFAZ GRÁFICA
+"""
+GUI_CSS_PATH = get_path(WORKING_DIRECTORY, 'static', 'css')
+
 
 """
     CARPETAS DE RESULTADOS DEL MODELO 
@@ -209,7 +253,7 @@ class ModelConstants:
 
         self.model_data_viz_dir: io = get_path(self.model_root_dir, 'DATA_VIZ')
 
-        self.model_viz_preprocesing_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'PREPROCESSING')
+        self.model_viz_preprocesing_dir: io = get_path(self.model_root_dir, 'PREPROCESSING_VIZ', PREPROCESSING_CONFIG)
         self.model_viz_eda_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'DATASET_EDA')
         self.model_viz_train_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'TRAIN_PHASE')
         self.model_viz_data_augm_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'DATA_AUGMENTATION_EXAMPLES')
@@ -219,7 +263,6 @@ class ModelConstants:
         self.model_viz_results_confusion_matrix_dir: io = get_path(self.model_viz_results_dir, 'CONFUSION_MATRIX')
         self.model_viz_results_accuracy_dir: io = get_path(self.model_viz_results_dir, 'ACCURACY')
         self.model_viz_results_metrics_dir: io = get_path(self.model_viz_results_dir, 'METRICS')
-
 
 
 MODEL_FILES = ModelConstants()

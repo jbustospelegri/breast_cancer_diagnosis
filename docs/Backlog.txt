@@ -70,12 +70,20 @@ DONE
 -------
 TODO
 ------
-4) Aplicar regularización L2 en la función de pérdidas -> Repasar en qué consiste.
+10) En model ensambler leer el csv y no la clase DataBreastCancer para poder hacer distintas pruebas
 
-6) Preprocesado de imagenes
-    6.2 -  Aplicar la GCN normalización en las imagenes (este procesado no está aplicado).
+11) FUNCION QUE CREA LA MASCARA DE LAS IMAGENES Y LAS ALMACENA EN LA CARPETA 02_PROCESED\MASK
 
-7.1) Plot model de la arquitectura de red
+    11.1) DATASET CBIS
+            -> LAS MASCARAS SE DEBEN DE LEER DEL CSV Y LINCAR LA PATOLOGÍA CON EL ID (ALERTA CON CAMBIOS DE NOMBRES) Y
+               MULTIPLES PATOLOGÍAS PARA UNA MISMA IMAGEN.
+            -> LA FUNCIÓN DE CONVERT DEBE DE LEER LAS MASCARAS
+
+
+---------
+  EXTRA
+---------
+
 
 
 

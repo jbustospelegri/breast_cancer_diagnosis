@@ -1,20 +1,22 @@
 import io
-from itertools import product
-
-from data_viz.functions import render_mpl_table
-from utils.config import MODEL_FILES, XGB_CONFIG, METRICS
-from utils.functions import get_path, search_files, get_filename
-
+import random
+import os
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
+from itertools import product
+from tensorflow.python.keras.preprocessing.image import load_img, img_to_array, ImageDataGenerator
 from sklearn.metrics import recall_score, f1_score, precision_score, accuracy_score
 from typing import List
 from collections import defaultdict
 
-import os
+from data_viz.functions import render_mpl_table, plot_image, create_countplot
+from preprocessing.image_processing import full_image_pipeline, crop_image_pipeline
+from utils.config import MODEL_FILES, XGB_CONFIG, METRICS, DATA_AUGMENTATION_FUNCS, EXPERIMENT
+from utils.functions import get_path, search_files, get_filename
+
 
 sns.set(style='white')
 sns.despine()
@@ -22,10 +24,10 @@ sns.despine()
 
 class DataVisualizer:
 
-    metrics = [f if type(f) is str else f.__name__ for f in METRICS.values()] + ['accuracy', 'loss']
+    metrics = [f.lower() if type(f) is str else f.__name__ for f in METRICS.values()] + ['accuracy', 'loss']
 
     @staticmethod
-    def __get_dataframe_from_logs(dirname: io, metrics: list) -> pd.DataFrame:
+    def get_dataframe_from_logs(dirname: io, metrics: list) -> pd.DataFrame:
         """
 
         Función utilizada para crear gráficas a partir de los historiales generados por keras durante el entrenamiento.
@@ -69,7 +71,7 @@ class DataVisualizer:
         return pd.concat(data_list, ignore_index=True)
 
     @staticmethod
-    def __get_dataframe_from_preds(dirname: io) -> pd.DataFrame:
+    def get_dataframe_from_preds(dirname: io) -> pd.DataFrame:
 
         l = []
         for file in search_files(dirname, 'csv'):
@@ -83,7 +85,11 @@ class DataVisualizer:
         return pd.concat(l, ignore_index=True).groupby(['PREPROCESSED_IMG', 'Weight', 'Layer'], as_index=False).first()
 
     @staticmethod
-    def __plot_model_metrics(plot_params: List[dict], dirname: io = None, filename: io = None, plots_per_line: int = 2):
+    def get_dataframe_from_dataset_excel() -> pd.DataFrame:
+        return pd.read_excel(MODEL_FILES.model_db_desc_csv, dtype=object, index_col=None)
+
+    @staticmethod
+    def plot_model_metrics(plot_params: List[dict], dirname: io = None, filename: io = None, plots_per_line: int = 2):
         """
         Función para representar gráficamente las métricas obtenidas especificadas mediante el parámetro plot_params
         :param plot_params: lista de diccionarios que contiene las especificaciones para generar un grafico
@@ -129,7 +135,7 @@ class DataVisualizer:
         figure.savefig(get_path(dirname, filename))
 
     @staticmethod
-    def __plot_confusion_matrix(df: pd.DataFrame, models: list) -> None:
+    def plot_confusion_matrix(df: pd.DataFrame, models: list) -> None:
         # En función del número de modelos, se generan n hileras para graficar los resultados. Cada hilera contendrá
         # dos modelos.
         nrows = (len(models) // 2) + 1
@@ -169,7 +175,7 @@ class DataVisualizer:
                                      f'{XGB_CONFIG}_{mode}.jpg'))
 
     @staticmethod
-    def __plot_metrics_table(df: pd.DataFrame, models: list, class_metric: bool = True) -> None:
+    def plot_metrics_table(df: pd.DataFrame, models: list, class_metric: bool = True) -> None:
         """
         Función utilizada para generar una imagen con una tabla que contiene las métricas de accuracy, precision,
         recall y f1_score para entrenamiento y validación. Las métricas se calculan a partir del log de predicciones
@@ -185,7 +191,7 @@ class DataVisualizer:
 
         metrics = ['accuracy', 'precision', 'recall', 'f1']
 
-        for w, l in zip(df.Weight.unique(), df.Layer.unique()):
+        for w, l in product(df.Weight.unique(), df.Layer.unique()):
 
             df_ = df[(df.Weight == w) & (df.Layer == l)].copy()
 
@@ -204,6 +210,8 @@ class DataVisualizer:
 
                 for phase, model in product(df_.TRAIN_VAL.unique(), models):
 
+                    df_2 = df_[df_.TRAIN_VAL == phase]
+
                     if class_metric:
                         # En caso de querer obtener las metricas de cada clase se itera sobre cada una de estas.
                         for class_label in df_.IMG_LABEL.unique():
@@ -214,22 +222,22 @@ class DataVisualizer:
 
                             # Creación del dataset de métricas
                             metric_df.loc[(phase,), (model, class_label)] = [
-                                round(accuracy_score(df_.IMG_LABEL.map(map_dict), df_[model].map(map_dict)) * 100, 2),
-                                round(precision_score(df_.IMG_LABEL.map(map_dict), df_[model].map(map_dict),
+                                round(accuracy_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict)) * 100, 2),
+                                round(precision_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
                                                       zero_division=0, average='weighted') * 100, 2),
-                                round(recall_score(df_.IMG_LABEL.map(map_dict), df_[model].map(map_dict),
+                                round(recall_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
                                                    zero_division=0, average='weighted') * 100, 2),
-                                round(f1_score(df_.IMG_LABEL.map(map_dict), df_[model].map(map_dict),
+                                round(f1_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
                                                zero_division=0, average='weighted') * 100, 2)]
                     else:
                         # Creación del dataset de métricas
                         metric_df.loc[(phase,), model] = [
-                            round(accuracy_score(df_.IMG_LABEL.tolist(), df_[model].tolist()) * 100, 2),
-                            round(precision_score(df_.IMG_LABEL.tolist(), df_[model].tolist(), zero_division=0,
+                            round(accuracy_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist()) * 100, 2),
+                            round(precision_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
                                                   average='weighted') * 100, 2),
-                            round(recall_score(df_.IMG_LABEL.tolist(), df_[model].tolist(), zero_division=0,
+                            round(recall_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
                                                average='weighted') * 100, 2),
-                            round(f1_score(df_.IMG_LABEL.tolist(), df_[model].tolist(), zero_division=0,
+                            round(f1_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
                                            average='weighted') * 100, 2)]
 
                 # se resetea el índice para poder mostrar en la tabla si las métricas son de entrenamiento o de
@@ -252,7 +260,7 @@ class DataVisualizer:
                 fig.savefig(get_path(MODEL_FILES.model_viz_results_metrics_dir, w, l, filename))
 
     @staticmethod
-    def __plot_accuracy_plots(df: pd.DataFrame, models: list, hue: str, title: str, img_name: str):
+    def plot_accuracy_plots(df: pd.DataFrame, models: list, hue: str, title: str, img_name: str):
 
         df_grouped = df.groupby(['Weight', 'Layer', 'TRAIN_VAL'], as_index=False). \
             apply(lambda x: pd.Series({m: round(accuracy_score(x.IMG_LABEL, x[m]) * 100, 2) for m in models}))
@@ -308,7 +316,7 @@ class DataVisualizer:
         """
 
         # Se recupera un dataframe a partir del directorio de logs que contendrá las métricas
-        data = self.__get_dataframe_from_logs(logs_dir, self.metrics)
+        data = self.get_dataframe_from_logs(logs_dir, self.metrics)
 
         # Se itera sobre las fases con las que se ha entrenado cada modelo
         for weights, layers, phase in product(data.Weights.unique().tolist(), data.FrozenLayers.unique().tolist(),
@@ -318,7 +326,7 @@ class DataVisualizer:
 
             if len(data_filtered) > 0:
                 # Se crea la gráfica correspondiente
-                self.__plot_model_metrics(
+                self.plot_model_metrics(
                     dirname=MODEL_FILES.model_viz_results_model_history_dir,
                     filename=f'Model_history_train_{phase}_{weights}_{layers}.jpg',
                     plot_params=[
@@ -363,12 +371,108 @@ class DataVisualizer:
        """
 
         # Lectura de los datos
-        df = self.__get_dataframe_from_preds(dirname=predictions_dir)
+        df = self.get_dataframe_from_preds(dirname=predictions_dir)
         models = [c for c in df.columns if c not in ['PREPROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', 'Weight', 'Layer']]
-        self.__plot_confusion_matrix(df, models)
-        self.__plot_metrics_table(df, models, class_metric=True)
-        self.__plot_metrics_table(df, models, class_metric=False)
-        self.__plot_accuracy_plots(df[df.Layer == 'ALL'], models, hue='Weight', img_name='Weight Init Accuracy',
-                                   title='Random Initialization vs Imagenet')
-        self.__plot_accuracy_plots(df[df.Weight == 'imagenet'], models, hue='Layer', img_name='Frozen Layers Accuracy',
-                                   title='Impact of the fraction of convolutional blocks fine-tuned on CNN performance')
+        self.plot_confusion_matrix(df, models)
+        # self.plot_metrics_table(df, models, class_metric=True)
+        self.plot_metrics_table(df, models, class_metric=False)
+        self.plot_accuracy_plots(df[df.Layer == 'ALL'], models, hue='Weight', img_name='Weight Init Accuracy',
+                                 title='Random Initialization vs Imagenet')
+        self.plot_accuracy_plots(df[df.Weight == 'imagenet'], models, hue='Layer', img_name='Frozen Layers Accuracy',
+                                 title='Impact of the fraction of convolutional blocks fine-tuned on CNN performance')
+
+    def get_data_augmentation_examples(self) -> None:
+        """
+        Función que permite generar un ejemplo de cada tipo de data augmentation aplicado
+        :param out_filepath: ruta del archivo de imagen a generar
+        :param example_imag: nombre de una muestra de ejemplo sobre la que se aplicarán las transformaciones propias del
+                             data augmentation
+        """
+
+        df = self.get_dataframe_from_dataset_excel()
+
+        example_imag = df.loc[random.sample(df.index.tolist(), 1)[0], 'PREPROCESSED_IMG']
+
+        # Se lee la imagen del path de ejemplo
+        image = load_img(example_imag)
+        # Se transforma la imagen a formato array
+        image = img_to_array(image)
+        # Se añade una dimensión para obtener el dato de forma (1, width, height, channels)
+        image_ori = np.expand_dims(image, axis=0)
+
+        # Figura y subplots de matplotlib. Debido a que existen 4 transformaciones de data augmentation, se creará un
+        # grid con 5 columnas que contendrán cada ejemplo de transformación y la imagen original
+        elements = len(DATA_AUGMENTATION_FUNCS.keys())
+        cols = 3
+        rows = elements // cols + elements % cols
+        fig = plt.figure(figsize=(15, 4 * rows))
+
+        # Se representa la imagen original en el primer subplot.
+        plot_image(img=image_ori, title='Imagen Original', ax_=fig.add_subplot(rows, cols, 1))
+
+        # Se iteran las transformaciones
+        for i, (k, v) in enumerate(DATA_AUGMENTATION_FUNCS.items(), 2):
+
+            # Se crea al datagenerator con exclusivamente la transformación a aplicar.
+            datagen = ImageDataGenerator(**{k: v}, fill_mode='constant', cval=0)
+            # Se recupera la imagen transformada mediante next() del método flow del objeto datagen
+            plot_image(img=next(datagen.flow(image_ori)), title=k, ax_=fig.add_subplot(rows, cols, i))
+
+        # Se ajusta la figura
+        fig.tight_layout()
+
+        # Se almacena la figura
+        plt.savefig(get_path(MODEL_FILES.model_viz_data_augm_dir, f'{get_filename(example_imag)}.png'))
+
+    def get_eda_from_df(self) -> None:
+        """
+        Función que permite representar graficamente el número de observaciones y la proporción de cada una de las
+        clases presentes en un dataet. La clase de cada observción debe estar almacenada en una columna cuyo
+        nombre sea "class".
+
+        :param dirname: directorio en el que se almacenará la imagen.
+        """
+
+        df = self.get_dataframe_from_dataset_excel()
+
+        print(f'{"-" * 75}\n\tGenerando análisis del dataset\n{"-" * 75}')
+        title = 'Distribución clases según orígen'
+        file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
+        create_countplot(x='DATASET', hue='IMG_LABEL', data=df, title=title, file=file)
+
+        title = 'Distribución clases'
+        file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
+        create_countplot(x='IMG_LABEL', data=df, title=title, file=file)
+
+        title = 'Distribución clases segun train-val'
+        file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
+        create_countplot(x='TRAIN_VAL', hue='IMG_LABEL', data=df, title=title, file=file, norm=True)
+
+        title = 'Distribución clases segun patología'
+        file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
+        create_countplot(x='ABNORMALITY_TYPE', hue='IMG_LABEL', data=df, title=title, file=file, norm=True)
+        print(f'{"-" * 75}\n\tAnálisis del dataset finalizado en {MODEL_FILES.model_viz_eda_dir}\n{"-" * 75}')
+
+    def get_preprocessing_examples(self) -> None:
+
+        df = self.get_dataframe_from_dataset_excel().assign(example_dir=None)
+        photos = []
+        for dataset in df.DATASET.unique():
+            photos += random.sample(df[df.DATASET == dataset].index.tolist(), 5)
+
+        df.loc[photos, 'example_dir'] = df.loc[photos, :].apply(
+            lambda x: get_path(MODEL_FILES.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG),
+                               f'{get_filename(x.PREPROCESSED_IMG)}.png'),
+            axis=1
+        )
+
+        if EXPERIMENT == 'COMPLETE_IMAGE':
+            for _, r in df[df.example_dir.notnull()].iterrows():
+                full_image_pipeline([r.CONVERTED_IMG, r.example_dir, True])
+        elif EXPERIMENT == 'PATCHES':
+            for _, r in df[df.example_dir.notnull()].iterrows():
+                crop_image_pipeline([r.CONVERTED_IMG, r.example_dir, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN, True])
+        elif EXPERIMENT == 'MASK':
+            pass
+        else:
+            raise ValueError(f"Function {EXPERIMENT} doesn't defined")
