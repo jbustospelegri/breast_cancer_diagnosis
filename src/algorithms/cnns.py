@@ -9,6 +9,7 @@ from tensorflow.keras.callbacks import History
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import L2
 from tensorflow.keras.applications import resnet50, densenet, vgg16, inception_v3
+from tensorflow.python.keras.constraints import maxnorm
 from tensorflow.python.keras.preprocessing.image import DataFrameIterator
 from tensorflow.keras.layers import Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input
 from tensorflow.keras.losses import CategoricalCrossentropy
@@ -71,11 +72,10 @@ class GeneralModel:
 
         neurons = get_number_of_neurons(x.get_shape().as_list())
         while neurons > 15:
-            x = Dropout(0.25)(x)
-            x = Dense(neurons, activation='relu')(x)
+            x = Dense(neurons, activation='relu', kernel_constraint=maxnorm(3))(x)
+            x = Dropout(0.2)(x)
             neurons = get_number_of_neurons(x.get_shape().as_list())
 
-        x = Dropout(0.5)(x)
         output = Dense(self.n, activation='softmax')(x)
 
         self.model = Model(inputs=input, outputs=output)

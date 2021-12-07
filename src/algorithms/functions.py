@@ -1,4 +1,6 @@
 import pandas as pd
+from tensorflow.python.keras.optimizer_v1 import Nadam
+
 import utils.config as conf
 
 
