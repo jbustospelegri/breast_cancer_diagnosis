@@ -32,7 +32,7 @@ if __name__ == '__main__':
     db = BreastCancerDataset(excel_path=model_config.model_db_desc_csv)
 
     # Se generarán algunos ejemplos de la base de datos
-    data_viz = DataVisualizer()
+    data_viz = DataVisualizer(config=model_config)
 
     print(f'{"-" * 75}\nGenerando ejemplos de Data Augmentation del set de datos.\n{"-" * 75}')
     data_viz.get_data_augmentation_examples()

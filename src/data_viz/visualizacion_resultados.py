@@ -26,6 +26,9 @@ class DataVisualizer:
 
     metrics = [f.lower() if type(f) is str else f.__name__ for f in METRICS.values()] + ['accuracy', 'loss']
 
+    def __init__(self, config: MODEL_FILES):
+        self.conf = config
+
     @staticmethod
     def get_dataframe_from_logs(dirname: io, metrics: list) -> pd.DataFrame:
         """
@@ -84,9 +87,8 @@ class DataVisualizer:
 
         return pd.concat(l, ignore_index=True).groupby(['PREPROCESSED_IMG', 'Weight', 'Layer'], as_index=False).first()
 
-    @staticmethod
-    def get_dataframe_from_dataset_excel() -> pd.DataFrame:
-        return pd.read_excel(MODEL_FILES.model_db_desc_csv, dtype=object, index_col=None)
+    def get_dataframe_from_dataset_excel(self) -> pd.DataFrame:
+        return pd.read_excel(self.conf.model_db_desc_csv, dtype=object, index_col=None)
 
     @staticmethod
     def plot_model_metrics(plot_params: List[dict], dirname: io = None, filename: io = None, plots_per_line: int = 2):
@@ -134,8 +136,7 @@ class DataVisualizer:
         figure.tight_layout()
         figure.savefig(get_path(dirname, filename))
 
-    @staticmethod
-    def plot_confusion_matrix(df: pd.DataFrame, models: list) -> None:
+    def plot_confusion_matrix(self, df: pd.DataFrame, models: list) -> None:
         # En función del número de modelos, se generan n hileras para graficar los resultados. Cada hilera contendrá
         # dos modelos.
         nrows = (len(models) // 2) + 1
@@ -171,11 +172,10 @@ class DataVisualizer:
                 # Se ajustan los subplots
                 fig.tight_layout()
                 # Se almacena la figura.
-                fig.savefig(get_path(MODEL_FILES.model_viz_results_confusion_matrix_dir, w, layer,
+                fig.savefig(get_path(self.conf.model_viz_results_confusion_matrix_dir, w, layer,
                                      f'{XGB_CONFIG}_{mode}.jpg'))
 
-    @staticmethod
-    def plot_metrics_table(df: pd.DataFrame, models: list, class_metric: bool = True) -> None:
+    def plot_metrics_table(self, df: pd.DataFrame, models: list, class_metric: bool = True) -> None:
         """
         Función utilizada para generar una imagen con una tabla que contiene las métricas de accuracy, precision,
         recall y f1_score para entrenamiento y validación. Las métricas se calculan a partir del log de predicciones
@@ -257,10 +257,9 @@ class DataVisualizer:
 
                 fig, _ = render_mpl_table(metric_df, merge_pos=merge_cells, header_rows=2)
                 filename = f'{XGB_CONFIG}_model_metrics{"_marginal"  if class_metric else ""}.jpg'
-                fig.savefig(get_path(MODEL_FILES.model_viz_results_metrics_dir, w, l, filename))
+                fig.savefig(get_path(self.conf.model_viz_results_metrics_dir, w, l, filename))
 
-    @staticmethod
-    def plot_accuracy_plots(df: pd.DataFrame, models: list, hue: str, title: str, img_name: str):
+    def plot_accuracy_plots(self, df: pd.DataFrame, models: list, hue: str, title: str, img_name: str):
 
         df_grouped = df.groupby(['Weight', 'Layer', 'TRAIN_VAL'], as_index=False). \
             apply(lambda x: pd.Series({m: round(accuracy_score(x.IMG_LABEL, x[m]) * 100, 2) for m in models}))
@@ -278,10 +277,9 @@ class DataVisualizer:
 
         fig.tight_layout()
         fig.suptitle(title, y=1.05, fontsize=14, fontweight='bold')
-        fig.savefig(get_path(MODEL_FILES.model_viz_results_accuracy_dir, XGB_CONFIG, f'{img_name}.png'))
+        fig.savefig(get_path(self.conf.model_viz_results_accuracy_dir, XGB_CONFIG, f'{img_name}.png'))
 
-    @staticmethod
-    def get_model_time_executions(summary_dir: io):
+    def get_model_time_executions(self, summary_dir: io):
 
         data = pd.read_csv(search_files(summary_dir, 'csv', in_subdirs=False)[0], sep=';', decimal='.')
 
@@ -302,7 +300,7 @@ class DataVisualizer:
             axes.set(ylabel='Tiempo (seg)', xlabel='Capas entrenables')
 
         fig.tight_layout()
-        fig.savefig(get_path(MODEL_FILES.model_viz_results_dir, 'Comparación tiempos entrenamiento.jpg'))
+        fig.savefig(get_path(self.conf.model_viz_results_dir, 'Comparación tiempos entrenamiento.jpg'))
 
     def get_model_logs_metrics(self, logs_dir: io):
         """
@@ -327,7 +325,7 @@ class DataVisualizer:
             if len(data_filtered) > 0:
                 # Se crea la gráfica correspondiente
                 self.plot_model_metrics(
-                    dirname=MODEL_FILES.model_viz_results_model_history_dir,
+                    dirname=self.conf.model_viz_results_model_history_dir,
                     filename=f'Model_history_train_{phase}_{weights}_{layers}.jpg',
                     plot_params=[
                         {
@@ -422,7 +420,7 @@ class DataVisualizer:
         fig.tight_layout()
 
         # Se almacena la figura
-        plt.savefig(get_path(MODEL_FILES.model_viz_data_augm_dir, f'{get_filename(example_imag)}.png'))
+        plt.savefig(get_path(self.conf.model_viz_data_augm_dir, f'{get_filename(example_imag)}.png'))
 
     def get_eda_from_df(self) -> None:
         """
@@ -437,21 +435,21 @@ class DataVisualizer:
 
         print(f'{"-" * 75}\n\tGenerando análisis del dataset\n{"-" * 75}')
         title = 'Distribución clases según orígen'
-        file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
+        file = get_path(self.conf.model_viz_eda_dir, f'{title}.png')
         create_countplot(x='DATASET', hue='IMG_LABEL', data=df, title=title, file=file)
 
         title = 'Distribución clases'
-        file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
+        file = get_path(self.conf.model_viz_eda_dir, f'{title}.png')
         create_countplot(x='IMG_LABEL', data=df, title=title, file=file)
 
         title = 'Distribución clases segun train-val'
-        file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
+        file = get_path(self.conf.model_viz_eda_dir, f'{title}.png')
         create_countplot(x='TRAIN_VAL', hue='IMG_LABEL', data=df, title=title, file=file, norm=True)
 
         title = 'Distribución clases segun patología'
-        file = get_path(MODEL_FILES.model_viz_eda_dir, f'{title}.png')
+        file = get_path(self.conf.model_viz_eda_dir, f'{title}.png')
         create_countplot(x='ABNORMALITY_TYPE', hue='IMG_LABEL', data=df, title=title, file=file, norm=True)
-        print(f'{"-" * 75}\n\tAnálisis del dataset finalizado en {MODEL_FILES.model_viz_eda_dir}\n{"-" * 75}')
+        print(f'{"-" * 75}\n\tAnálisis del dataset finalizado en {self.conf.model_viz_eda_dir}\n{"-" * 75}')
 
     def get_preprocessing_examples(self) -> None:
 
@@ -461,7 +459,7 @@ class DataVisualizer:
             photos += random.sample(df[df.DATASET == dataset].index.tolist(), 5)
 
         df.loc[photos, 'example_dir'] = df.loc[photos, :].apply(
-            lambda x: get_path(MODEL_FILES.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG),
+            lambda x: get_path(self.conf.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG),
                                f'{get_filename(x.PREPROCESSED_IMG)}.png'),
             axis=1
         )
