@@ -64,7 +64,8 @@ XGB_COLS = {
 """
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
-IMG_SHAPE: int = 300
+IMG_SHAPE: tuple = (1024, 1024)
+PATCH_SIZE: int = 300
 PREPROCESSING_CONFIG: str = 'CONF2'
 PREPROCESSING_FUNCS: dict = {
     'CONF1': {
@@ -104,7 +105,7 @@ PREPROCESSING_FUNCS: dict = {
         },
         'SQUARE_PAD': True,
         'RESIZING': {
-            'size': (IMG_SHAPE, IMG_SHAPE)
+            'size': (PATCH_SIZE, PATCH_SIZE)
         },
         'CROPPING_2': {
             'left': 0.05,
@@ -149,7 +150,7 @@ PREPROCESSING_FUNCS: dict = {
         },
         'SQUARE_PAD': True,
         'RESIZING': {
-            'size': (IMG_SHAPE, IMG_SHAPE)
+            'size': (PATCH_SIZE, PATCH_SIZE)
         },
         'CROPPING_2': {
             'left': 0.05,

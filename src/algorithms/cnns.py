@@ -3,6 +3,9 @@ import numpy as np
 from typing import Callable, io, Union, Tuple
 from time import process_time
 
+from segmentation_models.models.unet import Unet
+from segmentation_models import set_framework
+from segmentation_models.metrics import iou_score
 from tensorflow.keras import Model, Sequential, optimizers, callbacks
 from tensorflow.keras.backend import count_params
 from tensorflow.keras.callbacks import History
@@ -12,9 +15,11 @@ from tensorflow.keras.applications import resnet50, densenet, vgg16, inception_v
 from tensorflow.python.keras.constraints import maxnorm
 from tensorflow.python.keras.preprocessing.image import DataFrameIterator
 from tensorflow.keras.layers import Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input
-from tensorflow.keras.losses import CategoricalCrossentropy
+from tensorflow.keras.losses import CategoricalCrossentropy, BinaryCrossentropy
 
 from src.utils.functions import get_path, get_number_of_neurons
+
+set_framework('tf.keras')
 
 
 class GeneralModel:
@@ -22,6 +27,7 @@ class GeneralModel:
     __name__ = 'GeneralModel'
     model: Model = None
     callbakcs = {}
+    loss = CategoricalCrossentropy()
     metrics = ['accuracy']
     history: History = None
     shape = (255, 255, 3)
@@ -116,7 +122,7 @@ class GeneralModel:
         self.set_trainable_layers(unfrozen_layers=unfrozen_layers)
 
         # Se compila el modelo
-        self.model.compile(optimizer=opt, loss=CategoricalCrossentropy(), metrics=self.metrics)
+        self.model.compile(optimizer=opt, loss=self.loss, metrics=self.metrics)
 
         start = process_time()
         self.history = self.model.fit(
@@ -310,3 +316,64 @@ class DenseNetModel(GeneralModel):
             n=n, baseline=densenet.DenseNet121(include_top=False, weights=weights, input_shape=self.shape),
             preprocess_func=densenet.preprocess_input
         )
+
+
+class UnetVGG16Model(VGG16Model, GeneralModel):
+
+    __name__ = 'UnetVGG16'
+    loss = BinaryCrossentropy()
+    metrics = [iou_score]
+
+    def __init__(self, weights: Union[str, io] = None):
+        super(UnetVGG16Model, self).__init__(
+            n=0, baseline=Unet('vgg16', encoder_weights=weights, encoder_freeze=True),
+            preprocess_func=vgg16.preprocess_input
+        )
+
+    def create_model(self):
+        self.model = self.baseline
+
+
+class UnetResnet50Model(Resnet50Model, GeneralModel):
+
+    __name__ = 'UnetResnet50'
+    loss = BinaryCrossentropy()
+
+    def __init__(self, weights: Union[str, io] = None):
+        super(UnetResnet50Model, self).__init__(
+            n=0, baseline=Unet('resnet50', encoder_weights=weights, encoder_freeze=True),
+            preprocess_func=resnet50.preprocess_input
+        )
+
+    def create_model(self):
+        self.model = self.baseline
+
+
+class UnetDenseNetModel(DenseNetModel, GeneralModel):
+
+    __name__ = 'UnetDenseNet'
+    loss = BinaryCrossentropy()
+
+    def __init__(self, weights: Union[str, io] = None):
+        super(UnetDenseNetModel, self).__init__(
+            n=0, baseline=Unet('densenet121', encoder_weights=weights, encoder_freeze=True),
+            preprocess_func=densenet.preprocess_input
+        )
+
+    def create_model(self):
+        self.model = self.baseline
+
+
+class UnetInceptionV3Model(InceptionV3Model, GeneralModel):
+
+    __name__ = 'UnetInceptionV3'
+    loss = BinaryCrossentropy()
+
+    def __init__(self, weights: Union[str, io] = None):
+        super(UnetInceptionV3Model, self).__init__(
+            n=0, baseline=Unet('inceptionv3', encoder_weights=weights, encoder_freeze=True),
+            preprocess_func=inception_v3.preprocess_input
+        )
+
+    def create_model(self):
+        self.model = self.baseline

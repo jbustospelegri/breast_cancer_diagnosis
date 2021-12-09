@@ -13,7 +13,7 @@ from src.breast_cancer_dataset.base import GeneralDataBase
 from src.preprocessing.image_processing import crop_image_pipeline
 from src.utils.config import (
     INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC,
-    INBREAST_DB_XML_ROI_PATH, IMG_SHAPE
+    INBREAST_DB_XML_ROI_PATH, PATCH_SIZE
 )
 from src.utils.functions import search_files, get_filename, get_path, get_patch_from_center
 
@@ -142,7 +142,7 @@ class DatasetINBreastCrop(DatasetINBreast):
         df = pd.concat(l, ignore_index=True)
 
         df.loc[:, 'RAD'] = df.apply(
-            lambda x: round(max([(x.X_MAX - x.X_MIN), (x.Y_MAX - x.Y_MIN), IMG_SHAPE]) / 2), axis=1
+            lambda x: round(max([(x.X_MAX - x.X_MIN), (x.Y_MAX - x.Y_MIN), PATCH_SIZE]) / 2), axis=1
         )
 
         for axis in ['X', 'Y']:
