@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from breast_cancer_dataset.base import GeneralDataBase
 from preprocessing.image_processing import crop_image_pipeline
-from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, IMG_SHAPE
+from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, PATCH_SIZE
 from utils.functions import get_filename, search_files, get_path, get_patch_from_center
 
 
@@ -38,7 +38,7 @@ class DatasetMIAS(GeneralDataBase):
         df.loc[:, 'IMG_LABEL'] = df.PATHOLOGY.map(defaultdict(lambda: None, {'B': 'BENIGN', 'M': 'MALIGNANT'}))
 
         # Se procesa la columna RAD estableciendo un tamaño minimo de IMG_SHAPE / 2
-        df.loc[:, 'RAD'] = df.RAD.apply(lambda x: np.max([float(IMG_SHAPE / 2), float(x)]))
+        df.loc[:, 'RAD'] = df.RAD.apply(lambda x: np.max([float(PATCH_SIZE / 2), float(x)]))
 
         # Debido a que el sistema de coordenadas se centra en el borde inferior izquierdo se deben de modificar las
         # coordenadas Y para adecuarlas al sistema de coordenadas centrado en el borde superior izquerdo.

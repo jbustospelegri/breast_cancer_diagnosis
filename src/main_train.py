@@ -7,7 +7,7 @@ from multiprocessing import Queue, Process
 from src.algorithms.model_ensambling import GradientBoosting
 from src.breast_cancer_dataset.database_generator import BreastCancerDataset
 from src.algorithms.cnns import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
-from src.algorithms.functions import training_pipe
+from src.algorithms.functions import classification_training_pipe
 from src.data_viz.visualizacion_resultados import DataVisualizer
 
 from src.utils.config import MODEL_FILES, XGB_CONFIG
@@ -53,7 +53,7 @@ if __name__ == '__main__':
             q = Queue()
 
             # Se rea el proceso
-            p = Process(target=training_pipe, args=(cnn, db, q, model_config, weight_init, frozen_layers))
+            p = Process(target=classification_training_pipe, args=(cnn, db, q, model_config, weight_init, frozen_layers))
 
             # Se lanza el proceso
             p.start()
