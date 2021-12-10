@@ -22,7 +22,7 @@ if __name__ == '__main__':
     print("GPU available: ", tensorflow.config.list_physical_devices('GPU'))
 
     # Parámetros de entrada que serán sustituidos por las variables del usuario
-    experiment = 'CROPPED_IMGS_CONF2'
+    experiment = 'CROPPED_IMGS_MASS_CONF2_TOP_LAYERS'
 
     # Se setean las carpetas para almacenar las variables del modelo en función del experimento.
     model_config = MODEL_FILES
@@ -45,11 +45,11 @@ if __name__ == '__main__':
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
-    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['0FT', '1FT', '2FT', '3FT', '4FT',
-                                                                               'ALL', 'ALL']):
+    for weight_init, frozen_layers in zip(['random', *repeat('imagenet', 6)], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
+                                                                               'ALL']):
         # Diccionario en el que se almacenarán las predicciones de cada modelo. Estas serán utilizadas para aplicar el
         # algorítmo de gradient boosting.
-        for cnn in [VGG16Model, InceptionV3Model, Resnet50Model, DenseNetModel]:
+        for cnn in [DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model]:
             q = Queue()
 
             # Se rea el proceso

@@ -1,5 +1,4 @@
 import pandas as pd
-from tensorflow.python.keras.optimizer_v1 import Nadam
 
 import utils.config as conf
 
@@ -93,7 +92,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
     # Se registran los callbacks del modelo:
     cnn.register_callback(
         early_stopping=EarlyStopping(monitor='val_loss', mode='min', patience=20, restore_best_weights=True),
-        lr_reduce_on_plateau=ReduceLROnPlateau(monitor='val_loss', mode='min', factor=0.1, patience=5)
+        # lr_reduce_on_plateau=ReduceLROnPlateau(monitor='val_loss', mode='min', factor=0.1, patience=5)
     )
 
     # Queue que servirá para recuparar las predicciones de cada modelo.

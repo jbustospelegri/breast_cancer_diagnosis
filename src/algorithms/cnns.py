@@ -24,7 +24,7 @@ class GeneralModel:
     callbakcs = {}
     metrics = ['accuracy']
     history: History = None
-    shape = (255, 255, 3)
+    shape = (224, 224, 3)
     LAYERS_DICT = {
         '0FT': [],
         '1FT': ['block3_maxpool1', 'block3_maxpool2', 'block3_conv1'],
@@ -70,11 +70,15 @@ class GeneralModel:
         x = self.baseline(input, training=False)
         x = GlobalAveragePooling2D()(x)
 
-        neurons = get_number_of_neurons(x.get_shape().as_list())
-        while neurons > 15:
-            x = Dense(neurons, activation='relu', kernel_constraint=maxnorm(3))(x)
-            x = Dropout(0.2)(x)
-            neurons = get_number_of_neurons(x.get_shape().as_list())
+        # neurons = get_number_of_neurons(x.get_shape().as_list())
+        # while neurons > 15:
+        #     x = Dense(neurons, activation='relu', kernel_constraint=maxnorm(3))(x)
+        #     x = Dropout(0.2)(x)
+        #     neurons = get_number_of_neurons(x.get_shape().as_list())
+        x = Dense(128, activation='relu', kernel_constraint=maxnorm(3))(x)
+        x = Dropout(0.2)(x)
+        x = Dense(32, activation='relu', kernel_constraint=maxnorm(3))(x)
+        x = Dropout(0.2)(x)
 
         output = Dense(self.n, activation='softmax')(x)
 
