@@ -11,7 +11,7 @@ import cv2
     CONFIGURACION DEL EXPERIMENTO
 """
 # Los valores disponibles son PATCHES, COMPLETE_IMAGE, MASK
-EXPERIMENT = 'PATCHES'
+EXPERIMENT = 'MASK'
 
 """
     CONFIGURACION DEL DATASET
@@ -105,7 +105,7 @@ PREPROCESSING_FUNCS: dict = {
         },
         'SQUARE_PAD': True,
         'RESIZING': {
-            'size': (PATCH_SIZE, PATCH_SIZE)
+            'size': (1024, 1024)
         },
         'CROPPING_2': {
             'left': 0.05,
@@ -150,7 +150,7 @@ PREPROCESSING_FUNCS: dict = {
         },
         'SQUARE_PAD': True,
         'RESIZING': {
-            'size': (PATCH_SIZE, PATCH_SIZE)
+            'size': IMG_SHAPE
         },
         'CROPPING_2': {
             'left': 0.05,

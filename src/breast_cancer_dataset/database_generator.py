@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 
 from src.breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from src.breast_cancer_dataset.databases.inbreast import DatasetINBreast, DatasetINBreastCrop
-from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
+from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop, DatasetMIASMask
 from src.utils.config import (
     MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, PATCH_SIZE, PREPROCESSING_CONFIG,
     EXPERIMENT, IMG_SHAPE
@@ -21,9 +21,9 @@ from src.utils.config import (
 class BreastCancerDataset:
 
     DBS = {
-            'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetMIAS, DatasetINBreast],
-            'PATCHES': [DatasetCBISDDSMCrop, DatasetMIASCrop, DatasetINBreastCrop],
-            'MASK': []
+            'COMPLETE_IMAGE': [DatasetMIAS, DatasetINBreast, DatasetCBISDDSM],
+            'PATCHES': [DatasetMIASCrop, DatasetINBreastCrop, DatasetCBISDDSMCrop],
+            'MASK': [DatasetMIASMask]
         }
 
     def __init__(self, get_class: bool = True, split_data: bool = True, excel_path: str = ''):

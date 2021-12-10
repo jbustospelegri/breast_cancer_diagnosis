@@ -34,12 +34,14 @@ def full_image_pipeline(args) -> None:
 
         # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
         if not (len(args) >= 2):
-            raise ValueError('Not enough arguments for convert_dcm_img function. Minimum required arguments: 2')
+            raise IndexError('Not enough arguments for convert_dcm_img function. Minimum required arguments: 2')
 
         img_filepath: io = args[0]
         dest_dirpath: io = args[1]
 
         save_intermediate_steps = get_value_from_args_if_exists(args, 2, False, IndexError, TypeError)
+        img_mask_out_path = get_value_from_args_if_exists(args, 3, None, IndexError, TypeError)
+        img_mask_filepaths = get_value_from_args_if_exists(args, 4, None, IndexError, TypeError)
 
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
         if not os.path.isfile(img_filepath):
@@ -55,12 +57,24 @@ def full_image_pipeline(args) -> None:
         # Se lee la imagen original sin procesar.
         img = cv2.cvtColor(cv2.imread(img_filepath), cv2.COLOR_BGR2GRAY)
 
+        # Se lee la mascara
+        if img_mask_filepaths is None:
+            img_mask = np.ones(shape=img.shape, dtype=np.uint8)
+        else:
+            img_mask = np.zeros(shape=img.shape, dtype=np.uint8)
+            for p in img_mask_filepaths:
+                if not os.path.isfile(p):
+                    raise ValueError(f'The mask {p} does not exists.')
+                img_mask += cv2.cvtColor(cv2.imread(p), cv2.COLOR_BGR2GRAY)
+            binarize(img=img_mask, thresh='constant', threshval=1)
+
         images = {'ORIGINAL': img}
 
         # Primero se realiza un crop de las imagenes en el caso de que sean imagenes completas
-        images['CROPPING 1'] = crop_borders(
-            images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_1', {})
-        )
+        images['CROPPING 1'] = crop_borders(images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_1', {}))
+
+        # Se aplica el mismo procesado a la mascara
+        img_mask = crop_borders(img_mask, **prep_dict.get('CROPPING_1', {}))
 
         # A posteriori se quita el ruido de las imagenes utilizando un filtro medio
         images['REMOVE NOISE'] = remove_noise(
@@ -95,28 +109,34 @@ def full_image_pipeline(args) -> None:
             images['IMAGES SYNTHESIZED'] = cv2.merge(tuple(ecual_imgs))
 
         # Se realiza el flip de la imagen en caso de ser necesario:
-        images['IMG_FLIP'] = flip_breast(
-            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('FLIP_IMG', {})
-        )
+        images['IMG_FLIP'], flip = flip_breast(images[list(images.keys())[-1]].copy(), **prep_dict.get('FLIP_IMG', {}))
+
+        if flip:
+            img_mask = cv2.flip(src=img_mask, flipCode=1)
+
+        # Se aplica el ultimo crop de la parte izquierda
+        # Primero se realiza un crop de las imagenes
+        images['CROPPING LEFT'] = crop_borders(images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {}))
+
+        img_mask = crop_borders(img=img_mask,  **prep_dict.get('CROPPING_2', {}))
 
         # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
         if prep_dict.get('SQUARE_PAD', False):
             images['IMAGE PADDED'] = pad_image_into_square(img=images[list(images.keys())[-1]].copy())
+            img_mask = pad_image_into_square(img=img_mask)
 
         # Se aplica el resize de la imagen:
         if prep_dict.get('RESIZING', False):
             images['IMAGE RESIZED'] = \
                 resize_img(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RESIZING', {}))
-
-        # Se aplica el ultimo crop de la parte izquierda
-        # Primero se realiza un crop de las imagenes
-        images['CROPPING LEFT'] = crop_borders(
-            images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {})
-        )
+            img_mask = resize_img(img=img_mask, **prep_dict.get('RESIZING', {}))
 
         if save_intermediate_steps:
             for i, (name, imag) in enumerate(images.items()):
                 save_img(imag, get_dirname(dest_dirpath), f'{i}. {name}')
+
+        if img_mask_out_path:
+            Image.fromarray(np.uint8(img_mask)).save(img_mask_out_path)
 
         # Se almacena la imagen definitiva
         Image.fromarray(np.uint8(images[list(images.keys())[-1]].copy())).save(dest_dirpath)
@@ -124,6 +144,10 @@ def full_image_pipeline(args) -> None:
     except AssertionError as err:
         with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors (Assertions).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
+
+    except IndexError as err:
+        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nError calling function convert_dcm_img pipeline\n{err}\n{"=" * 100}')
 
     except Exception as err:
         with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
@@ -179,7 +203,7 @@ def crop_image_pipeline(args) -> None:
         images = {'ORIGINAL': img}
 
         # Se recorta la imagen
-        images['ROI EXTRACTION'] = get_roi_from_coord(name=img_filepath,
+        images['ROI EXTRACTION'] = get_roi_from_coord(
             img=images[list(images.keys())[-1]].copy(), x_max=x_max, x_min=x_min, y_max=y_max, y_min=y_min
         )
 
@@ -407,7 +431,7 @@ def remove_artifacts(img: np.ndarray, **kwargs) -> Tuple[Any, np.ndarray, np.nda
 
 
 @detect_func_err
-def flip_breast(img: np.ndarray, orient: str = 'left') -> np.ndarray:
+def flip_breast(img: np.ndarray, orient: str = 'left') -> Union[Tuple[Any, bool], Tuple[np.ndarray, bool]]:
     """
     Función utilizada para realizar el giro de los senos en caso de ser necesario. Esta funcionalidad pretende
     estandarizar las imagenes de forma que los flips se realizen posteriormente en el data augmentation-
@@ -443,10 +467,10 @@ def flip_breast(img: np.ndarray, orient: str = 'left') -> np.ndarray:
     # Si se desea que el seno esté orientado hacia la izquierda y está orientado a la derecha se girará.
     cond = {'right': left_side > right_side, 'left': left_side < right_side}
     if cond[orient]:
-        return cv2.flip(img.copy(), 1)
+        return cv2.flip(img.copy(), 1), True
     # En caso contrario el seno estará bien orientado.
     else:
-        return img
+        return img, False
 
 
 @detect_func_err
@@ -505,7 +529,7 @@ def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
 
 
 @detect_func_err
-def get_roi_from_coord(name, img: np.ndarray, x_max: int, x_min: int, y_max: int, y_min: int):
+def get_roi_from_coord(img: np.ndarray, x_max: int, x_min: int, y_max: int, y_min: int):
 
     if x_max is None:
         x_max = img.shape[1]
@@ -533,4 +557,15 @@ def get_roi_from_coord(name, img: np.ndarray, x_max: int, x_min: int, y_max: int
         y_min = 0
 
     return img[int(y_min):int(y_max), int(x_min):int(x_max)]
+
+
+def get_mias_roi_mask(args) -> None:
+
+    img: io = args[0]
+    x: int = int(args[1])
+    y: int = int(args[2])
+    rad: int = int(args[3])
+    mask = np.zeros(shape=(1024, 1024), dtype=np.uint8)
+    cv2.circle(mask, center=(x, y), radius=rad, thickness=-1, color=(255, 255, 255))
+    cv2.imwrite(img, mask)
 

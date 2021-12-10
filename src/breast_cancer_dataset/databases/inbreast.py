@@ -170,34 +170,6 @@ class DatasetINBreastSegmentation(DatasetINBreast):
         super(DatasetINBreast, self).clean_dataframe()
         self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
 
-    def preproces_images(self, show_example: bool = False) -> None:
-        """
-        Función utilizara para realizar el preprocesado de las imagenes completas.
-
-        :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
-        prueba realizada.
-        """
-
-        preprocessed_imgs = pd.DataFrame(
-            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}',
-                              ext=self.dest_extension),
-            columns=['CONVERTED_IMG']
-        )
-        print(f'{"-" * 75}\n\tStarting preprocessing of {len(preprocessed_imgs)} images')
-
-        args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG, row.X_MAX, row.Y_MAX, row.X_MIN, row.Y_MIN) for _, row in
-                self.df_desc.iterrows()]
-
-        with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(crop_image_pipeline, args), total=len(args), desc='preprocessing crop images')
-            tuple(results)
-
-        # Se recuperan las imagenes modificadas y se crea un dataframe
-        proc_imgs = list(
-            search_files(file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
-        )
-        print(f'\tProcessed {len(proc_imgs)} images.\n{"-" * 75}')
-
     @staticmethod
     def load_inbreast_mask(mask_path: io, imshape: tuple):
         """
