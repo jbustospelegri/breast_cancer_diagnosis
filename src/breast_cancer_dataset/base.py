@@ -20,7 +20,7 @@ class GeneralDataBase:
     IMG_TYPE: str = 'FULL'
     BINARY: bool = False
     DF_COLS = [
-        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'IMG_TYPE', 'RAW_IMG', 'CONVERTED_IMG',
+        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'IMG_TYPE', 'FILE_NAME', 'RAW_IMG', 'CONVERTED_IMG',
         'PREPROCESSED_IMG', 'IMG_LABEL'
     ]
     df_desc = pd.DataFrame(columns=DF_COLS, index=[0])
@@ -70,12 +70,12 @@ class GeneralDataBase:
 
         # Se procesa la columna ori path para poder lincar cada path con los datos del excel. Para ello, se separa
         # los nombres de cara archivo a partir del símbolo _ y se obtiene la primera posición.
-        db_files_df.loc[:, 'File Name'] = db_files_df.RAW_IMG.apply(get_id_func)
+        db_files_df.loc[:, 'FILE_NAME'] = db_files_df.RAW_IMG.apply(get_id_func)
 
         # Se crea la columna RAW_IMG con el path de la imagen original
-        df_def = pd.merge(left=df, right=db_files_df, on='File Name', how='left')
+        df_def = pd.merge(left=df, right=db_files_df, on='FILE_NAME', how='left')
 
-        print(f'\t{len(df_def)} image paths available in database')
+        print(f'\t{len(df.groupby(["FILE_NAME", "IMG_LABEL"]))} image paths available in database')
 
         # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
         df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
@@ -84,7 +84,8 @@ class GeneralDataBase:
 
         # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
         df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
-            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID}.{self.dest_extension}'), axis=1
+            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.FILE_NAME}.{self.dest_extension}'),
+            axis=1
         )
 
         return df_def[self.DF_COLS]
@@ -94,7 +95,7 @@ class GeneralDataBase:
         # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
         # una zona benigna y otra maligna).
         duplicated_tags = self.df_desc.groupby('ID').IMG_LABEL.nunique()
-        print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1])} images for ambiguous pathologys')
+        print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1]) * 2} samples for ambiguous pathologys')
         self.df_desc.drop(
             index=self.df_desc[self.df_desc.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index,
             inplace=True
@@ -103,26 +104,28 @@ class GeneralDataBase:
         print(f'\tExcluding {len(self.df_desc[self.df_desc.ID.duplicated()])} samples duplicated pathologys')
         self.df_desc.drop(index=self.df_desc[self.df_desc.ID.duplicated()].index, inplace=True)
 
-    def convert_images_format(self) -> None:
+    def convert_images_format(self, func: callable = convert_img, args: List = None) -> None:
         """
         Función para convertir las imagenes del formato de origen al formato de destino.
         """
 
-        print(f'{"-" * 75}\n\tStarting conversion of file format: {len(self.df_desc)} {self.ori_extension} files.')
+        print(
+            f'{"-" * 75}\n\tStarting conversion of file format: {self.df_desc.CONVERTED_IMG.nunique()}'
+            f' {self.ori_extension} files.'
+        )
 
         # Se crea el iterador con los argumentos necesarios para realizar la función a través de un multiproceso.
-        arg_iter = [(row.RAW_IMG, row.CONVERTED_IMG, self.BINARY) for _, row in self.df_desc.iterrows()]
+        if args is None:
+            args = list(set([(row.RAW_IMG, row.CONVERTED_IMG, self.BINARY) for _, row in self.df_desc.iterrows()]))
 
         # Se crea un pool de multihilos para realizar la tarea de conversión de forma paralelizada.
         with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(convert_img, arg_iter), total=len(arg_iter), desc='conversion to png')
+            results = tqdm(pool.imap(func, args), total=len(args), desc='conversion to png')
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
-        converted_imgs = pd.DataFrame(
-            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}',
-                              ext=self.dest_extension),
-            columns=['CONVERTED_IMG']
+        converted_imgs = list(
+            search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
         )
         print(f"\tConverted {len(converted_imgs)} images to {self.dest_extension} format.\n{'-' * 75}")
 
@@ -131,14 +134,10 @@ class GeneralDataBase:
         Función utilizara para realizar el preprocesado de las imagenes completas.
 
         """
-        processed_imgs = pd.DataFrame(
-            data=search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension),
-            columns=['CONVERTED_IMG']
-        )
-        print(f'{"-" * 75}\n\tStarting preprocessing of {len(processed_imgs)} images')
+        print(f'{"-" * 75}\n\tStarting preprocessing of {self.df_desc.PREPROCESSED_IMG.nunique()} images')
 
         if args is None:
-            args = [(row.CONVERTED_IMG, row.PREPROCESSED_IMG) for _, row in self.df_desc.iterrows()]
+            args = list(set([(row.CONVERTED_IMG, row.PREPROCESSED_IMG) for _, row in self.df_desc.iterrows()]))
 
         with Pool(processes=cpu_count() - 2) as pool:
             results = tqdm(pool.imap(func, args), total=len(args), desc='preprocessing full images')

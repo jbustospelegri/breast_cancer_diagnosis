@@ -16,7 +16,6 @@ from utils.functions import get_dirname
 class DatasetCBISDDSM(GeneralDataBase):
 
     __name__ = 'CBIS-DDSM'
-    ID_COL: str = 'image file path'
 
     def __init__(self):
         super(DatasetCBISDDSM, self).__init__(
@@ -46,7 +45,7 @@ class DatasetCBISDDSM(GeneralDataBase):
         df.loc[:, 'ABNORMALITY_TYPE'] = np.where(df['abnormality type'] == 'calcification', 'CALC', 'MASS')
 
         # Se obtienen las imagenes full de cada tipología.
-        df.drop_duplicates(subset=self.ID_COL, inplace=True)
+        df.drop_duplicates(subset=['image file path'], inplace=True)
 
         return df
 
@@ -61,10 +60,10 @@ class DatasetCBISDDSM(GeneralDataBase):
         df.loc[:, 'BREAST_DENSITY'] = df.breast_density
 
         # Se crea la columna filename para realizar el join
-        df.loc[:, 'File Name'] = df[self.ID_COL].apply(lambda x: get_dirname(x))
+        df.loc[:, 'FILE_NAME'] = df['image file path'].apply(lambda x: get_dirname(x))
 
         # Se crea una columna identificadora
-        df.loc[:, 'ID'] = df[self.ID_COL].apply(lambda x: get_dirname(x).split("/")[0])
+        df.loc[:, 'ID'] = df['image file path'].apply(lambda x: get_dirname(x).split("/")[0])
 
         return df
 
@@ -85,7 +84,6 @@ class DatasetCBISDDSM(GeneralDataBase):
 class DatasetCBISDDSMCrop(DatasetCBISDDSM):
 
     IMG_TYPE: str = 'CROP'
-    ID_COL: str = 'cropped image file path'
     PREPROCESS_FUNC = lambda: crop_image_pipeline
     DF_COLS = [
         'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
