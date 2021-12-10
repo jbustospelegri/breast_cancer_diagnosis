@@ -81,8 +81,8 @@ def full_image_pipeline(args) -> None:
             img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_NOISE', {}))
 
         # El siguiente paso consiste en eliminar los artefactos de la imagen. Solo aplica a imagenes completas
-        images['REMOVE ARTIFACTS'], _, _, mask = remove_artifacts(
-            img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_ARTIFACTS', {})
+        images['REMOVE ARTIFACTS'], _, _, mask, img_mask = remove_artifacts(
+            img=images[list(images.keys())[-1]].copy(), mask=img_mask, **prep_dict.get('REMOVE_ARTIFACTS', {})
         )
 
         # Una vez eliminados los artefactos, se realiza una normalización de la zona del pecho
@@ -100,7 +100,7 @@ def full_image_pipeline(args) -> None:
                 images[ecual_func.upper()] = apply_clahe_transform(img=img_to_ecualize, mask=mask, **ecual_kwargs)
                 ecual_imgs.append(images[list(images.keys())[-1]].copy())
 
-            elif 'gcn' in ecual_func:
+            elif 'GCN' in ecual_func.upper():
                 pass
 
         if len(prep_dict['ECUALIZATION'].keys()) == 2:
@@ -212,7 +212,7 @@ def crop_image_pipeline(args) -> None:
             img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_NOISE', {}))
 
         # El siguiente paso consiste en eliminar los artefactos de la imagen. Solo aplica a imagenes completas
-        images['REMOVE ARTIFACTS'], _, _, mask = remove_artifacts(
+        images['REMOVE ARTIFACTS'], _, _, mask, _ = remove_artifacts(
             img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_ARTIFACTS', {})
         )
 
@@ -231,7 +231,7 @@ def crop_image_pipeline(args) -> None:
                 images[ecual_func.upper()] = apply_clahe_transform(img=img_to_ecualize, **ecual_kwargs)
                 ecual_imgs.append(images[list(images.keys())[-1]].copy())
 
-            elif 'gcn' in ecual_func:
+            elif 'GCN' in ecual_func:
                 pass
 
         if len(prep_dict['ECUALIZATION'].keys()) == 2:
@@ -399,7 +399,7 @@ def get_breast_zone(mask: np.ndarray, convex_contour: bool = False) -> Union[np.
 
 
 @detect_func_err
-def remove_artifacts(img: np.ndarray, **kwargs) -> Tuple[Any, np.ndarray, np.ndarray, Any]:
+def remove_artifacts(img: np.ndarray, mask: np.ndarray = None, **kwargs) -> Tuple[Any, np.ndarray, np.ndarray, Any, Any]:
     """
 
     :param img:
@@ -413,6 +413,10 @@ def remove_artifacts(img: np.ndarray, **kwargs) -> Tuple[Any, np.ndarray, np.nda
     #       producir errores en el entrenamiento.
     #    2- Detectar las zonas pertenecientes al seno y a los artefactos asignandoles el valor de 1 mediante una
     #       binarización.s.
+
+    if mask is None:
+        mask = np.zeros(img.shape)
+
     bin_mask = binarize(img=img, **kwargs.get('bin_kwargs', {}))
 
     # La binarización de datos puede producir pérdida de información de los contornos del seno, por lo que se
@@ -422,12 +426,12 @@ def remove_artifacts(img: np.ndarray, **kwargs) -> Tuple[Any, np.ndarray, np.nda
 
     # Una vez identificados con un 1 tanto artefactos como el seno, se debe de identificar cual es la región
     # perteneciente al seno. Esta será la que tenga un área mayor.
-    mask, (x, y, w, h) = get_breast_zone(mask=modified_mask, **kwargs.get('contour_kwargs', {}))
+    breast_mask, (x, y, w, h) = get_breast_zone(mask=modified_mask, **kwargs.get('contour_kwargs', {}))
 
     # Se aplica y se devuelve la mascara.
-    img[mask == 0] = 0
+    img[breast_mask == 0] = 0
 
-    return img[y:y + h, x:x + w], bin_mask, modified_mask, mask[y:y + h, x:x + w]
+    return img[y:y + h, x:x + w], bin_mask, modified_mask, breast_mask[y:y + h, x:x + w], mask[y:y + h, x:x + w]
 
 
 @detect_func_err

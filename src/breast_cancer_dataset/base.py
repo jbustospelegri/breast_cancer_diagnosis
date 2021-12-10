@@ -79,13 +79,12 @@ class GeneralDataBase:
 
         # Se crea la clumna PREPROCESSED_IMG en la que se volcarán las imagenes preprocesadas
         df_def.loc[:, 'PREPROCESSED_IMG'] = df_def.apply(
-            lambda x: get_path(self.procesed_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.ID}.{self.dest_extension}'), axis=1
+            lambda x: get_path(self.procesed_dir, x.IMG_TYPE, f'{x.ID}.{self.dest_extension}'), axis=1
         )
 
         # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
         df_def.loc[:, 'CONVERTED_IMG'] = df_def.apply(
-            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, x.IMG_TYPE, f'{x.FILE_NAME}.{self.dest_extension}'),
-            axis=1
+            lambda x: get_path(self.conversion_dir, x.IMG_TYPE, f'{x.FILE_NAME}.{self.dest_extension}'), axis=1
         )
 
         return df_def[self.DF_COLS]
@@ -104,15 +103,16 @@ class GeneralDataBase:
         print(f'\tExcluding {len(self.df_desc[self.df_desc.ID.duplicated()])} samples duplicated pathologys')
         self.df_desc.drop(index=self.df_desc[self.df_desc.ID.duplicated()].index, inplace=True)
 
-    def convert_images_format(self, func: callable = convert_img, args: List = None) -> None:
+    def convert_images_format(self, func: callable = convert_img, args: List = None, show_txt: bool =True) -> None:
         """
         Función para convertir las imagenes del formato de origen al formato de destino.
         """
 
-        print(
-            f'{"-" * 75}\n\tStarting conversion of file format: {self.df_desc.CONVERTED_IMG.nunique()}'
-            f' {self.ori_extension} files.'
-        )
+        if show_txt:
+            print(
+                f'{"-" * 75}\n\tStarting conversion of file format: {self.df_desc.CONVERTED_IMG.nunique()}'
+                f' {self.ori_extension} files.'
+            )
 
         # Se crea el iterador con los argumentos necesarios para realizar la función a través de un multiproceso.
         if args is None:
@@ -120,14 +120,15 @@ class GeneralDataBase:
 
         # Se crea un pool de multihilos para realizar la tarea de conversión de forma paralelizada.
         with Pool(processes=cpu_count() - 2) as pool:
-            results = tqdm(pool.imap(func, args), total=len(args), desc='conversion to png')
+            results = tqdm(pool.imap(func, args), total=len(args))
             tuple(results)
 
         # Se recuperan las imagenes modificadas y se crea un dataframe
         converted_imgs = list(
             search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension)
         )
-        print(f"\tConverted {len(converted_imgs)} images to {self.dest_extension} format.\n{'-' * 75}")
+        if show_txt:
+            print(f"\tConverted {len(converted_imgs)} images to {self.dest_extension} format.\n{'-' * 75}")
 
     def preproces_images(self, args: list = None, func: callable = full_image_pipeline) -> None:
         """

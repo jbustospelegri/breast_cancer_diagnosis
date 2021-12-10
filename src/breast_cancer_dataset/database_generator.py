@@ -100,20 +100,21 @@ class BreastCancerDataset:
 
         # Para evitar entrecruzamientos de imagenes entre train y validación a partir del atributo shuffle=True, cada
         # generador se aplicará sobre una muestra disjunta del set de datos representada mediante la columna dataset.
+        dataset = self.df[['PREPROCESSED_IMG', 'IMG_LABEL']].drop_duplicates()
 
         # Se chequea que existen observaciones de entrenamiento para poder crear el dataframeiterator.
-        if len(self.df[self.df.TRAIN_VAL == 'train']) == 0:
+        if len(dataset[dataset.TRAIN_VAL == 'train']) == 0:
             train_df_iter = None
             logging.warning('No existen registros para generar un generador de train. Se retornará None')
         else:
-            train_df_iter = train_datagen.flow_from_dataframe(dataframe=self.df[self.df.TRAIN_VAL == 'train'], **params)
+            train_df_iter = train_datagen.flow_from_dataframe(dataframe=dataset[dataset.TRAIN_VAL == 'train'], **params)
 
         # Se chequea que existen observaciones de validación para poder crear el dataframeiterator.
-        if len(self.df[self.df.TRAIN_VAL == 'val']) == 0:
+        if len(dataset[dataset.TRAIN_VAL == 'val']) == 0:
             val_df_iter = None
             logging.warning('No existen registros para generar un generador de validación. Se retornará None')
         else:
-            val_df_iter = val_datagen.flow_from_dataframe(dataframe=self.df[self.df.TRAIN_VAL == 'val'], **params)
+            val_df_iter = val_datagen.flow_from_dataframe(dataframe=dataset[dataset.TRAIN_VAL == 'val'], **params)
 
         return train_df_iter, val_df_iter
 

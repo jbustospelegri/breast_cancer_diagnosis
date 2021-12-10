@@ -446,10 +446,10 @@ class DataVisualizer:
         file = get_path(self.conf.model_viz_eda_dir, f'{title}.png')
         create_countplot(x='TRAIN_VAL', hue='IMG_LABEL', data=df, title=title, file=file, norm=True)
 
-        title = 'Distribución clases segun patología'
-        file = get_path(self.conf.model_viz_eda_dir, f'{title}.png')
-        create_countplot(x='ABNORMALITY_TYPE', hue='IMG_LABEL', data=df, title=title, file=file, norm=True)
-        print(f'{"-" * 75}\n\tAnálisis del dataset finalizado en {self.conf.model_viz_eda_dir}\n{"-" * 75}')
+        # title = 'Distribución clases segun patología'
+        # file = get_path(self.conf.model_viz_eda_dir, f'{title}.png')
+        # create_countplot(x='ABNORMALITY_TYPE', hue='IMG_LABEL', data=df, title=title, file=file, norm=True)
+        # print(f'{"-" * 75}\n\tAnálisis del dataset finalizado en {self.conf.model_viz_eda_dir}\n{"-" * 75}')
 
     def get_preprocessing_examples(self) -> None:
 

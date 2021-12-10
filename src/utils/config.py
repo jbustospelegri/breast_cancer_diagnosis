@@ -11,7 +11,7 @@ import cv2
     CONFIGURACION DEL EXPERIMENTO
 """
 # Los valores disponibles son PATCHES, COMPLETE_IMAGE, MASK
-EXPERIMENT = 'MASK'
+EXPERIMENT = 'PATCHES'
 
 """
     CONFIGURACION DEL DATASET
@@ -136,8 +136,7 @@ PREPROCESSING_FUNCS: dict = {
             },
             'contour_kwargs': {
                 'convex_contour': False,
-            },
-            'crop_box': True,
+            }
         },
         'NORMALIZE_BREAST': {
             'type_norm': 'min_max'

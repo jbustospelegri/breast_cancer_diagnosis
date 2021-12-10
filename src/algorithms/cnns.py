@@ -4,7 +4,6 @@ from typing import Callable, io, Union, Tuple
 from time import process_time
 
 from segmentation_models.models.unet import Unet
-from segmentation_models import set_framework
 from segmentation_models.metrics import iou_score
 from tensorflow.keras import Model, Sequential, optimizers, callbacks
 from tensorflow.keras.backend import count_params
@@ -18,8 +17,6 @@ from tensorflow.keras.layers import Conv2D, Dropout, MaxPooling2D, Dense, Global
 from tensorflow.keras.losses import CategoricalCrossentropy, BinaryCrossentropy
 
 from src.utils.functions import get_path, get_number_of_neurons
-
-set_framework('tf.keras')
 
 
 class GeneralModel:

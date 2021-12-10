@@ -1,3 +1,4 @@
+import os
 from typing import io, List
 
 import cv2
@@ -129,30 +130,36 @@ class DatasetMIASMask(DatasetMIAS):
 
     def process_dataframe(self, df: pd.DataFrame, get_id_func: callable = lambda x: get_filename(x)) -> pd.DataFrame:
         df = super(DatasetMIAS, self).process_dataframe(df=df, get_id_func=get_id_func)
-        df.loc[:, 'ID'] = df.ID + '_' + df.groupby(['ID', 'IMG_LABEL']).cumcount().astype(str)
-        df.loc[:, 'CONVERTED_MASK_IMG'] = df.apply(
-            lambda x: get_path(self.conversion_dir, x.IMG_LABEL, 'MASK', f'{x.ID}.png'), axis=1
-        )
-        df.loc[:, 'MASK_IMG'] = df.apply(
-            lambda x: get_path(self.procesed_dir, x.IMG_LABEL, 'MASK', f'{x.FILE_NAME}.png'), axis=1)
+        df.loc[:, 'ID'] = df.ID + '_' + df.groupby('ID').cumcount().astype(str)
+        df.loc[:, 'CONVERT_MASK_IMG'] = df.apply(lambda x: get_path(self.conversion_dir, 'MASK', f'{x.ID}.png'), axis=1)
+        df.loc[:, 'MASK_IMG'] = df.apply(lambda x: get_path(self.procesed_dir, 'MASK', f'{x.FILE_NAME}.png'), axis=1)
 
         return df
 
-    def convert_images_format(self, func: callable = get_mias_roi_mask, args: List = None, txt: str = '') -> None:
+    def convert_images_format(self, func: callable = get_mias_roi_mask, args: List = None, show_txt: bool = True) \
+            -> None:
         super(DatasetMIAS, self).convert_images_format()
 
         # Crear las mascaras de directo
-        args = list(set([
-            (x.CONVERTED_MASK_IMG, x.X_CORD, x.Y_CORD, x.ORI_RAD) for _, x in
-            self.df_desc[~self.df_desc[['X_CORD', 'Y_CORD']].isnull().any(axis=1)].iterrows()
-        ]))
-        super(DatasetMIAS, self).convert_images_format(func=func, args=args)
+        args = list(set([(x.CONVERT_MASK_IMG, x.X_CORD, x.Y_CORD, x.ORI_RAD) for _, x in self.df_desc.iterrows()]))
+
+        print(f'{"-" * 75}\n\tGenerating: {self.df_desc.CONVERT_MASK_IMG.nunique()} mask files.')
+        super(DatasetMIAS, self).convert_images_format(func=func, args=args, show_txt=False)
+        generated = list(search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}MASK', ext=self.dest_extension))
+        print(f"\tGenerated {len(generated)} masks.\n{'-' * 75}")
 
     def preproces_images(self, args: list = None, func: callable = full_image_pipeline) -> None:
 
         args = [
-            (x.CONVERTED_IMG, x.PREPROCESSED_IMG, False, x.MASK_IMG, x.CONVERTED_MASK_IMG) for _, x in
+            (x.CONVERTED_IMG, x.PREPROCESSED_IMG, False, x.MASK_IMG, x.CONVERT_MASK_IMG) for _, x in
             self.df_desc.groupby(['CONVERTED_IMG', 'PREPROCESSED_IMG', 'MASK_IMG'], as_index=False).\
-                agg({'CONVERTED_MASK_IMG': lambda x: x.tolist()}).iterrows()
+                agg({'CONVERT_MASK_IMG': lambda x: x.tolist()}).iterrows()
         ]
         super(DatasetMIASMask, self).preproces_images(args=args, func=func)
+
+    def clean_dataframe(self):
+        print(f'\tExcluding {len(self.df_desc[self.df_desc[["X_CORD", "Y_CORD", "ORI_RAD"]].isna().any(axis=1)])} '
+              f'images without pathology mask localization.')
+        self.df_desc.drop(
+            index=self.df_desc[self.df_desc[["X_CORD", "Y_CORD", "ORI_RAD"]].isna().any(axis=1)].index, inplace=True
+        )
