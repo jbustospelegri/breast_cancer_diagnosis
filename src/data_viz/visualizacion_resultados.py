@@ -85,7 +85,7 @@ class DataVisualizer:
 
             l.append(df)
 
-        return pd.concat(l, ignore_index=True).groupby(['PREPROCESSED_IMG', 'Weight', 'Layer'], as_index=False).first()
+        return pd.concat(l, ignore_index=True).groupby(['PROCESSED_IMG', 'Weight', 'Layer'], as_index=False).first()
 
     def get_dataframe_from_dataset_excel(self) -> pd.DataFrame:
         return pd.read_excel(self.conf.model_db_desc_csv, dtype=object, index_col=None)
@@ -370,7 +370,7 @@ class DataVisualizer:
 
         # Lectura de los datos
         df = self.get_dataframe_from_preds(dirname=predictions_dir)
-        models = [c for c in df.columns if c not in ['PREPROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', 'Weight', 'Layer']]
+        models = [c for c in df.columns if c not in ['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', 'Weight', 'Layer']]
         self.plot_confusion_matrix(df, models)
         # self.plot_metrics_table(df, models, class_metric=True)
         self.plot_metrics_table(df, models, class_metric=False)
@@ -389,7 +389,7 @@ class DataVisualizer:
 
         df = self.get_dataframe_from_dataset_excel()
 
-        example_imag = df.loc[random.sample(df.index.tolist(), 1)[0], 'PREPROCESSED_IMG']
+        example_imag = df.loc[random.sample(df.index.tolist(), 1)[0], 'PROCESSED_IMG']
 
         # Se lee la imagen del path de ejemplo
         image = load_img(example_imag)
@@ -459,8 +459,8 @@ class DataVisualizer:
             photos += random.sample(df[df.DATASET == dataset].index.tolist(), 5)
 
         df.loc[photos, 'example_dir'] = df.loc[photos, :].apply(
-            lambda x: get_path(self.conf.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PREPROCESSED_IMG),
-                               f'{get_filename(x.PREPROCESSED_IMG)}.png'),
+            lambda x: get_path(self.conf.model_viz_preprocesing_dir, x.DATASET, get_filename(x.PROCESSED_IMG),
+                               f'{get_filename(x.PROCESSED_IMG)}.png'),
             axis=1
         )
 

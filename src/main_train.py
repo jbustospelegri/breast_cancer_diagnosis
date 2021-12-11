@@ -22,7 +22,7 @@ if __name__ == '__main__':
     print("GPU available: ", tensorflow.config.list_physical_devices('GPU'))
 
     # Parámetros de entrada que serán sustituidos por las variables del usuario
-    experiment = 'PATCHES_MIAS_CHECK'
+    experiment = 'CHECK_COMPLETE_IMGS_DATAFRAME'
 
     # Se setean las carpetas para almacenar las variables del modelo en función del experimento.
     model_config = MODEL_FILES

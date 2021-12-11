@@ -63,16 +63,16 @@ class GradientBoosting:
 
         # En caso de existir dataset de validación, se concatena train y val en un dataset único. En caso contrario,
         # se recupera unicamente el set de datos de train
-        data = self.db[['PREPROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', *XGB_COLS[XGB_CONFIG]]].copy()
+        data = self.db[['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', *XGB_COLS[XGB_CONFIG]]].copy()
         cols = XGB_COLS[XGB_CONFIG].copy()
         for file in search_files(cnn_predictions_dir, 'csv', in_subdirs=False):
             model_name = get_filename(file)
-            df = pd.read_csv(file, sep=';')[['PREPROCESSED_IMG', 'PREDICTION']]
+            df = pd.read_csv(file, sep=';')[['PROCESSED_IMG', 'PREDICTION']]
             df_dumy = pd.concat(
                 objs=[
                     pd.DataFrame(
                         data=[['0', '0', '0']],
-                        columns=['PREPROCESSED_IMG',
+                        columns=['PROCESSED_IMG',
                                  *[f'{n}_{l}' for n, l in list(product([model_name], data.IMG_LABEL.unique()))]]
                     ),
                     pd.get_dummies(df.rename(columns={'PREDICTION': model_name}), columns=[model_name]).astype(str)
@@ -80,7 +80,7 @@ class GradientBoosting:
                 ignore_index=True
             ).ffill()
             cols += [f'{n}_{l}' for n, l in list(product([model_name], data.IMG_LABEL.unique()))]
-            data = pd.merge(left=data, right=df_dumy, on='PREPROCESSED_IMG', how='left')
+            data = pd.merge(left=data, right=df_dumy, on='PROCESSED_IMG', how='left')
 
         # generación del conjunto de datos de train para gradient boosting
         data.dropna(how='any', inplace=True)
@@ -90,7 +90,7 @@ class GradientBoosting:
         self.model_gb.fit(train_x, np.reshape(train_y.values, -1))
 
         # se almacenan las predicciones
-        data_csv = data[['PREPROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL']].\
+        data_csv = data[['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL']].\
             assign(PREDICTION=self.model_gb.predict(data[cols]))
 
         bulk_data(file=get_path(xgb_predictions_dir, f'{self.__name__}.csv'), **data_csv.to_dict())

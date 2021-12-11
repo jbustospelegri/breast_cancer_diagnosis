@@ -170,12 +170,10 @@ def log_error(module, file_path, **kwargs_msg):
         logger.removeHandler(hdlr)
 
 
-def get_patch_from_center(df: pd.DataFrame):
-    df.loc[:, 'X_MAX'] = pd.to_numeric(df.X_CORD, errors='coerce', downcast='integer') + \
-                         pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
-    df.loc[:, 'Y_MAX'] = pd.to_numeric(df.Y_CORD, errors='coerce', downcast='integer') + \
-                         pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
-    df.loc[:, 'X_MIN'] = pd.to_numeric(df.X_CORD, errors='coerce', downcast='integer') - \
-                         pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
-    df.loc[:, 'Y_MIN'] = pd.to_numeric(df.Y_CORD, errors='coerce', downcast='integer') - \
-                         pd.to_numeric(df.RAD, errors='coerce', downcast='integer')
+def load_point(point_string):
+    x, y = tuple([float(num) for num in point_string.strip('()').split(',')])
+    return y, x
+
+
+def get_contours(img: np.ndarray) -> list:
+    return cv2.findContours(image=img, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE)[0]

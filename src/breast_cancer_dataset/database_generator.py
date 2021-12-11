@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 
 from src.breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from src.breast_cancer_dataset.databases.inbreast import DatasetINBreast, DatasetINBreastCrop
-from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop, DatasetMIASMask
+from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
 from src.utils.config import (
     MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, PATCH_SIZE, PREPROCESSING_CONFIG,
     EXPERIMENT, IMG_SHAPE
@@ -21,9 +21,8 @@ from src.utils.config import (
 class BreastCancerDataset:
 
     DBS = {
-            'COMPLETE_IMAGE': [DatasetMIAS, DatasetINBreast, DatasetCBISDDSM],
-            'PATCHES': [DatasetMIASCrop, DatasetINBreastCrop, DatasetCBISDDSMCrop],
-            'MASK': [DatasetMIASMask]
+            'COMPLETE_IMAGE': [DatasetINBreast, DatasetMIAS, DatasetCBISDDSM],
+            'PATCHES': [DatasetINBreastCrop, DatasetMIASCrop, DatasetCBISDDSMCrop]
         }
 
     def __init__(self, get_class: bool = True, split_data: bool = True, excel_path: str = ''):
@@ -50,7 +49,7 @@ class BreastCancerDataset:
 
             db.start_pipeline()
 
-            df_list.append(db.df_desc)
+            df_list.append(db.df_desc[db.DF_COLS])
 
         return pd.concat(objs=df_list, ignore_index=True)
 
@@ -76,7 +75,7 @@ class BreastCancerDataset:
         # usuario mediante input, se utilizará la técnica de interpolación lanzcos. Por otra parte, para generar una
         # salida one hot encoding en función de la clase de cada muestra, se parametriza class_mode como 'categorical'.
         params = dict(
-            x_col='PREPROCESSED_IMG',
+            x_col='PROCESSED_IMG',
             y_col='IMG_LABEL',
             target_size=size,
             interpolation='lanczos',
@@ -100,7 +99,7 @@ class BreastCancerDataset:
 
         # Para evitar entrecruzamientos de imagenes entre train y validación a partir del atributo shuffle=True, cada
         # generador se aplicará sobre una muestra disjunta del set de datos representada mediante la columna dataset.
-        dataset = self.df[['PREPROCESSED_IMG', 'IMG_LABEL']].drop_duplicates()
+        dataset = self.df[['PROCESSED_IMG', 'IMG_LABEL']].drop_duplicates()
 
         # Se chequea que existen observaciones de entrenamiento para poder crear el dataframeiterator.
         if len(dataset[dataset.TRAIN_VAL == 'train']) == 0:
@@ -169,7 +168,7 @@ class BreastCancerDataset:
             logging.warning('No existen registros para generar un generador de train. Se retornará None')
         else:
             train_df_iter_img = train_datagen.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='PREPROCESSED_IMG', **params
+                dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='PROCESSED_IMG', **params
             )
             train_df_iter_mask = train_datagen.flow_from_dataframe(
                 dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='MASK_IMG', **params
@@ -182,7 +181,7 @@ class BreastCancerDataset:
             logging.warning('No existen registros para generar un generador de validación. Se retornará None')
         else:
             val_df_iter_img = val_datagen.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='PREPROCESSED_IMG', **params
+                dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='PROCESSED_IMG', **params
             )
             val_df_iter_mask = val_datagen.flow_from_dataframe(
                 dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='MASK_IMG', **params
@@ -206,13 +205,13 @@ class BreastCancerDataset:
 
         # Se filtran los datos en función de si se desea obtener el conjunto de train y val
         train_x, _, _, _ = train_test_split(
-            self.df.PREPROCESSED_IMG, self.df.IMG_LABEL, random_state=SEED, train_size=train_prop,
+            self.df.PROCESSED_IMG, self.df.IMG_LABEL, random_state=SEED, train_size=train_prop,
             stratify=self.df.IMG_LABEL if stratify else None
         )
 
         # Se asigna el valor de 'train' a aquellas imagenes (representadas por sus paths) que estén presentes en train_x
         # en caso contrario, se asignará el valor 'val'.
-        self.df.loc[:, 'TRAIN_VAL'] = np.where(self.df.PREPROCESSED_IMG.isin(train_x), 'train', 'val')
+        self.df.loc[:, 'TRAIN_VAL'] = np.where(self.df.PROCESSED_IMG.isin(train_x), 'train', 'val')
 
     @staticmethod
     def bulk_data_desc_to_files(df: pd.DataFrame) -> None:

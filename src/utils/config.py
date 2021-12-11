@@ -11,7 +11,7 @@ import cv2
     CONFIGURACION DEL EXPERIMENTO
 """
 # Los valores disponibles son PATCHES, COMPLETE_IMAGE, MASK
-EXPERIMENT = 'PATCHES'
+EXPERIMENT = 'COMPLETE_IMAGE'
 
 """
     CONFIGURACION DEL DATASET
@@ -24,12 +24,12 @@ TRAIN_DATA_PROP: float = 0.8
 DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': True,
     'vertical_flip': True,
-    'shear_range': 0.1,
+    # 'shear_range': 0.1,
     'rotation_range': 270,
     'width_shift_range': 0.1,
     'height_shift_range': 0.1,
     'brightness_range': (0.6, 1),
-    'zoom_range': [0.8, 1.2],
+    # 'zoom_range': [0.8, 1.2],
 }
 
 """
@@ -66,6 +66,35 @@ XGB_COLS = {
 """
 IMG_SHAPE: tuple = (1024, 1024)
 PATCH_SIZE: int = 300
+
+CROP_CONFIG: str = 'CONF0'
+CROP_PARAMS: dict = {
+    'CONF0': {
+        'N_BACKGROUND': 5,
+        'N_ROI': 5,
+        'OVERLAP': 1,
+        'MARGIN': 1.2
+    },
+    'CONF1': {
+        'N_BACKGROUND': 0,
+        'N_ROI': 1,
+        'OVERLAP': 1,
+        'MARGIN': 1
+    },
+    'CONF3': {
+        'N_BACKGROUND': 1,
+        'N_ROI': 1,
+        'OVERLAP': 1,
+        'MARGIN': 1.4
+    },
+    'CONF4': {
+        'N_BACKGROUND': 0,
+        'N_ROI': 1,
+        'OVERLAP': 1,
+        'MARGIN': 1.4
+    },
+}
+
 PREPROCESSING_CONFIG: str = 'CONF2'
 PREPROCESSING_FUNCS: dict = {
     'CONF1': {

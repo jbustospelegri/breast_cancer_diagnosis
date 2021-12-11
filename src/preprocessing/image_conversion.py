@@ -1,10 +1,8 @@
-from pathlib import Path
-
 import os
 import pydicom
 import numpy as np
 
-
+from pathlib import Path
 from typing import io
 from PIL import Image
 
@@ -46,7 +44,7 @@ def convert_img(args) -> None:
             raise KeyError(f'Conversion function for {os.path.splitext(img_path)} not implemented')
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Asserts).txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Assertions).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in convert_img\n{err}\n{"=" * 100}')
 
     except Exception as err:
@@ -87,7 +85,7 @@ def convert_dcm_imgs(ori_path: io, dest_path: io, filter_binary: bool) -> None:
         Image.fromarray(final_image).save(dest_path)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Asserts).txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Assertions).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in convert_dcm_imgs\n{err}\n{"=" * 100}')
 
     except Exception as err:
@@ -112,7 +110,7 @@ def convert_pgm_imgs(ori_path: io, dest_path: io) -> None:
         img.save(dest_path)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Asserts).txt'), 'a') as f:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Assertions).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in convert_pgm_imgs\n{err}\n{"=" * 100}')
 
     except Exception as err:

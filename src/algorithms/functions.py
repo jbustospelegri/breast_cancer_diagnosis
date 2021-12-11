@@ -57,8 +57,8 @@ def get_predictions(keras_model: models, data: Iterator, class_labels: dict, **k
             argmax(axis=-1).tolist()]
 
     # Se crea el dataset final
-    dataset = pd.DataFrame({'PREPROCESSED_IMG': fnames, 'PREDICTION': predictions, 'IMG_LABEL': true_labels}) \
-        if true_labels else pd.DataFrame({'PREPROCESSED_IMG': fnames, 'PREDICTION': predictions})
+    dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions, 'IMG_LABEL': true_labels}) \
+        if true_labels else pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions})
 
     # Se añaden columnas adicionales al dataset
     for col, value in kwargs.get('add_columns', {}).items():

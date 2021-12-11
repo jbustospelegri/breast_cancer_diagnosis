@@ -1,21 +1,16 @@
-import os
-from typing import io
+from typing import List
 
 import pandas as pd
 import numpy as np
-import plistlib
-
-from skimage.draw import polygon
-from multiprocessing import Pool, cpu_count
-from tqdm import tqdm
 
 from src.breast_cancer_dataset.base import GeneralDataBase
 from src.preprocessing.image_processing import crop_image_pipeline
+from src.preprocessing.mask_conversion import get_inbreast_roi_mask
 from src.utils.config import (
     INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC,
-    INBREAST_DB_XML_ROI_PATH, PATCH_SIZE
+    CROP_CONFIG, CROP_PARAMS
 )
-from src.utils.functions import search_files, get_filename, get_path, get_patch_from_center
+from src.utils.functions import get_filename, get_path
 
 
 class DatasetINBreast(GeneralDataBase):
@@ -52,9 +47,6 @@ class DatasetINBreast(GeneralDataBase):
         # Se crea la columna ABNORMALITY_TYPE que indicará si se trata de una calcificación o de una masa.
         df.loc[:, 'ABNORMALITY_TYPE'] = np.where(df['Mass '] == 'X', 'MASS', None)
 
-        return df
-
-    def add_extra_columns(self, df: pd.DataFrame):
         # Se crea la columna Breast que indicará si se trata de una imagen del seno derecho (Right) o izquierdo (Left).
         df.loc[:, 'BREAST'] = np.where(df.Laterality == 'R', 'RIGHT', 'LEFT')
 
@@ -67,30 +59,24 @@ class DatasetINBreast(GeneralDataBase):
         # Se crea la columna de ID
         df.loc[:, 'ID'] = df['File Name'].astype(str)
 
+        # Se crea la columna FILE_NAME
+        df.loc[:, 'FILE_NAME'] = df['File Name'].astype(str)
+
         return df
 
-    def process_dataframe(self, df: pd.DataFrame, f: callable = lambda x: int(get_filename(x).split('_')[0])) \
+    def get_raw_files(self, df: pd.DataFrame, f: callable = lambda x: int(get_filename(x).split('_')[0])) \
             -> pd.DataFrame:
-        return super(DatasetINBreast, self).process_dataframe(df=df, get_id_func=f)
+        return super(DatasetINBreast, self).get_raw_files(df=df, get_id_func=f)
+
+    def get_image_mask(self, func: callable = get_inbreast_roi_mask, args: List = None):
+
+        args = list(set([(x.CONVERTED_IMG, x.FILE_NAME, x.CONVERTED_MASK) for _, x in self.df_desc.iterrows()]))
+        super(DatasetINBreast, self).get_image_mask(func=func, args=args)
 
 
 class DatasetINBreastCrop(DatasetINBreast):
 
-    IMG_TYPE: str = 'CROP'
-    DF_COLS = [
-        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
-        'CONVERTED_IMG', 'PREPROCESSED_IMG', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN', 'IMG_LABEL'
-    ]
-
-    def add_extra_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = super(DatasetINBreastCrop, self).add_extra_columns(df)
-        df = pd.merge(left=df, right=self.get_inbreast_roi(), on='File Name', how='left')
-
-        # Debido a que una imagen puede contener más de un recorte, se modifica la columna de ID para tener un identifi
-        # cador unico
-        df.loc[:, 'ID'] = df.ID + '_' + df.groupby('ID').cumcount().astype(str)
-
-        return df
+    IMG_TYPE: str = get_path('CROP', CROP_CONFIG)
 
     def preproces_images(self, args: list = None, func: callable = crop_image_pipeline) -> None:
         """
@@ -99,104 +85,15 @@ class DatasetINBreastCrop(DatasetINBreast):
         :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
         prueba realizada.
         """
-        super(DatasetINBreastCrop, self).preproces_images(
-            args=[
-                (r.CONVERTED_IMG, r.PREPROCESSED_IMG, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN) for _, r in
-                self.df_desc.iterrows()
-            ], func=func
-        )
 
-    def clean_dataframe(self):
-        print(f'\tExcluding {len(self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)])} '
-              f'images without pathology localization.')
-        self.df_desc.drop(
-            index=self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)].index,
-            inplace=True
-        )
+        p = CROP_PARAMS[CROP_CONFIG]
+        args = list(set([(
+            x.CONVERTED_IMG, x.PROCESSED_IMG, x.CONVERTED_MASK, p['N_BACKGROUND'], p['N_ROI'], p['OVERLAP'], p['MARGIN'])
+            for _, x in self.df_desc.iterrows()
+        ]))
 
-    @staticmethod
-    def get_inbreast_roi():
-        """
-        This function loads a osirix xml region as a binary numpy array for INBREAST
-        dataset
-        @mask_path : Path to the xml file
-        @imshape : The shape of the image as an array e.g. [4084, 3328]
-        return: numpy array where positions in the roi are assigned a value of 1.
-        """
+        super(DatasetINBreastCrop, self).preproces_images(args=args, func=func)
+        super(DatasetINBreastCrop, self).get_roi_imgs()
 
-        def load_point(point_string):
-            x, y = tuple([int(round(float(num), 0)) for num in point_string.strip('()').split(',')])
-            return y, x
-
-        l = []
-        for path in search_files(file=INBREAST_DB_XML_ROI_PATH, ext='xml', in_subdirs=False):
-            plist_dict = plistlib.load(open(path, 'rb'), fmt=plistlib.FMT_XML)['Images'][0]
-            for roi in plist_dict['ROIs']:
-                if roi['Name'] in ['Mass']:
-                    p = pd.DataFrame(data=[load_point(point) for point in roi['Point_px']], columns=['Y', 'X'])
-                    l.append(pd.DataFrame(
-                        data=[[int(get_filename(path)), p.X.max(), p.X.min(), p.Y.max(), p.Y.min()]],
-                        columns=['File Name', 'X_MAX', 'X_MIN', 'Y_MAX', 'Y_MIN'])
-                    )
-
-        df = pd.concat(l, ignore_index=True)
-
-        df.loc[:, 'RAD'] = df.apply(
-            lambda x: round(max([(x.X_MAX - x.X_MIN), (x.Y_MAX - x.Y_MIN), PATCH_SIZE]) / 2), axis=1
-        )
-
-        for axis in ['X', 'Y']:
-            df.loc[:, f'{axis}_CORD'] = round(df[[f'{axis}_MAX', f'{axis}_MIN']].sum(axis=1) / 2)
-
-        get_patch_from_center(df=df)
-
-        return df[['File Name', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN']]
-
-
-class DatasetINBreastSegmentation(DatasetINBreast):
-
-    IMG_TYPE: str = 'Segmentation'
-    DF_COLS = [
-        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
-        'CONVERTED_IMG', 'PREPROCESSED_IMG', 'IMG_LABEL'
-    ]
-
-    def add_extra_columns(self, df: pd.DataFrame):
-        super(DatasetINBreast, self).add_extra_columns(df)
-        for col in ['X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN']:
-            df.loc[:, col] = None
-
-    def clean_dataframe(self):
-        super(DatasetINBreast, self).clean_dataframe()
-        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
-
-    @staticmethod
-    def load_inbreast_mask(mask_path: io, imshape: tuple):
-        """
-        This function loads a osirix xml region as a binary numpy array for INBREAST
-        dataset
-        @mask_path : Path to the xml file
-        @imshape : The shape of the image as an array e.g. [4084, 3328]
-        return: numpy array where positions in the roi are assigned a value of 1.
-        """
-
-        def load_point(point_string):
-            x, y = tuple([float(num) for num in point_string.strip('()').split(',')])
-            return y, x
-
-        mask = np.zeros(imshape)
-        with open(mask_path, 'rb') as mask_file:
-            plist_dict = plistlib.load(mask_file, fmt=plistlib.FMT_XML)['Images'][0]
-            assert plist_dict['NumberOfROIs'] == len(plist_dict['ROIs'])
-            for roi in plist_dict['ROIs']:
-                assert roi['NumberOfPoints'] == len(roi['Point_px'])
-                points = [load_point(point) for point in roi['Point_px']]
-                if len(points) <= 2:
-                    for point in points:
-                        mask[int(point[0]), int(point[1])] = 1
-                else:
-                    x, y = zip(*points)
-                    x, y = np.array(x), np.array(y)
-                    poly_x, poly_y = polygon(x, y, shape=imshape)
-                    mask[poly_x, poly_y] = 1
-        return mask
+    def delete_observations(self):
+        pass
