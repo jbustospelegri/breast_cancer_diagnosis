@@ -1,12 +1,12 @@
 
 import os
-import random
 import tqdm
 
 import pandas as pd
 
 from typing import io, List
-from multiprocessing import Pool, cpu_count
+from multiprocessing import cpu_count
+from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 
 from src.preprocessing.image_conversion import convert_img
@@ -116,7 +116,7 @@ class GeneralDataBase:
 
         print(f'{"-" * 75}\n\tGetting masks: {self.df_desc.CONVERTED_MASK.nunique()} existing files.')
         # Se crea un pool de multihilos para realizar la tarea de conversión de forma paralelizada.
-        with Pool(processes=cpu_count() - 2) as pool:
+        with ThreadPool(processes=cpu_count() - 2) as pool:
             results = tqdm(pool.imap(func, args), total=len(args), desc='getting mask files')
             tuple(results)
         # Se recuperan las imagenes modificadas y se crea un dataframe
@@ -136,7 +136,7 @@ class GeneralDataBase:
             args = list(set([(row.RAW_IMG, row.CONVERTED_IMG) for _, row in self.df_desc.iterrows()]))
 
         # Se crea un pool de multihilos para realizar la tarea de conversión de forma paralelizada.
-        with Pool(processes=cpu_count() - 2) as pool:
+        with ThreadPool(processes=cpu_count() - 2) as pool:
             results = tqdm(pool.imap(func, args), total=len(args), desc='converting images')
             tuple(results)
 
@@ -158,7 +158,7 @@ class GeneralDataBase:
                 self.df_desc.iterrows()
             ]))
 
-        with Pool(processes=cpu_count() - 2) as pool:
+        with ThreadPool(processes=cpu_count() - 2) as pool:
             results = tqdm(pool.imap(func, args), total=len(args), desc='preprocessing full images')
             tuple(results)
 

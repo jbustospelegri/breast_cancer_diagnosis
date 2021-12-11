@@ -56,10 +56,25 @@ def get_inbreast_roi_mask(args) -> None:
 
 
 def get_mias_roi_mask(args) -> None:
-    img: io = args[0]
-    x: int = int(args[1])
-    y: int = int(args[2])
-    rad: int = int(args[3])
-    mask = np.zeros(shape=(1024, 1024), dtype=np.uint8)
-    cv2.circle(mask, center=(x, y), radius=rad, thickness=-1, color=(255, 255, 255))
-    cv2.imwrite(img, mask)
+
+    try:
+        if len(args) != 4:
+            raise ValueError('Incorrect number of args for function get_mias_roi')
+
+        mask = np.zeros(shape=(1024, 1024), dtype=np.uint8)
+        for x, y, rad in zip(args[1], args[2], args[3]):
+            cv2.circle(mask, center=(int(x), int(y)), radius=int(rad), thickness=-1, color=(255, 255, 255))
+        cv2.imwrite(args[0], mask)
+
+    except AssertionError as err:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Assertions).txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
+
+    except ValueError as err:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nError calling function get_inbrest_roi_mask pipeline\n{err}\n{"=" * 100}')
+
+    except Exception as err:
+        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\n{get_filename(get_filename(args[0]))}\n{err}\n{"=" * 100}')
+

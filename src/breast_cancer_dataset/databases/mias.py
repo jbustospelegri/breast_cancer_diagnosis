@@ -1,16 +1,16 @@
-import os
-from typing import io, List
+from typing import List
 
-import cv2
 import pandas as pd
 import numpy as np
 
 from collections import defaultdict
 
 from breast_cancer_dataset.base import GeneralDataBase
-from preprocessing.image_processing import crop_image_pipeline, full_image_pipeline, get_mias_roi_mask
-from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, PATCH_SIZE
-from utils.functions import get_filename, search_files, get_path, get_patch_from_center
+from preprocessing.image_processing import crop_image_pipeline
+from preprocessing.mask_conversion import get_mias_roi_mask
+from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, \
+    CROP_CONFIG, CROP_PARAMS
+from utils.functions import get_path
 
 
 class DatasetMIAS(GeneralDataBase):
@@ -41,11 +41,9 @@ class DatasetMIAS(GeneralDataBase):
         # Se crea la columna IMG_LABEL que contendrá las tipologías 'BENIGNA' y 'MALIGNA'.
         df.loc[:, 'IMG_LABEL'] = df.PATHOLOGY.map(defaultdict(lambda: None, {'B': 'BENIGN', 'M': 'MALIGNANT'}))
 
-        # Se corrige el formato del círculo
-        df.loc[:, 'ORI_RAD'] = pd.to_numeric(df.RAD, downcast='integer', errors='coerce')
-
         # Se procesa la columna RAD estableciendo un tamaño minimo de IMG_SHAPE / 2
-        df.loc[:, 'RAD'] = df.RAD.apply(lambda x: np.max([float(PATCH_SIZE / 2), float(x)]))
+        # df.loc[:, 'RAD'] = df.RAD.apply(lambda x: np.max([float(PATCH_SIZE / 2), float(x)]))
+        df.loc[:, 'RAD'] = pd.to_numeric(df.RAD, downcast='integer', errors='coerce')
 
         # Debido a que el sistema de coordenadas se centra en el borde inferior izquierdo se deben de modificar las
         # coordenadas Y para adecuarlas al sistema de coordenadas centrado en el borde superior izquerdo.
@@ -78,33 +76,30 @@ class DatasetMIAS(GeneralDataBase):
 
         return df
 
+    def get_image_mask(self, func: callable = get_mias_roi_mask, args: List = None):
+
+        args = [
+            (x.CONVERTED_MASK, x.X_CORD, x.Y_CORD, x.RAD) for _, x in
+            self.df_desc[~self.df_desc[['X_CORD', 'Y_CORD', 'RAD']].isna().any(axis=1)].
+                groupby('CONVERTED_MASK', as_index=False).agg({'X_CORD': list, 'Y_CORD': list, 'RAD': list}).iterrows()
+        ]
+        super(DatasetMIAS, self).get_image_mask(func=func, args=args)
+
+    def clean_dataframe(self):
+
+        # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
+        # una zona benigna y otra maligna).
+        duplicated_tags = self.df_desc.groupby('ID').IMG_LABEL.nunique()
+        print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1]) * 2} samples for ambiguous pathologys')
+        self.df_desc.drop(
+            index=self.df_desc[self.df_desc.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index,
+            inplace=True
+        )
+
 
 class DatasetMIASCrop(DatasetMIAS):
 
-    IMG_TYPE: str = 'CROP'
-    DF_COLS = [
-        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'IMG_TYPE', 'FILE_NAME', 'RAW_IMG', 'CONVERTED_IMG',
-        'PREPROCESSED_IMG', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN', 'IMG_LABEL'
-    ]
-
-    def add_extra_columns(self, df: pd.DataFrame):
-
-        # A partir de las coordenadas y el radio, se obtienen los extremos de un cuadrado para realizar los recortes.
-        get_patch_from_center(df=df)
-
-        # Debido a que una imagen puede contener más de un recorte, se modifica la columna de ID para tener un identifi
-        # cador unico
-        df.loc[:, 'ID'] = df.ID + '_' + df.groupby('ID').cumcount().astype(str)
-
-        return df
-
-    def clean_dataframe(self):
-        print(f'\tExcluding {len(self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)])} '
-              f'images without pathology localization.')
-        self.df_desc.drop(
-            index=self.df_desc[self.df_desc[["X_MAX", "Y_MAX", "X_MIN", "Y_MIN"]].isna().any(axis=1)].index,
-            inplace=True
-        )
+    IMG_TYPE: str = get_path('CROP', CROP_CONFIG)
 
     def preproces_images(self, args: list = None, func: callable = crop_image_pipeline) -> None:
         """
@@ -113,53 +108,18 @@ class DatasetMIASCrop(DatasetMIAS):
         :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
         prueba realizada.
         """
-        super(DatasetMIASCrop, self).preproces_images(
-            args=[
-                (r.CONVERTED_IMG, r.PREPROCESSED_IMG, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN) for _, r in
-                self.df_desc.iterrows()
-            ], func=func
-        )
 
+        p = CROP_PARAMS[CROP_CONFIG]
+        args = list(set([(
+            x.CONVERTED_IMG, x.PROCESSED_IMG, x.CONVERTED_MASK, p['N_BACKGROUND'], p['N_ROI'], p['OVERLAP'], p['MARGIN'])
+            for _, x in self.df_desc.iterrows()
+        ]))
 
-class DatasetMIASMask(DatasetMIAS):
+        super(DatasetMIASCrop, self).preproces_images(args=args, func=func)
+        super(DatasetMIASCrop, self).get_roi_imgs()
 
-    DF_COLS = [
-        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'IMG_TYPE', 'FILE_NAME', 'RAW_IMG', 'CONVERTED_IMG',
-        'PREPROCESSED_IMG', 'X_CORD', 'Y_CORD', 'ORI_RAD', 'IMG_LABEL'
-    ]
-
-    def process_dataframe(self, df: pd.DataFrame, get_id_func: callable = lambda x: get_filename(x)) -> pd.DataFrame:
-        df = super(DatasetMIAS, self).process_dataframe(df=df, get_id_func=get_id_func)
-        df.loc[:, 'ID'] = df.ID + '_' + df.groupby('ID').cumcount().astype(str)
-        df.loc[:, 'CONVERT_MASK_IMG'] = df.apply(lambda x: get_path(self.conversion_dir, 'MASK', f'{x.ID}.png'), axis=1)
-        df.loc[:, 'MASK_IMG'] = df.apply(lambda x: get_path(self.procesed_dir, 'MASK', f'{x.FILE_NAME}.png'), axis=1)
-
-        return df
-
-    def convert_images_format(self, func: callable = get_mias_roi_mask, args: List = None, show_txt: bool = True) \
-            -> None:
-        super(DatasetMIAS, self).convert_images_format()
-
-        # Crear las mascaras de directo
-        args = list(set([(x.CONVERT_MASK_IMG, x.X_CORD, x.Y_CORD, x.ORI_RAD) for _, x in self.df_desc.iterrows()]))
-
-        print(f'{"-" * 75}\n\tGenerating: {self.df_desc.CONVERT_MASK_IMG.nunique()} mask files.')
-        super(DatasetMIAS, self).convert_images_format(func=func, args=args, show_txt=False)
-        generated = list(search_files(file=f'{self.conversion_dir}{os.sep}**{os.sep}MASK', ext=self.dest_extension))
-        print(f"\tGenerated {len(generated)} masks.\n{'-' * 75}")
-
-    def preproces_images(self, args: list = None, func: callable = full_image_pipeline) -> None:
-
-        args = [
-            (x.CONVERTED_IMG, x.PREPROCESSED_IMG, False, x.MASK_IMG, x.CONVERT_MASK_IMG) for _, x in
-            self.df_desc.groupby(['CONVERTED_IMG', 'PREPROCESSED_IMG', 'MASK_IMG'], as_index=False).\
-                agg({'CONVERT_MASK_IMG': lambda x: x.tolist()}).iterrows()
-        ]
-        super(DatasetMIASMask, self).preproces_images(args=args, func=func)
+    def delete_observations(self):
+        pass
 
     def clean_dataframe(self):
-        print(f'\tExcluding {len(self.df_desc[self.df_desc[["X_CORD", "Y_CORD", "ORI_RAD"]].isna().any(axis=1)])} '
-              f'images without pathology mask localization.')
-        self.df_desc.drop(
-            index=self.df_desc[self.df_desc[["X_CORD", "Y_CORD", "ORI_RAD"]].isna().any(axis=1)].index, inplace=True
-        )
+        pass
