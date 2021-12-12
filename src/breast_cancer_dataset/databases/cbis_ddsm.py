@@ -1,4 +1,5 @@
 import os
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -6,11 +7,13 @@ import pandas as pd
 
 from breast_cancer_dataset.base import GeneralDataBase
 from preprocessing.image_processing import crop_image_pipeline
+from preprocessing.mask_generator import get_cbis_roi_mask
 from utils.config import (
     CBIS_DDSM_DB_PATH, CBIS_DDSM_CONVERTED_DATA_PATH, CBIS_DDSM_PREPROCESSED_DATA_PATH, CBIS_DDSM_MASS_CASE_DESC_TRAIN,
-    CBIS_DDSM_MASS_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TRAIN,
+    CBIS_DDSM_MASS_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TEST, CBIS_DDSM_CALC_CASE_DESC_TRAIN, CROP_CONFIG,
+    CROP_PARAMS,
 )
-from utils.functions import get_dirname
+from utils.functions import get_dirname, get_path
 
 
 class DatasetCBISDDSM(GeneralDataBase):
@@ -31,7 +34,7 @@ class DatasetCBISDDSM(GeneralDataBase):
         l = []
 
         # Se iteran los csv con información del set de datos para unificaros
-        print(f'{"-" * 70}\n\tGetting information from database {self.__name__} ({self.IMG_TYPE})\n{"-" * 70}')
+        print(f'{"=" * 70}\n\tGetting information from database {self.__name__} ({self.IMG_TYPE})\n{"=" * 70}')
         for path in self.database_info_file_paths:
             l.append(pd.read_csv(path))
 
@@ -47,10 +50,6 @@ class DatasetCBISDDSM(GeneralDataBase):
         # Se obtienen las imagenes full de cada tipología.
         df.drop_duplicates(subset=['image file path'], inplace=True)
 
-        return df
-
-    def add_extra_columns(self, df: pd.DataFrame):
-        # Se crea la columna Breast que indicará si se trata de una imagen del seno derecho (Right) o izquierdo (Left).
         df.loc[:, 'BREAST'] = df['left or right breast']
 
         # Se crea la columna BREAST_VIEW que indicará si se trata de una imagen CC o MLO
@@ -60,15 +59,14 @@ class DatasetCBISDDSM(GeneralDataBase):
         df.loc[:, 'BREAST_DENSITY'] = df.breast_density
 
         # Se crea la columna filename para realizar el join
-        df.loc[:, 'FILE_NAME'] = df['image file path'].apply(lambda x: get_dirname(x))
+        df.loc[:, 'FILE_NAME'] = df['image file path'].apply(lambda x: get_dirname(x).split("/")[0])
 
         # Se crea una columna identificadora
         df.loc[:, 'ID'] = df['image file path'].apply(lambda x: get_dirname(x).split("/")[0])
 
         return df
 
-    def process_dataframe(self, df: pd.DataFrame, f: callable = lambda x: "/".join(get_dirname(x).split(os.sep)[-3:])) \
-            -> pd.DataFrame:
+    def get_raw_files(self, df: pd.DataFrame, f: callable = lambda x: get_dirname(x).split(os.sep)[-3]) -> pd.DataFrame:
         """
         Función que creará un dataframe con información del dataset CBIS-DDSM. Para cada imagen, se pretende recuperar
         la tipología (clase) detectada, el path de origen de la imagen y su nombre, el tipo de patología (massa o
@@ -78,27 +76,17 @@ class DatasetCBISDDSM(GeneralDataBase):
 
         :return: Pandas dataframe con las columnas especificadas en la descripción
         """
-        return super(DatasetCBISDDSM, self).process_dataframe(df=df, get_id_func=f)
+        return super(DatasetCBISDDSM, self).get_raw_files(df=df, get_id_func=f)
+
+    def get_image_mask(self, func: callable = get_cbis_roi_mask, args: List = None):
+        super(DatasetCBISDDSM, self).get_image_mask(
+            func=func, args=[(x.ID, x.CONVERTED_MASK) for _, x in self.df_desc.iterrows()]
+        )
 
 
 class DatasetCBISDDSMCrop(DatasetCBISDDSM):
 
-    IMG_TYPE: str = 'CROP'
-    PREPROCESS_FUNC = lambda: crop_image_pipeline
-    DF_COLS = [
-        'ID', 'DATASET', 'BREAST', 'BREAST_VIEW', 'BREAST_DENSITY', 'ABNORMALITY_TYPE', 'IMG_TYPE', 'RAW_IMG',
-        'CONVERTED_IMG', 'PREPROCESSED_IMG', 'X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN', 'IMG_LABEL'
-    ]
-
-    def add_extra_columns(self, df: pd.DataFrame):
-        df = super(DatasetCBISDDSMCrop, self).add_extra_columns(df)
-        for col in ['X_MAX', 'Y_MAX', 'X_MIN', 'Y_MIN']:
-            df.loc[:, col] = None
-        return df
-
-    def clean_dataframe(self):
-        super(DatasetCBISDDSMCrop, self).clean_dataframe()
-        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
+    IMG_TYPE: str = get_path('CROP', CROP_CONFIG, create=False)
 
     def preproces_images(self, args: list = None, func: callable = crop_image_pipeline) -> None:
         """
@@ -107,20 +95,15 @@ class DatasetCBISDDSMCrop(DatasetCBISDDSM):
         :param show_example: booleano para almacenar 5 ejemplos aleatorios en la carpeta de resultados para la
         prueba realizada.
         """
-        super(DatasetCBISDDSMCrop, self).preproces_images(
-            args=[
-                (r.CONVERTED_IMG, r.PREPROCESSED_IMG, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN) for _, r in
-                self.df_desc.iterrows()
-            ], func=func
-        )
 
+        p = CROP_PARAMS[CROP_CONFIG]
+        args = list(set([(
+            x.CONVERTED_IMG, x.PROCESSED_IMG, x.CONVERTED_MASK, p['N_BACKGROUND'], p['N_ROI'], p['OVERLAP'], p['MARGIN'])
+            for _, x in self.df_desc.iterrows()
+        ]))
 
-class DatasetCBISSDDMask(DatasetCBISDDSM):
+        super(DatasetCBISDDSMCrop, self).preproces_images(args=args, func=func)
+        super(DatasetCBISDDSMCrop, self).get_roi_imgs()
 
-    IMG_TYPE: str = 'MASK'
-    ID_COL: str = 'ROI mask file path'
-    BINARY: bool = True
-
-    def clean_dataframe(self):
-        super(DatasetCBISSDDMask, self).clean_dataframe()
-        self.df_desc = self.df_desc.groupby('CONVERTED_IMG', as_index=False).first()
+    def delete_observations(self):
+        pass

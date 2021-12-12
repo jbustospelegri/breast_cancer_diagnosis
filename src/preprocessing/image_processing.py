@@ -227,15 +227,17 @@ def crop_image_pipeline(args) -> None:
         breast_zone = breast_mask.copy()
         for contour in get_contours(img=mask):
             x, y, w, h = cv2.boundingRect(contour)
-            center = (y + h // 2, x + w // 2)
-            y_min, x_min = int(center[0] - h * margin_roi // 2), int(center[1] - w * margin_roi // 2)
-            y_max, x_max = int(center[0] + h * margin_roi // 2), int(center[1] + w * margin_roi // 2)
-            x_max, x_min, y_max, y_min = correct_axis(img_denoised.shape, x_max, x_min, y_max, y_min)
-            roi_zones.append(img_denoised[y_min:y_max, x_min:x_max])
-            mask_zones.append(breast_zone[y_min:y_max, x_min:x_max])
 
-            # Se suprimen las zonas de la patología para posteriormente obtener la zona del background
-            cv2.rectangle(breast_mask, (x_min, y_min), (x_max, y_max), color=(0, 0, 0), thickness=-1)
+            if (h > 15) & (w > 15):
+                center = (y + h // 2, x + w // 2)
+                y_min, x_min = int(center[0] - h * margin_roi // 2), int(center[1] - w * margin_roi // 2)
+                y_max, x_max = int(center[0] + h * margin_roi // 2), int(center[1] + w * margin_roi // 2)
+                x_max, x_min, y_max, y_min = correct_axis(img_denoised.shape, x_max, x_min, y_max, y_min)
+                roi_zones.append(img_denoised[y_min:y_max, x_min:x_max])
+                mask_zones.append(breast_zone[y_min:y_max, x_min:x_max])
+
+                # Se suprimen las zonas de la patología para posteriormente obtener la zona del background
+                cv2.rectangle(breast_mask, (x_min, y_min), (x_max, y_max), color=(0, 0, 0), thickness=-1)
 
         # TODO: Se obtienen los parches de las zonas sin patología
 

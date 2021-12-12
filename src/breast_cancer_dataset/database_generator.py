@@ -13,7 +13,7 @@ from src.breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, Datas
 from src.breast_cancer_dataset.databases.inbreast import DatasetINBreast, DatasetINBreastCrop
 from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
 from src.utils.config import (
-    MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, PATCH_SIZE, PREPROCESSING_CONFIG,
+    MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG,
     EXPERIMENT, IMG_SHAPE
 )
 
@@ -21,8 +21,8 @@ from src.utils.config import (
 class BreastCancerDataset:
 
     DBS = {
-            'COMPLETE_IMAGE': [DatasetINBreast, DatasetMIAS, DatasetCBISDDSM],
-            'PATCHES': [DatasetINBreastCrop, DatasetMIASCrop, DatasetCBISDDSMCrop]
+            'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetMIAS, DatasetINBreast],
+            'PATCHES': [DatasetCBISDDSMCrop, DatasetMIASCrop, DatasetINBreastCrop]
         }
 
     def __init__(self, get_class: bool = True, split_data: bool = True, excel_path: str = ''):

@@ -5,7 +5,7 @@ import numpy as np
 
 from src.breast_cancer_dataset.base import GeneralDataBase
 from src.preprocessing.image_processing import crop_image_pipeline
-from src.preprocessing.mask_conversion import get_inbreast_roi_mask
+from src.preprocessing.mask_generator import get_inbreast_roi_mask
 from src.utils.config import (
     INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC,
     CROP_CONFIG, CROP_PARAMS
@@ -29,7 +29,7 @@ class DatasetINBreast(GeneralDataBase):
         l = []
 
         # Se iteran los csv con información del set de datos para unificaros
-        print(f'{"-" * 70}\n\tGetting information from database {self.__name__} ({self.IMG_TYPE})\n{"-" * 70}')
+        print(f'{"=" * 70}\n\tGetting information from database {self.__name__} ({self.IMG_TYPE})\n{"=" * 70}')
         for path in self.database_info_file_paths:
             l.append(pd.read_excel(path, skipfooter=2))
         df = pd.concat(objs=l, ignore_index=True)
@@ -76,7 +76,7 @@ class DatasetINBreast(GeneralDataBase):
 
 class DatasetINBreastCrop(DatasetINBreast):
 
-    IMG_TYPE: str = get_path('CROP', CROP_CONFIG)
+    IMG_TYPE: str = get_path('CROP', CROP_CONFIG, create=False)
 
     def preproces_images(self, args: list = None, func: callable = crop_image_pipeline) -> None:
         """

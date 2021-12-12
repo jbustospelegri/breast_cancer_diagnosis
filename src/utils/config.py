@@ -79,7 +79,7 @@ CROP_PARAMS: dict = {
         'N_BACKGROUND': 0,
         'N_ROI': 1,
         'OVERLAP': 1,
-        'MARGIN': 1
+        'MARGIN': 1.2
     },
     'CONF3': {
         'N_BACKGROUND': 1,
@@ -186,6 +186,11 @@ PREPROCESSING_FUNCS: dict = {
             'top': 0,
             'bottom': 0
         },
+        'EDIT_MASK': {
+            'kernel_shape': cv2.MORPH_RECT,
+            'kernel_size': (20, 20),
+            'operations': [(cv2.MORPH_OPEN, 1)]
+        }
     },
 }
 

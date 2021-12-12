@@ -7,7 +7,7 @@ from collections import defaultdict
 
 from breast_cancer_dataset.base import GeneralDataBase
 from preprocessing.image_processing import crop_image_pipeline
-from preprocessing.mask_conversion import get_mias_roi_mask
+from preprocessing.mask_generator import get_mias_roi_mask
 from utils.config import MIAS_DB_PATH, MIAS_CONVERTED_DATA_PATH, MIAS_PREPROCESSED_DATA_PATH, MIAS_CASE_DESC, \
     CROP_CONFIG, CROP_PARAMS
 from utils.functions import get_path
@@ -28,7 +28,7 @@ class DatasetMIAS(GeneralDataBase):
         # Se obtiene la información del fichero de texto descriptivo del dataset
         l = []
         # Se iteran los csv con información del set de datos para unificaros
-        print(f'{"-" * 70}\n\tGetting information from database {self.__name__} ({self.IMG_TYPE})\n{"-" * 70}')
+        print(f'{"=" * 70}\n\tGetting information from database {self.__name__} ({self.IMG_TYPE})\n{"=" * 70}')
         for path in self.database_info_file_paths:
             l.append(
                 pd.read_csv(
@@ -99,7 +99,7 @@ class DatasetMIAS(GeneralDataBase):
 
 class DatasetMIASCrop(DatasetMIAS):
 
-    IMG_TYPE: str = get_path('CROP', CROP_CONFIG)
+    IMG_TYPE: str = get_path('CROP', CROP_CONFIG, create=False)
 
     def preproces_images(self, args: list = None, func: callable = crop_image_pipeline) -> None:
         """

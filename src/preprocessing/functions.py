@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-from typing import Union, Tuple, Any
+from typing import Union, Tuple, Any, List
 
 from src.utils.functions import detect_func_err, get_contours
 
@@ -91,7 +91,7 @@ def binarize(img: np.ndarray, thresh: str = 'otsu', threshval: int = 1) -> np.nd
 
 
 @detect_func_err
-def edit_mask(mask: np.ndarray, operations: tuple, kernel_size: tuple = (23, 23),
+def edit_mask(mask: np.ndarray, operations: List[tuple] = None, kernel_size: tuple = (23, 23),
               kernel_shape: int = cv2.MORPH_ELLIPSE) -> np.ndarray:
     """
 
@@ -101,6 +101,9 @@ def edit_mask(mask: np.ndarray, operations: tuple, kernel_size: tuple = (23, 23)
     """
 
     # Se genera el kernel para realizar la transformación morgológica de la imagen.
+    if operations is None:
+        operations = [(cv2.MORPH_OPEN, 1)]
+
     kernel = cv2.getStructuringElement(shape=kernel_shape, ksize=kernel_size)
 
     # Se realiza una erosión seguida de una dilatación para eliminar el ruido situado en el fondo de la imagen

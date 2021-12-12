@@ -180,7 +180,7 @@ class GeneralDataBase:
         self.df_desc = pd.merge(left=self.df_desc, right=croped_imgs, on=['FILE_NAME'], how='left')
 
         # Se suprimen los casos que no contienen ningún recorte
-        print(f'Deleting {len(self.df_desc[self.df_desc.FILE.isnull()])} samples without cropped regions')
+        print(f'\tDeleting {len(self.df_desc[self.df_desc.FILE.isnull()])} samples without cropped regions')
         self.df_desc.drop(index=self.df_desc[self.df_desc.FILE.isnull()].index, inplace=True)
 
         # Se modifica el identificador único de la imagen
