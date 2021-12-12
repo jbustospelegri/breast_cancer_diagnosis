@@ -200,7 +200,6 @@ class VGG16Model(GeneralModel):
         '3FT': ['block3_conv1', 'block3_conv2', 'block3_conv3', 'block3_pool'],
         '4FT': ['block2_conv1', 'block2_conv2', 'block2_pool']
     }
-    shape = (224, 224, 3)
 
     def __init__(self, n: int, weights: Union[str, io] = None):
         super(VGG16Model, self).__init__(
@@ -310,7 +309,6 @@ class DenseNetModel(GeneralModel):
             'conv5_block13_1_relu', 'conv5_block13_2_conv', 'conv5_block13_concat'
         ]
     }
-    shape = (224, 224, 3)
 
     def __init__(self, n: int, weights: Union[str, io] = None):
         super(DenseNetModel, self).__init__(

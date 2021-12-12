@@ -186,11 +186,6 @@ PREPROCESSING_FUNCS: dict = {
             'top': 0,
             'bottom': 0
         },
-        'EDIT_MASK': {
-            'kernel_shape': cv2.MORPH_RECT,
-            'kernel_size': (20, 20),
-            'operations': [(cv2.MORPH_OPEN, 1)]
-        }
     },
 }
 
