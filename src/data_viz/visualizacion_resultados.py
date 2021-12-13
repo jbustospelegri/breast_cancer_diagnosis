@@ -14,7 +14,7 @@ from collections import defaultdict
 
 from data_viz.functions import render_mpl_table, plot_image, create_countplot
 from preprocessing.image_processing import full_image_pipeline, crop_image_pipeline
-from utils.config import MODEL_FILES, XGB_CONFIG, METRICS, DATA_AUGMENTATION_FUNCS, EXPERIMENT
+from utils.config import MODEL_FILES, XGB_CONFIG, METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, EXPERIMENT
 from utils.functions import get_path, search_files, get_filename
 
 
@@ -400,7 +400,7 @@ class DataVisualizer:
 
         # Figura y subplots de matplotlib. Debido a que existen 4 transformaciones de data augmentation, se creará un
         # grid con 5 columnas que contendrán cada ejemplo de transformación y la imagen original
-        elements = len(DATA_AUGMENTATION_FUNCS.keys())
+        elements = len(CLASSIFICATION_DATA_AUGMENTATION_FUNCS.keys())
         cols = 3
         rows = elements // cols + elements % cols
         fig = plt.figure(figsize=(15, 4 * rows))
@@ -409,7 +409,7 @@ class DataVisualizer:
         plot_image(img=image_ori, title='Imagen Original', ax_=fig.add_subplot(rows, cols, 1))
 
         # Se iteran las transformaciones
-        for i, (k, v) in enumerate(DATA_AUGMENTATION_FUNCS.items(), 2):
+        for i, (k, v) in enumerate(CLASSIFICATION_DATA_AUGMENTATION_FUNCS.items(), 2):
 
             # Se crea al datagenerator con exclusivamente la transformación a aplicar.
             datagen = ImageDataGenerator(**{k: v}, fill_mode='constant', cval=0)

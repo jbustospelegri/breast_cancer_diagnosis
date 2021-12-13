@@ -10,8 +10,8 @@ import cv2
 """
     CONFIGURACION DEL EXPERIMENTO
 """
-# Los valores disponibles son PATCHES, COMPLETE_IMAGE, MASK
-EXPERIMENT = 'PATCHES'
+# Los valores disponibles son PATCHES, COMPLETE_IMAGE
+EXPERIMENT = 'COMPLETE_IMAGE'
 
 """
     CONFIGURACION DEL DATASET
@@ -21,7 +21,7 @@ TRAIN_DATA_PROP: float = 0.7
 """
     CONFIGURACION DATA AUGMENTATION
 """
-DATA_AUGMENTATION_FUNCS: dict = {
+CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': True,
     'vertical_flip': True,
     # 'shear_range': 0.1,
@@ -29,7 +29,12 @@ DATA_AUGMENTATION_FUNCS: dict = {
     'width_shift_range': 0.1,
     'height_shift_range': 0.1,
     'brightness_range': (0.6, 1),
-    # 'zoom_range': [0.8, 1.2],
+    'zoom_range': [1, 1.5],
+}
+
+SEGMENTATION_DATA_AUGMENTATION_FUNCS: dict = {
+    'horizontal_flip': True,
+    'vertical_flip': True,
 }
 
 """
@@ -40,6 +45,7 @@ WARM_UP_EPOCHS: int = 30
 WARM_UP_LEARNING_RATE: float = 1e-3
 LEARNING_RATE: float = 1e-4
 
+SEGMENTATION_BATCH_SIZE: int = 16
 BATCH_SIZE: int = 18
 SEED: int = 81
 
@@ -64,85 +70,33 @@ XGB_COLS = {
 """
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
-IMG_SHAPE: tuple = (1024, 1024)
+IMG_SHAPE: tuple = (512, 256)
 PATCH_SIZE: int = 300
 
 CROP_CONFIG: str = 'CONF0'
 CROP_PARAMS: dict = {
     'CONF0': {
-        'N_BACKGROUND': 5,
-        'N_ROI': 5,
-        'OVERLAP': 1,
-        'MARGIN': 1.2
+        'N_BACKGROUND': 1,
+        'N_ROI': 2,
+        'OVERLAP': 0.9,
+        'MARGIN': 1.4
     },
     'CONF1': {
         'N_BACKGROUND': 0,
         'N_ROI': 1,
-        'OVERLAP': 1,
+        'OVERLAP': None,
         'MARGIN': 1.2
     },
     'CONF3': {
-        'N_BACKGROUND': 1,
-        'N_ROI': 1,
-        'OVERLAP': 1,
-        'MARGIN': 1.4
-    },
-    'CONF4': {
         'N_BACKGROUND': 0,
         'N_ROI': 1,
-        'OVERLAP': 1,
+        'OVERLAP': None,
         'MARGIN': 1.4
-    },
+    }
 }
 
 PREPROCESSING_CONFIG: str = 'CONF2'
 PREPROCESSING_FUNCS: dict = {
-    'CONF1': {
-        'CROPPING_1': {
-            'left': 0.01,
-            'right': 0.01,
-            'top': 0.04,
-            'bottom': 0.04
-        },
-        'REMOVE_NOISE': {
-            'ksize': 3
-        },
-        'REMOVE_ARTIFACTS': {
-            'bin_kwargs': {
-                'thresh': 'otsu',
-                'threshval': 30
-            },
-            'mask_kwargs': {
-                'kernel_shape': cv2.MORPH_ELLIPSE,
-                'kernel_size': (20, 10),
-                'operations': [(cv2.MORPH_OPEN, None), (cv2.MORPH_DILATE, 2)]
-            },
-            'contour_kwargs': {
-                'convex_contour': True,
-            },
-            'crop_box': True,
-        },
-        'NORMALIZE_BREAST': {
-            'type_norm': 'truncation'
-        },
-        'FLIP_IMG': {
-            'orient': 'left'
-        },
-        'ECUALIZATION': {
-            'clahe_1': {'clip': 2},
-            'clahe_2': {'clip': 3},
-        },
-        'SQUARE_PAD': True,
-        'RESIZING': {
-            'size': (1024, 1024)
-        },
-        'CROPPING_2': {
-            'left': 0.05,
-            'right': 0,
-            'top': 0,
-            'bottom': 0
-        },
-    },
     'CONF2': {
         'CROPPING_1': {
             'left': 0.01,

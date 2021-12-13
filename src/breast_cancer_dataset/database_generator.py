@@ -13,8 +13,8 @@ from src.breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, Datas
 from src.breast_cancer_dataset.databases.inbreast import DatasetINBreast, DatasetINBreastCrop
 from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
 from src.utils.config import (
-    MODEL_FILES, SEED, DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG,
-    EXPERIMENT, IMG_SHAPE
+    MODEL_FILES, SEED, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS,
+    PREPROCESSING_CONFIG, EXPERIMENT, IMG_SHAPE, SEGMENTATION_DATA_AUGMENTATION_FUNCS, PATCH_SIZE
 )
 
 
@@ -53,7 +53,7 @@ class BreastCancerDataset:
 
         return pd.concat(objs=df_list, ignore_index=True)
 
-    def get_dataset_generator(self, batch_size: int, preproces_func: Callable, size: tuple = IMG_SHAPE) -> \
+    def get_dataset_generator(self, batch_size: int, callback: Callable, size: tuple = PATCH_SIZE) -> \
             (Iterator, Iterator):
         """
 
@@ -64,7 +64,7 @@ class BreastCancerDataset:
         :param batch_size: tamaño de batch con el que se crearán los iteradores.
         :param size: tamaño de la imagen que servirá de input para los iteradores. Si la imagen tiene un tamaño distinto
                      se aplicará un resize aplicando la tecnica de interpolación lanzcos. Por defecto es 224, 224.
-        :param preproces_func: función de preprocesado a aplicar a las imagenes leidas una vez aplicadas las
+        :param callback: función de preprocesado a aplicar a las imagenes leidas una vez aplicadas las
                                        técnicas de data augmentation.
         :return: dataframeIterator de validación y de tran.
         """
@@ -89,13 +89,11 @@ class BreastCancerDataset:
         # Parametrización del generador de entrenamiento. Las imagenes de entrenamiento recibirán un conjunto de
         # modificaciones aleatorias con el objetivo de aumentar el set de datos de entrenamiento y evitar de esta forma
         # el over fitting.
-        train_datagen = ImageDataGenerator(
-            **DATA_AUGMENTATION_FUNCS, fill_mode='constant', cval=0, preprocessing_function=preproces_func
-        )
+        train_datagen = ImageDataGenerator(**CLASSIFICATION_DATA_AUGMENTATION_FUNCS, preprocessing_function=callback)
 
         # Parametrización del generador de validación. Las imagenes de validación exclusivamente se les aplicará la
         # técnica de preprocesado subministrada por el usuario.
-        val_datagen = ImageDataGenerator(preprocessing_function=preproces_func)
+        val_datagen = ImageDataGenerator(preprocessing_function=callback)
 
         # Para evitar entrecruzamientos de imagenes entre train y validación a partir del atributo shuffle=True, cada
         # generador se aplicará sobre una muestra disjunta del set de datos representada mediante la columna dataset.
@@ -117,7 +115,7 @@ class BreastCancerDataset:
 
         return train_df_iter, val_df_iter
 
-    def get_segmentation_dataset_generator(self, batch_size: int, preproces_func: Callable, size: tuple = IMG_SHAPE) \
+    def get_segmentation_dataset_generator(self, batch_size: int, callback: Callable, size: tuple = IMG_SHAPE) \
             -> (Iterator, Iterator):
         """
 
@@ -128,7 +126,7 @@ class BreastCancerDataset:
         :param batch_size: tamaño de batch con el que se crearán los iteradores.
         :param size: tamaño de la imagen que servirá de input para los iteradores. Si la imagen tiene un tamaño distinto
                      se aplicará un resize aplicando la tecnica de interpolación lanzcos. Por defecto es 224, 224.
-        :param preproces_func: función de preprocesado a aplicar a las imagenes leidas una vez aplicadas las
+        :param callback: función de preprocesado a aplicar a las imagenes leidas una vez aplicadas las
                                        técnicas de data augmentation.
         :return: dataframeIterator de validación y de tran.
         """
@@ -138,7 +136,12 @@ class BreastCancerDataset:
         # representada por la columna 'img_label'. Para ajustar el tamaño de la imagen al tamaño definido por el
         # usuario mediante input, se utilizará la técnica de interpolación lanzcos. Por otra parte, para generar una
         # salida one hot encoding en función de la clase de cada muestra, se parametriza class_mode como 'categorical'.
-        params = dict(
+
+        def image_mask_generator(image_data_generator: Iterator, mask_data_generator: Iterator):
+            for (img, mask) in zip(image_data_generator, mask_data_generator):
+                yield (img, mask)
+
+        img_params = dict(
             target_size=size,
             interpolation='lanczos',
             shufle=True,
@@ -148,16 +151,27 @@ class BreastCancerDataset:
             directory=None,
         )
 
+        mask_params = dict(
+            target_size=size,
+            interpolation='nearest',
+            shufle=True,
+            seed=SEED,
+            batch_size=batch_size,
+            class_mode=None,
+            directory=None,
+            color_mode='grayscale',
+        )
+
         # Parametrización del generador de entrenamiento. Las imagenes de entrenamiento recibirán un conjunto de
         # modificaciones aleatorias con el objetivo de aumentar el set de datos de entrenamiento y evitar de esta forma
         # el over fitting.
-        train_datagen = ImageDataGenerator(
-            **DATA_AUGMENTATION_FUNCS, fill_mode='constant', cval=0, preprocessing_function=preproces_func
-        )
+        train_datagen_img = ImageDataGenerator(**SEGMENTATION_DATA_AUGMENTATION_FUNCS, preprocessing_function=callback)
+        train_datagen_mask = ImageDataGenerator(**SEGMENTATION_DATA_AUGMENTATION_FUNCS, rescale=1. / 255)
 
         # Parametrización del generador de validación. Las imagenes de validación exclusivamente se les aplicará la
         # técnica de preprocesado subministrada por el usuario.
-        val_datagen = ImageDataGenerator(preprocessing_function=preproces_func)
+        val_datagen_img = ImageDataGenerator(preprocessing_function=callback)
+        val_datagen_mask = ImageDataGenerator(rescale=1. / 255)
 
         # Para evitar entrecruzamientos de imagenes entre train y validación a partir del atributo shuffle=True, cada
         # generador se aplicará sobre una muestra disjunta del set de datos representada mediante la columna dataset.
@@ -167,11 +181,11 @@ class BreastCancerDataset:
             train_df_iter_img, train_df_iter_mask = None, None
             logging.warning('No existen registros para generar un generador de train. Se retornará None')
         else:
-            train_df_iter_img = train_datagen.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='PROCESSED_IMG', **params
+            train_df_iter_img = train_datagen_img.flow_from_dataframe(
+                dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='PROCESSED_IMG', **img_params
             )
-            train_df_iter_mask = train_datagen.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='MASK_IMG', **params
+            train_df_iter_mask = train_datagen_mask.flow_from_dataframe(
+                dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='PROCESSED_MASK', **mask_params
             )
 
         # Se chequea que existen observaciones de validación para poder crear el dataframeiterator.
@@ -180,14 +194,15 @@ class BreastCancerDataset:
             val_df_iter_mask = None
             logging.warning('No existen registros para generar un generador de validación. Se retornará None')
         else:
-            val_df_iter_img = val_datagen.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='PROCESSED_IMG', **params
+            val_df_iter_img = val_datagen_img.flow_from_dataframe(
+                dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='PROCESSED_IMG', **img_params
             )
-            val_df_iter_mask = val_datagen.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='MASK_IMG', **params
+            val_df_iter_mask = val_datagen_mask.flow_from_dataframe(
+                dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='PROCESSED_MASK', **mask_params
             )
 
-        return zip(train_df_iter_img, train_df_iter_mask), zip(val_df_iter_img, val_df_iter_mask)
+        return image_mask_generator(train_df_iter_img, train_df_iter_mask), \
+               image_mask_generator(val_df_iter_img, val_df_iter_mask)
 
     def split_dataset(self, train_prop: float, stratify: bool = True):
         """

@@ -286,7 +286,7 @@ def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
 
 
 @detect_func_err
-def correct_axis(shape: tuple, x_max: int, x_min: int, y_max: int, y_min: int) -> Union[int, int, int, int]:
+def correct_axis(shape: tuple, x_max: int, x_min: int, y_max: int, y_min: int) -> Tuple[int, int, int, int]:
 
     if x_max > shape[1]:
         x_min -= x_max - shape[1]
@@ -305,3 +305,17 @@ def correct_axis(shape: tuple, x_max: int, x_min: int, y_max: int, y_min: int) -
         y_min = 0
 
     return int(x_max),int(x_min), int(y_max), int(y_min)
+
+
+@detect_func_err
+def global_contrast_normalization(imagen: np.ndarray, s: int = 1, lmda: int = 10, eps: float = 0) -> np.ndarray:
+
+    # Se obtiene la imagen
+    img = imagen.astype(float).copy()
+
+    # Se obtiene la media de los valores de la imagen
+    img_norm = img - np.mean(img)
+
+    contrast = np.sqrt(lmda + np.mean(img_norm ** 2))
+
+    return s * img_norm / max(contrast, eps)

@@ -5,6 +5,7 @@ from time import process_time
 
 from segmentation_models.models.unet import Unet
 from segmentation_models.metrics import iou_score
+from segmentation_models.losses import dice_loss
 from tensorflow.keras import Model, Sequential, optimizers, callbacks
 from tensorflow.keras.backend import count_params
 from tensorflow.keras.callbacks import History
@@ -36,7 +37,7 @@ class GeneralModel:
         '4FT': []
     }
 
-    def __init__(self, n: int, baseline: Model = None, preprocess_func: Callable = None):
+    def __init__(self, n: int = 1, baseline: Model = None, preprocess_func: Callable = None):
         self.baseline = baseline if baseline is not None else self.create_baseline()
         self.n = n
         self.preprocess_func = preprocess_func
@@ -130,9 +131,7 @@ class GeneralModel:
             epochs=epochs,
             validation_data=val_data,
             verbose=2,
-            callbacks=list(self.callbakcs.values()),
-            steps_per_epoch=train_data.samples // batch_size,
-            validation_steps=val_data.samples // batch_size,
+            callbacks=list(self.callbakcs.values())
         )
         return process_time() - start, len(self.history.history['loss'])
 
@@ -316,15 +315,17 @@ class DenseNetModel(GeneralModel):
         )
 
 
-class UnetVGG16Model(VGG16Model, GeneralModel):
+class UnetVGG16Model(GeneralModel):
 
     __name__ = 'UnetVGG16'
-    loss = BinaryCrossentropy()
+    LAYERS_DICT = VGG16Model.LAYERS_DICT
+    loss = dice_loss
     metrics = [iou_score]
 
     def __init__(self, weights: Union[str, io] = None):
+        from segmentation_models import Unet
         super(UnetVGG16Model, self).__init__(
-            n=0, baseline=Unet('vgg16', encoder_weights=weights, encoder_freeze=True),
+            n=0, baseline=Unet('vgg16', encoder_weights=weights, classes=1, encoder_freeze=True, activation='sigmoid'),
             preprocess_func=vgg16.preprocess_input
         )
 
@@ -332,14 +333,17 @@ class UnetVGG16Model(VGG16Model, GeneralModel):
         self.model = self.baseline
 
 
-class UnetResnet50Model(Resnet50Model, GeneralModel):
+class UnetResnet50Model(GeneralModel):
 
     __name__ = 'UnetResnet50'
-    loss = BinaryCrossentropy()
+    LAYERS_DICT = Resnet50Model.LAYERS_DICT
+    loss = dice_loss
+    metrics = [iou_score]
 
     def __init__(self, weights: Union[str, io] = None):
+        from segmentation_models import Unet
         super(UnetResnet50Model, self).__init__(
-            n=0, baseline=Unet('resnet50', encoder_weights=weights, encoder_freeze=True),
+            n=0, baseline=Unet('resnet50', encoder_weights=weights, classes=1, encoder_freeze=True, activation='sigmoid'),
             preprocess_func=resnet50.preprocess_input
         )
 
@@ -347,14 +351,17 @@ class UnetResnet50Model(Resnet50Model, GeneralModel):
         self.model = self.baseline
 
 
-class UnetDenseNetModel(DenseNetModel, GeneralModel):
+class UnetDenseNetModel(GeneralModel):
 
     __name__ = 'UnetDenseNet'
-    loss = BinaryCrossentropy()
+    LAYERS_DICT = DenseNetModel.LAYERS_DICT
+    loss = dice_loss
+    metrics = [iou_score]
 
     def __init__(self, weights: Union[str, io] = None):
+        from segmentation_models import Unet
         super(UnetDenseNetModel, self).__init__(
-            n=0, baseline=Unet('densenet121', encoder_weights=weights, encoder_freeze=True),
+            baseline=Unet('densenet121', encoder_weights=weights, classes=1, encoder_freeze=True, activation='sigmoid'),
             preprocess_func=densenet.preprocess_input
         )
 
@@ -365,11 +372,14 @@ class UnetDenseNetModel(DenseNetModel, GeneralModel):
 class UnetInceptionV3Model(InceptionV3Model, GeneralModel):
 
     __name__ = 'UnetInceptionV3'
-    loss = BinaryCrossentropy()
+    LAYERS_DICT = InceptionV3Model.LAYERS_DICT
+    loss = dice_loss
+    metrics = [iou_score]
 
     def __init__(self, weights: Union[str, io] = None):
+        from segmentation_models import Unet
         super(UnetInceptionV3Model, self).__init__(
-            n=0, baseline=Unet('inceptionv3', encoder_weights=weights, encoder_freeze=True),
+            baseline=Unet('inceptionv3', encoder_weights=weights, classes=1, encoder_freeze=True, activation='sigmoid'),
             preprocess_func=inception_v3.preprocess_input
         )
 

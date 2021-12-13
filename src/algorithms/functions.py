@@ -101,7 +101,7 @@ def classification_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c:
     # Se recuperan los generadores de entrenamiento y validación en función del tamaño de entrada definido para cada
     # red y su función de preprocesado.
     train, val = db.get_dataset_generator(
-        batch_size=conf.BATCH_SIZE, preproces_func=cnn.preprocess_func, size=cnn.shape[:2]
+        batch_size=conf.BATCH_SIZE, callback=cnn.preprocess_func, size=cnn.shape[:2]
     )
 
     if frozen_layers == 'ALL':
@@ -187,8 +187,7 @@ def segmentation_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: c
 
     # Se registran los callbacks del modelo:
     cnn.register_callback(
-        early_stopping=EarlyStopping(monitor='val_loss', mode='min', patience=20, restore_best_weights=True),
-        # lr_reduce_on_plateau=ReduceLROnPlateau(monitor='val_loss', mode='min', factor=0.1, patience=5)
+        early_stopping=EarlyStopping(monitor='val_loss', mode='min', patience=20, restore_best_weights=True)
     )
 
     # Queue que servirá para recuparar las predicciones de cada modelo.
@@ -196,8 +195,8 @@ def segmentation_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: c
 
     # Se recuperan los generadores de entrenamiento y validación en función del tamaño de entrada definido para cada
     # red y su función de preprocesado.
-    train, val = db.get_dataset_generator(
-        batch_size=conf.BATCH_SIZE, preproces_func=cnn.preprocess_func, size=cnn.shape[:2]
+    train, val = db.get_segmentation_dataset_generator(
+        batch_size=conf.SEGMENTATION_BATCH_SIZE, callback=cnn.preprocess_func
     )
 
     if frozen_layers == 'ALL':
@@ -206,7 +205,7 @@ def segmentation_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: c
             filename=get_path(c.model_log_dir, weight_init, frozen_layers, f'{name}_scratch.csv'), separator=';')
         )
 
-        t, e = cnn.train_from_scratch(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(conf.LEARNING_RATE))
+        t, e = cnn.train_from_scratch(train, val, conf.EPOCHS, conf.SEGMENTATION_BATCH_SIZE, Adam(conf.LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='Scratch', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
@@ -223,7 +222,9 @@ def segmentation_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: c
                 separator=';')
         )
 
-        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, conf.BATCH_SIZE, Adam(conf.WARM_UP_LEARNING_RATE))
+        t, e = cnn.extract_features(
+            train, val, conf.WARM_UP_EPOCHS, conf.SEGMENTATION_BATCH_SIZE, Adam(conf.WARM_UP_LEARNING_RATE)
+        )
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='ExtractFeatures', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
@@ -236,7 +237,9 @@ def segmentation_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: c
                 separator=';')
         )
 
-        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(conf.LEARNING_RATE), frozen_layers)
+        t, e = cnn.fine_tunning(
+            train, val, conf.EPOCHS, conf.SEGMENTATION_BATCH_SIZE, Adam(conf.LEARNING_RATE), frozen_layers
+        )
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='FineTunning', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())

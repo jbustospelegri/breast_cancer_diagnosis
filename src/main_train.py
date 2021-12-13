@@ -6,8 +6,11 @@ from multiprocessing import Queue, Process
 
 from src.algorithms.model_ensambling import GradientBoosting
 from src.breast_cancer_dataset.database_generator import BreastCancerDataset
-from src.algorithms.cnns import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
-from src.algorithms.functions import classification_training_pipe
+from src.algorithms.cnns import (
+    VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model, UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model,
+    UnetResnet50Model
+)
+from src.algorithms.functions import classification_training_pipe, segmentation_training_pipe
 from src.data_viz.visualizacion_resultados import DataVisualizer
 
 from src.utils.config import MODEL_FILES, XGB_CONFIG
@@ -45,6 +48,25 @@ if __name__ == '__main__':
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
+    print(f'{"-" * 75}\nInicio proceso de segmentación de imagenes.\n{"-" * 75}')
+    for weight_init, frozen_layers in zip(['random', *repeat('imagenet', 6)], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
+                                                                               'ALL']):
+        # Diccionario en el que se almacenarán las predicciones de cada modelo. Estas serán utilizadas para aplicar el
+        # algorítmo de gradient boosting.
+        for cnn in [UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model]:
+            q = Queue()
+
+            # Se rea el proceso
+            p = Process(target=segmentation_training_pipe, args=(cnn, db, q, model_config, weight_init, frozen_layers))
+
+            # Se lanza el proceso
+            p.start()
+            p.join()
+
+        print(f'{"-" * 50}\nProceso de entrenamiento finalizado\n{"-" * 50}')
+
+    # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
+    # un subproceso daemonico para evitar la sobrecarga de memoria.
     for weight_init, frozen_layers in zip(['random', *repeat('imagenet', 6)], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
                                                                                'ALL']):
         # Diccionario en el que se almacenarán las predicciones de cada modelo. Estas serán utilizadas para aplicar el
@@ -74,7 +96,7 @@ if __name__ == '__main__':
             save_model_dir=get_path(model_config.model_store_xgb_dir, XGB_CONFIG, weight_init, frozen_layers),
             xgb_predictions_dir=get_path(model_config.model_predictions_xgb_dir, XGB_CONFIG, weight_init, frozen_layers)
         )
-        print('-' * 50 + f'\nProceso de entrenamiento finalizado\n' + '-' * 50)
+        print(f'{"-" * 50}\nProceso de entrenamiento finalizado\n{"-" * 50}')
 
     print(f'{"="* 75}\nGeneradando visualización de resultados.\n{"="* 75}')
 
