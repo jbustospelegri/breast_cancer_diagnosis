@@ -35,13 +35,13 @@ if __name__ == '__main__':
     data_viz = DataVisualizer(config=model_config)
 
     print(f'{"-" * 75}\nGenerando ejemplos de Data Augmentation del set de datos.\n{"-" * 75}')
-    data_viz.get_data_augmentation_examples()
+    # data_viz.get_data_augmentation_examples()
 
     print(f'{"-" * 75}\nGenerando análisis EDA del set de datos.\n{"-" * 75}')
     data_viz.get_eda_from_df()
 
     print(f'{"-" * 75}\nGenerando imagenes de ejemplo de preprocesado del set de datos.\n{"-" * 75}')
-    data_viz.get_preprocessing_examples()
+    # data_viz.get_preprocessing_examples()
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.

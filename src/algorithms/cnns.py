@@ -78,11 +78,10 @@ class GeneralModel:
         #     x = Dense(neurons, activation='relu', kernel_constraint=maxnorm(3))(x)
         #     x = Dropout(0.2)(x)
         #     neurons = get_number_of_neurons(x.get_shape().as_list())
-        x = Dense(128, activation='relu', kernel_constraint=maxnorm(3))(x)
+        # x = Dense(128, activation='relu', kernel_constraint=maxnorm(3))(x)
+        # x = Dropout(0.2)(x)
+        # x = Dense(32, activation='relu', kernel_constraint=maxnorm(3))(x)
         x = Dropout(0.2)(x)
-        x = Dense(32, activation='relu', kernel_constraint=maxnorm(3))(x)
-        x = Dropout(0.2)(x)
-
         output = Dense(self.n, activation='softmax')(x)
 
         self.model = Model(inputs=input, outputs=output)

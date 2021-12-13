@@ -99,7 +99,7 @@ class BreastCancerDataset:
 
         # Para evitar entrecruzamientos de imagenes entre train y validación a partir del atributo shuffle=True, cada
         # generador se aplicará sobre una muestra disjunta del set de datos representada mediante la columna dataset.
-        dataset = self.df[['PROCESSED_IMG', 'IMG_LABEL']].drop_duplicates()
+        dataset = self.df.drop_duplicates(subset=['PROCESSED_IMG', 'IMG_LABEL'])
 
         # Se chequea que existen observaciones de entrenamiento para poder crear el dataframeiterator.
         if len(dataset[dataset.TRAIN_VAL == 'train']) == 0:
