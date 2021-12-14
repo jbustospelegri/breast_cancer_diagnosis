@@ -1,11 +1,17 @@
 import os
 import sys
-from typing import io
+import cv2
 
-from src.algorithms.metrics import f1_score
+from typing import io
+from albumentations import HorizontalFlip, VerticalFlip
+
+from tensorflow.keras.losses import CategoricalCrossentropy
+from segmentation_models.metrics import IOUScore
+from segmentation_models.losses import DiceLoss
+
+from src.cnns.metrics import f1_score
 from src.utils.functions import get_path
 
-import cv2
 
 """
     CONFIGURACION DEL EXPERIMENTO
@@ -24,17 +30,17 @@ TRAIN_DATA_PROP: float = 0.7
 CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': True,
     'vertical_flip': True,
-    # 'shear_range': 0.1,
     'rotation_range': 270,
     'width_shift_range': 0.1,
     'height_shift_range': 0.1,
-    'brightness_range': (0.6, 1),
+    # 'brightness_range': (0.6, 1), no tiene sentido debido a que se aplica la ecu
     'zoom_range': [1, 1.5],
 }
 
 SEGMENTATION_DATA_AUGMENTATION_FUNCS: dict = {
-    'horizontal_flip': True,
-    'vertical_flip': True,
+    'horizontal_flip': HorizontalFlip(),
+    'vertical_flip': VerticalFlip(),
+    # 'brightness_range': RandomBrightnessContrast()
 }
 
 """
@@ -45,16 +51,24 @@ WARM_UP_EPOCHS: int = 30
 WARM_UP_LEARNING_RATE: float = 1e-3
 LEARNING_RATE: float = 1e-4
 
-SEGMENTATION_BATCH_SIZE: int = 16
+SEGMENTATION_BATCH_SIZE: int = 12
 BATCH_SIZE: int = 18
+
 SEED: int = 81
 
-METRICS = {
+CLASSIFICATION_METRICS = {
     'AUC': 'AUC',
     'Precision': 'Precision',
     'Recall': 'Recall',
     'F1 Score': f1_score
 }
+
+SEGMENTATION_METRICS = {
+    'IoU': IOUScore(),
+}
+
+CLASSIFICATION_LOSS = CategoricalCrossentropy()
+SEGMENTATIO_LOSS = DiceLoss()
 
 """
     CONFIGURACION PARA EL GRADIENT BOOSTING
@@ -70,7 +84,7 @@ XGB_COLS = {
 """
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
-IMG_SHAPE: tuple = (512, 256)
+IMG_SHAPE: tuple = (352, 192)
 PATCH_SIZE: int = 300
 
 CROP_CONFIG: str = 'CONF0'
@@ -95,9 +109,9 @@ CROP_PARAMS: dict = {
     }
 }
 
-PREPROCESSING_CONFIG: str = 'CONF2'
+PREPROCESSING_CONFIG: str = 'CONF1'
 PREPROCESSING_FUNCS: dict = {
-    'CONF2': {
+    'CONF1': {
         'CROPPING_1': {
             'left': 0.01,
             'right': 0.01,
@@ -130,9 +144,12 @@ PREPROCESSING_FUNCS: dict = {
         'ECUALIZATION': {
             'clahe_1': {'clip': 2},
         },
-        'SQUARE_PAD': True,
+        'RATIO_PAD': {
+            'ratio': '1:2',
+        },
         'RESIZING': {
-            'size': IMG_SHAPE
+            'width': IMG_SHAPE[1],
+            'height': IMG_SHAPE[0]
         },
         'CROPPING_2': {
             'left': 0.05,

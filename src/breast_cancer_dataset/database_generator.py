@@ -2,13 +2,16 @@ import json
 import logging
 import os
 
+import cv2
 import pandas as pd
 import numpy as np
 
 from typing import Callable
+from albumentations import Lambda, Compose
 from tensorflow.keras.preprocessing.image import ImageDataGenerator, Iterator
 from sklearn.model_selection import train_test_split
 
+from breast_cancer_dataset.base import Dataset, Dataloder
 from src.breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from src.breast_cancer_dataset.databases.inbreast import DatasetINBreast, DatasetINBreastCrop
 from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
@@ -16,13 +19,14 @@ from src.utils.config import (
     MODEL_FILES, SEED, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS,
     PREPROCESSING_CONFIG, EXPERIMENT, IMG_SHAPE, SEGMENTATION_DATA_AUGMENTATION_FUNCS, PATCH_SIZE
 )
+from src.preprocessing.image_processing import resize_img
 
 
 class BreastCancerDataset:
 
     DBS = {
-            'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetMIAS, DatasetINBreast],
-            'PATCHES': [DatasetCBISDDSMCrop, DatasetMIASCrop, DatasetINBreastCrop]
+            'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetINBreast],
+            'PATCHES': [DatasetCBISDDSMCrop , DatasetINBreastCrop]
         }
 
     def __init__(self, get_class: bool = True, split_data: bool = True, excel_path: str = ''):
@@ -137,72 +141,49 @@ class BreastCancerDataset:
         # usuario mediante input, se utilizará la técnica de interpolación lanzcos. Por otra parte, para generar una
         # salida one hot encoding en función de la clase de cada muestra, se parametriza class_mode como 'categorical'.
 
-        def image_mask_generator(image_data_generator: Iterator, mask_data_generator: Iterator):
-            for (img, mask) in zip(image_data_generator, mask_data_generator):
-                yield (img, mask)
+        train_aug = Compose([
+            *list(SEGMENTATION_DATA_AUGMENTATION_FUNCS.values()),
+            Lambda(
+                image=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_LANCZOS4),
+                mask=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_NEAREST),
+                name='image resizing'
+            ),
+            Lambda(mask=lambda x, **kwargs: np.float32(x.round().clip(0, 1)), name='normalize mask'),
+            Lambda(image=callback, name='cnn processing function')
+        ])
 
-        img_params = dict(
-            target_size=size,
-            interpolation='lanczos',
-            shufle=True,
-            seed=SEED,
-            batch_size=batch_size,
-            class_mode=None,
-            directory=None,
-        )
-
-        mask_params = dict(
-            target_size=size,
-            interpolation='nearest',
-            shufle=True,
-            seed=SEED,
-            batch_size=batch_size,
-            class_mode=None,
-            directory=None,
-            color_mode='grayscale',
-        )
-
-        # Parametrización del generador de entrenamiento. Las imagenes de entrenamiento recibirán un conjunto de
-        # modificaciones aleatorias con el objetivo de aumentar el set de datos de entrenamiento y evitar de esta forma
-        # el over fitting.
-        train_datagen_img = ImageDataGenerator(**SEGMENTATION_DATA_AUGMENTATION_FUNCS, preprocessing_function=callback)
-        train_datagen_mask = ImageDataGenerator(**SEGMENTATION_DATA_AUGMENTATION_FUNCS, rescale=1. / 255)
-
-        # Parametrización del generador de validación. Las imagenes de validación exclusivamente se les aplicará la
-        # técnica de preprocesado subministrada por el usuario.
-        val_datagen_img = ImageDataGenerator(preprocessing_function=callback)
-        val_datagen_mask = ImageDataGenerator(rescale=1. / 255)
+        val_aug = Compose([
+            Lambda(
+                image=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_LANCZOS4),
+                mask=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_NEAREST),
+                name='image resizing',
+            ),
+            Lambda(mask=lambda x, **kwargs: np.float32(x.round().clip(0, 1)), name='normalize mask'),
+            Lambda(image=callback, name='cnn processing function')
+        ])
 
         # Para evitar entrecruzamientos de imagenes entre train y validación a partir del atributo shuffle=True, cada
         # generador se aplicará sobre una muestra disjunta del set de datos representada mediante la columna dataset.
 
         # Se chequea que existen observaciones de entrenamiento para poder crear el dataframeiterator.
         if len(self.df[self.df.TRAIN_VAL == 'train']) == 0:
-            train_df_iter_img, train_df_iter_mask = None, None
+            train_dataloader = None
             logging.warning('No existen registros para generar un generador de train. Se retornará None')
         else:
-            train_df_iter_img = train_datagen_img.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='PROCESSED_IMG', **img_params
-            )
-            train_df_iter_mask = train_datagen_mask.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'train'], x_col='PROCESSED_MASK', **mask_params
-            )
+            # Dataset for train images
+            train_df = Dataset(self.df[self.df.TRAIN_VAL == 'train'], 'PROCESSED_IMG', 'PROCESSED_MASK', train_aug)
+            train_dataloader = Dataloder(train_df, batch_size=batch_size, shuffle=True, seed=SEED)
 
         # Se chequea que existen observaciones de validación para poder crear el dataframeiterator.
         if len(self.df[self.df.TRAIN_VAL == 'val']) == 0:
-            val_df_iter_img = None
-            val_df_iter_mask = None
+            valid_dataloader = None
             logging.warning('No existen registros para generar un generador de validación. Se retornará None')
         else:
-            val_df_iter_img = val_datagen_img.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='PROCESSED_IMG', **img_params
-            )
-            val_df_iter_mask = val_datagen_mask.flow_from_dataframe(
-                dataframe=self.df[self.df.TRAIN_VAL == 'val'], x_col='PROCESSED_MASK', **mask_params
-            )
+            # Dataset for validation images
+            val_df = Dataset(self.df[self.df.TRAIN_VAL == 'val'], 'PROCESSED_IMG', 'PROCESSED_MASK', val_aug)
+            valid_dataloader = Dataloder(val_df, batch_size=batch_size, shuffle=True, seed=SEED)
 
-        return image_mask_generator(train_df_iter_img, train_df_iter_mask), \
-               image_mask_generator(val_df_iter_img, val_df_iter_mask)
+        return train_dataloader, valid_dataloader
 
     def split_dataset(self, train_prop: float, stratify: bool = True):
         """

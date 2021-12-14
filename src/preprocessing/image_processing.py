@@ -123,15 +123,16 @@ def full_image_pipeline(args) -> None:
         img_mask = crop_borders(img=img_mask,  **prep_dict.get('CROPPING_2', {}))
 
         # # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
-        # if prep_dict.get('SQUARE_PAD', False):
-        #     images['IMAGE PADDED'] = pad_image_into_square(img=images[list(images.keys())[-1]].copy())
-        #     img_mask = pad_image_into_square(img=img_mask)
-        #
-        # # Se aplica el resize de la imagen:
-        # if prep_dict.get('RESIZING', False):
-        #     images['IMAGE RESIZED'] = \
-        #         resize_img(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RESIZING', {}))
-        #     img_mask = resize_img(img=img_mask, **prep_dict.get('RESIZING', {}))
+        if prep_dict.get('RATIO_PAD', False):
+            images['IMAGE RATIO PADDED'] = \
+                pad_image_into_square(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RATIO_PAD', {}))
+            img_mask = pad_image_into_square(img=img_mask, **prep_dict.get('RATIO_PAD', {}))
+
+        # Se aplica el resize de la imagen:
+        if prep_dict.get('RESIZING', False):
+            images['IMAGE RESIZED'] = \
+                resize_img(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RESIZING', {}))
+            img_mask = resize_img(img=img_mask, **prep_dict.get('RESIZING', {}), interpolation=cv2.INTER_NEAREST)
 
         if save_intermediate_steps:
             for i, (name, imag) in enumerate(images.items()):

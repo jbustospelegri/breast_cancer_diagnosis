@@ -87,7 +87,7 @@ def classification_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c:
     cnn = m(n=len(db.class_dict), weights=None if weight_init == 'random' else weight_init)
 
     # Se registran las métricas que se desean almacenar:
-    cnn.register_metric(*list(conf.METRICS.values()))
+    cnn.register_metric(*list(conf.CLASSIFICATION_METRICS.values()))
 
     # Se registran los callbacks del modelo:
     cnn.register_callback(
@@ -110,7 +110,7 @@ def classification_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c:
             filename=get_path(c.model_log_dir, weight_init, frozen_layers, f'{name}_scratch.csv'), separator=';')
         )
 
-        t, e = cnn.train_from_scratch(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(conf.LEARNING_RATE))
+        t, e = cnn.train_from_scratch(train, val, conf.EPOCHS, Adam(conf.LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='Scratch', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
@@ -127,7 +127,7 @@ def classification_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c:
                 separator=';')
         )
 
-        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, conf.BATCH_SIZE, Adam(conf.WARM_UP_LEARNING_RATE))
+        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, Adam(conf.WARM_UP_LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='ExtractFeatures', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
@@ -140,7 +140,7 @@ def classification_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c:
                 separator=';')
         )
 
-        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, conf.BATCH_SIZE, Adam(conf.LEARNING_RATE), frozen_layers)
+        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, Adam(conf.LEARNING_RATE), frozen_layers)
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='FineTunning', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
@@ -166,8 +166,8 @@ def classification_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c:
     print(f'{"=" * 75}\nPredicciones finalizadas.\n{"=" * 75}')
 
 
-def segmentation_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FILES,
-                               weight_init: Union[str, io] = None, frozen_layers: Union[str, int] = None) -> None:
+def segmentation_training_pipe(m: Model, db: BreastCancerDataset, c: conf.MODEL_FILES, weights: Union[str, io] = None,
+                               frozen_layers: Union[str, int] = None) -> None:
     """
     Función utilizada para generar el pipeline de entrenamiento de cada modelo.
 
@@ -183,7 +183,7 @@ def segmentation_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: c
 
     """
     # Se inicializa cada modelo:
-    cnn = m(weights=None if weight_init == 'random' else weight_init)
+    cnn = m(weights=None if weights == 'random' else weights)
 
     # Se registran los callbacks del modelo:
     cnn.register_callback(
@@ -196,70 +196,53 @@ def segmentation_training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: c
     # Se recuperan los generadores de entrenamiento y validación en función del tamaño de entrada definido para cada
     # red y su función de preprocesado.
     train, val = db.get_segmentation_dataset_generator(
-        batch_size=conf.SEGMENTATION_BATCH_SIZE, callback=cnn.preprocess_func
+        batch_size=conf.SEGMENTATION_BATCH_SIZE, callback=cnn.get_preprocessing_func()
     )
 
     if frozen_layers == 'ALL':
-        print(f'{"=" * 75}\nEntrenando {name} desde 0 con inicialización de pesos {weight_init}\n{"=" * 75}')
+        print(f'{"=" * 75}\nEntrenando {name} desde 0 con inicialización de pesos {weights}\n{"=" * 75}')
         cnn.register_callback(log=CSVLogger(
-            filename=get_path(c.model_log_dir, weight_init, frozen_layers, f'{name}_scratch.csv'), separator=';')
+            filename=get_path(c.model_log_dir, weights, frozen_layers, f'{name}_scratch.csv'), separator=';')
         )
 
-        t, e = cnn.train_from_scratch(train, val, conf.EPOCHS, conf.SEGMENTATION_BATCH_SIZE, Adam(conf.LEARNING_RATE))
+        t, e = cnn.train_from_scratch(train, val, conf.EPOCHS, Adam(conf.LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='Scratch', FT=frozen_layers,
-                  weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
+                  weights=weights, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
         print(f'{"=" * 75}\nEntrenamiento finalizado.\n{"=" * 75}')
 
     else:
         print(f'{"=" * 75}\nEntrenando {name} mediante transfer learning con inicialización de pesos de '
-              f'{weight_init}. Número de capas a entrenar {frozen_layers}\n{"=" * 75}')
+              f'{weights}. Número de capas a entrenar {frozen_layers}\n{"=" * 75}')
 
         print(f'{"-" * 75}\n\tEmpieza proceso de extract-features (warm up)\n{"-" * 75}')
         cnn.register_callback(
             log=CSVLogger(
-                filename=get_path(c.model_log_dir, weight_init, frozen_layers, f'{name}_ExtractFeatures.csv'),
+                filename=get_path(c.model_log_dir, weights, frozen_layers, f'{name}_ExtractFeatures.csv'),
                 separator=';')
         )
 
-        t, e = cnn.extract_features(
-            train, val, conf.WARM_UP_EPOCHS, conf.SEGMENTATION_BATCH_SIZE, Adam(conf.WARM_UP_LEARNING_RATE)
-        )
+        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, Adam(conf.WARM_UP_LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='ExtractFeatures', FT=frozen_layers,
-                  weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
+                  weights=weights, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
         print(f'{"-" * 75}\n\tEntrenamiento finalizado.\n{"-" * 75}')
 
         print(f'{"-" * 75}\n\tEmpieza proceso de fine-tunning\n{"-" * 75}')
         cnn.register_callback(
             log=CSVLogger(
-                filename=get_path(c.model_log_dir, weight_init, frozen_layers, f'{name}_FineTunning.csv'),
+                filename=get_path(c.model_log_dir, weights, frozen_layers, f'{name}_FineTunning.csv'),
                 separator=';')
         )
 
-        t, e = cnn.fine_tunning(
-            train, val, conf.EPOCHS, conf.SEGMENTATION_BATCH_SIZE, Adam(conf.LEARNING_RATE), frozen_layers
-        )
+        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, Adam(conf.LEARNING_RATE), frozen_layers)
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='FineTunning', FT=frozen_layers,
-                  weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
+                  weights=weights, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
         print(f'{"-" * 75}\n\tEntrenamiento finalizado.\n{"-" * 75}')
 
         print(f'{"=" * 75}\nProceso de transfer learning finalizado\n{"=" * 75}')
 
     print(f'{"=" * 75}\nAlmacenando  modelo.\n{"=" * 75}')
-    cnn.save_model(dirname=get_path(c.model_store_cnn_dir, weight_init, frozen_layers), model_name=f"{name}.h5")
+    cnn.save_model(dirname=get_path(c.model_store_cnn_dir, weights, frozen_layers), model_name=f"{name}.h5")
     print(f'{"=" * 75}\nModelo almacenado correctamente.\n{"=" * 75}')
-
-    print(f'{"=" * 75}\nObteniendo predicciones del modelo {name}.\n{"=" * 75}')
-    class_lbls = {v: k for k, v in train.class_indices.items()}
-
-    # Se generan las predicciones de entrenamiento y validación en formato de dataframe y se devuelven al proceso ppal.
-    q.put(pd.concat(
-        objs=[
-            get_predictions(keras_model=cnn, data=train, class_labels=class_lbls, add_columns={'TRAIN_VAL': 'train'}),
-            get_predictions(keras_model=cnn, data=val, class_labels=class_lbls, add_columns={'TRAIN_VAL': 'val'})
-        ],
-        ignore_index=True
-    ))
-    print(f'{"=" * 75}\nPredicciones finalizadas.\n{"=" * 75}')

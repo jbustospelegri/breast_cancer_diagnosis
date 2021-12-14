@@ -250,31 +250,31 @@ def apply_clahe_transform(img: np.ndarray, mask: np.ndarray = None, clip: int = 
 
 
 @detect_func_err
-def pad_image_into_square(img: np.ndarray) -> np.ndarray:
+def pad_image_into_square(img: np.ndarray, ratio: str = '1:2') -> np.ndarray:
     """
 
     :param img:
     :return:
     """
+    height_ratio, width_ratio = map(int, ratio.split(':'))
+
+    desired_width = img.shape[0] * height_ratio // width_ratio
+    desired_height = img.shape[1] * width_ratio // height_ratio
+    padded_img = np.zeros(shape=(max(img.shape[0], desired_height), max(desired_width, img.shape[1])), dtype=np.uint8)
 
     if len(img.shape) == 2:
         nrows, ncols = img.shape
-
-        padded_img = np.zeros(shape=(max(nrows, ncols), max(nrows, ncols)), dtype=np.uint8)
         padded_img[:nrows, :ncols] = img
 
-        return padded_img
     else:
         nrows, ncols, d = img.shape
-
-        padded_img = np.zeros(shape=(max(nrows, ncols), max(nrows, ncols), d), dtype=np.uint8)
         padded_img[:nrows, :ncols, :] = img
 
-        return padded_img
+    return padded_img
 
 
 @detect_func_err
-def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
+def resize_img(img: np.ndarray, height: int, width: int, interpolation=cv2.INTER_LANCZOS4) -> np.ndarray:
     """
 
     :param img:
@@ -282,7 +282,7 @@ def resize_img(img: np.ndarray, size: tuple = (300, 300)) -> np.ndarray:
     :return:
     """
 
-    return cv2.resize(src=img.copy(), dsize=size, interpolation=cv2.INTER_LANCZOS4)
+    return cv2.resize(src=img.copy(), dsize=(width, height), interpolation=interpolation)
 
 
 @detect_func_err

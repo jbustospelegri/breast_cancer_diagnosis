@@ -1,13 +1,16 @@
-
 import os
 import tqdm
+import cv2
 
 import pandas as pd
+import numpy as np
 
 from typing import io, List
 from multiprocessing import cpu_count
 from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
+from tensorflow.keras.utils import Sequence
+from albumentations import Compose
 
 from src.preprocessing.image_conversion import convert_img
 from src.preprocessing.image_processing import full_image_pipeline
@@ -249,3 +252,72 @@ class GeneralDataBase:
         # Se eliminan las imagenes que no hayan podido ser procesadas y se obtiene un único registro a nivel de label
         # e imagen.
         self.delete_observations()
+
+
+class Dataset:
+
+    def __init__(self, df: pd.DataFrame, img_col: str, mask_col: str, augmentation: Compose = None):
+
+        assert img_col in df.columns, f'{img_col} not in df'
+        assert mask_col in df.columns, f'{mask_col} not in df'
+
+        self.df = df
+        self.img_col = img_col
+        self.mask_col = mask_col
+        self.augmentation = augmentation
+
+    def __getitem__(self, i):
+
+        # read data
+        image = cv2.cvtColor(cv2.imread(self.df.iloc[i][self.img_col]), cv2.COLOR_BGR2RGB)
+        mask = cv2.imread(self.df.iloc[i][self.mask_col], cv2.IMREAD_GRAYSCALE)
+
+        # apply augmentations
+        if self.augmentation:
+            sample = self.augmentation(image=image, mask=mask)
+            image, mask = sample['image'], sample['mask']
+
+        return image, mask
+
+    def __len__(self):
+        return len(self.df)
+
+
+class Dataloder(Sequence):
+    """Load data from dataset and form batches
+
+    Args:
+        dataset: instance of Dataset class for image loading and preprocessing.
+        batch_size: Integet number of images in batch.
+        shuffle: Boolean, if `True` shuffle image indexes each epoch.
+    """
+
+    def __init__(self, dataset, batch_size=1, shuffle=False, seed=0):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.indexes = np.arange(len(dataset))
+        self.seed = seed
+
+        self.on_epoch_end()
+
+    def __getitem__(self, i):
+
+        # collect batch data
+        data = []
+        for j in range(i * self.batch_size, (i + 1) * self.batch_size):
+            data.append(self.dataset[j])
+
+        # transpose list of lists
+        batch = [np.stack(samples, axis=0) for samples in zip(*data)]
+
+        return batch
+
+    def __len__(self):
+        """Denotes the number of batches per epoch"""
+        return len(self.indexes) // self.batch_size
+
+    def on_epoch_end(self):
+        """Callback function to shuffle indexes each epoch"""
+        if self.shuffle:
+            self.indexes = np.random.RandomState(seed=self.seed).permutation(self.indexes)

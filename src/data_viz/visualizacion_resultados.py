@@ -14,7 +14,7 @@ from collections import defaultdict
 
 from data_viz.functions import render_mpl_table, plot_image, create_countplot
 from preprocessing.image_processing import full_image_pipeline, crop_image_pipeline
-from utils.config import MODEL_FILES, XGB_CONFIG, METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, EXPERIMENT
+from utils.config import MODEL_FILES, XGB_CONFIG, CLASSIFICATION_METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, EXPERIMENT
 from utils.functions import get_path, search_files, get_filename
 
 
@@ -24,7 +24,7 @@ sns.despine()
 
 class DataVisualizer:
 
-    metrics = [f.lower() if type(f) is str else f.__name__ for f in METRICS.values()] + ['accuracy', 'loss']
+    metrics = [f.lower() if type(f) is str else f.__name__ for f in CLASSIFICATION_METRICS.values()] + ['accuracy', 'loss']
 
     def __init__(self, config: MODEL_FILES):
         self.conf = config
