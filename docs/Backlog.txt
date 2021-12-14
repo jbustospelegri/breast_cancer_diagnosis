@@ -67,10 +67,6 @@ DONE
           Barplot con hue=weights, x=redes,y=accuracy, data=data[layers == 'all']
     9.4 - Gráfico de barras según accuracy en imagenet en función de la red
           Barplot con hue=layers, x=redes, y=accuracy, data=data[weighs=='imagenet']
--------
-TODO
-------
-10) En model ensambler leer el csv y no la clase DataBreastCancer para poder hacer distintas pruebas
 
 11) FUNCION QUE CREA LA MASCARA DE LAS IMAGENES Y LAS ALMACENA EN LA CARPETA 02_PROCESED\MASK
 
@@ -78,12 +74,67 @@ TODO
             -> LAS MASCARAS SE DEBEN DE LEER DEL CSV Y LINCAR LA PATOLOGÍA CON EL ID (ALERTA CON CAMBIOS DE NOMBRES) Y
                MULTIPLES PATOLOGÍAS PARA UNA MISMA IMAGEN.
             -> LA FUNCIÓN DE CONVERT DEBE DE LEER LAS MASCARAS
+-------
+TODO
+------
+10) En model ensambler leer el csv y no la clase DataBreastCancer para poder hacer distintas pruebas
+11) Implementación background y overlap para parches.
+12) Estratificación de train y val en función del label y de la base de datos
+13) Evitar segregación en train y val de parches de la misma patología con overlap -> Sesgo.
+14) **Aplicación de recorte de parche a partir de la máscara obtenida por el modelo de segmentación.**
+15) Aplicar auto batch-balance.
+16) Aplicar regularización L2 con weight decay.
+17) Revisión DataViz:
+    - Los logs de resultados salen con las métricas giradas.
+    - Unificar extract features y finetunning en la misma gráfica.
+    - Añadir métrica AUC en la tabla de metrics.
+    - **Añadir métricas IoU y dice para los modelos de segmentación.**
+    - Revisar que las visualizaciones son correctas.
+    - Arreglar visualización de data augmentation.
+    - Arreglar visualización de steps de processed imgs.
+18) Procesado de imagenes.
+    - Aplicar Global Contrast Norm como configuración 2 del dataset
+    - Testear crops de rois cuadrados
 
 
 ---------
-  EXTRA
+  TESTS
 ---------
+EJEC_ROI_TEST1:
+    - Modelo previo al refactor de frozen layers (se excluyen bn en train y se añaden capas en algunos modelos).
+    - El data augmentation contenia fill_mode cte con pixeles negros
+    - Se utilizan todos los dataset
+    - El Crop presenta un margen de 1.2, sin tener background y con un único crop por ROI (NO OVERLAP).
+    - En el data augmentation hay funciones como brightness (no tiene sentido al aplicar clahe)
+      y zoom que pueden meter ruido al hacer desaparecer las patologías.
 
+    **RESULTADOS**:
+    - acc train > 80% para modelo Gradient Boosting con all layers en imagenet
+    - acc val   > 70% para modelo Densenet con all layers en imagenet
+
+EJEC_ROI_TEST2:
+    - Se suprime el dataset MIAS del entrenamiento
+    - Se suprime fill mode cte del data augmentation manteniendo brightness y zoom.
+    - Post refactor de frozen layers
+
+EJEC_ROI_TEST3:
+    - Se aumenta el margin de los rois a 1.4.
+
+EJEC_ROI_TEST4:
+    - Se añade tercera fase de entrenamiento para fine-tunning añadiendo un unfroze all con SGD(1e-5) y
+      reducción de learning rate en un factor de 10.
+
+EJEC_ROI_TEST5:
+    - Se añade regularización L2
+
+EJEC_ROI_TEST6:
+    - Añadir data augmentation al set de validacion
+
+EJEC_ROI_TEST7:
+    - Añadir fully connected layers a la salida del baseline.
+
+EJEC_ROI_TEST8:
+    - Añadir imagen del fondo y imagen de ROI con overlap del 90% minimo.
 
 
 
