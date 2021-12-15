@@ -3,11 +3,11 @@ import sys
 import cv2
 
 from typing import io
-from albumentations import HorizontalFlip, VerticalFlip
+from albumentations import HorizontalFlip, VerticalFlip, RandomRotate90, ShiftScaleRotate, Affine
 
 from tensorflow.keras.losses import CategoricalCrossentropy
 from segmentation_models.metrics import IOUScore
-from segmentation_models.losses import DiceLoss
+from segmentation_models.losses import DiceLoss, BinaryFocalLoss
 
 from src.cnns.metrics import f1_score
 from src.utils.functions import get_path
@@ -37,6 +37,14 @@ CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
     'zoom_range': [1, 1.5],
 }
 
+CLASSIFICATION_DATA_AUGMENTATION_FUNCS2: dict = {
+    'horizontal_flip': HorizontalFlip(),
+    'vertical_flip': VerticalFlip(),
+    'rotation_range': RandomRotate90(),
+    'shift_range': ShiftScaleRotate(scale_limit=0, rotate_limit=0, shift_limit=0.1, border_mode=cv2.BORDER_WRAP),
+    'zoom': Affine(scale=[0.7, 1], interpolation=cv2.INTER_LANCZOS4),
+}
+
 SEGMENTATION_DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': HorizontalFlip(),
     'vertical_flip': VerticalFlip(),
@@ -51,7 +59,7 @@ WARM_UP_EPOCHS: int = 30
 WARM_UP_LEARNING_RATE: float = 1e-3
 LEARNING_RATE: float = 1e-4
 
-SEGMENTATION_BATCH_SIZE: int = 12
+SEGMENTATION_BATCH_SIZE: int = 9
 BATCH_SIZE: int = 18
 
 SEED: int = 81
@@ -67,8 +75,8 @@ SEGMENTATION_METRICS = {
     'IoU': IOUScore(),
 }
 
-CLASSIFICATION_LOSS = CategoricalCrossentropy()
-SEGMENTATIO_LOSS = DiceLoss()
+CLASSIFICATION_LOSS = CategoricalCrossentropy() + (1 * BinaryFocalLoss())
+SEGMENTATION_LOSS = DiceLoss()
 
 """
     CONFIGURACION PARA EL GRADIENT BOOSTING
@@ -84,7 +92,7 @@ XGB_COLS = {
 """
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
-IMG_SHAPE: tuple = (352, 192)
+IMG_SHAPE: tuple = (384, 192)
 PATCH_SIZE: int = 300
 
 CROP_CONFIG: str = 'CONF0'

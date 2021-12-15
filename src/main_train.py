@@ -47,14 +47,13 @@ if __name__ == '__main__':
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
     print(f'{"=" * 75}\n\tInicio proceso de segmentación de imagenes.\n{"=" * 75}')
-    for weight_init, frozen_layers in zip([*repeat('imagenet', '5'), ['0FT', '1FT', '2FT', '3FT', '4FT']]):
-
+    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
+                                                                               'ALL']):
         for cnn in [UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model]:
 
             # Se rea el proceso
             p = Process(target=segmentation_training_pipe, args=(cnn, db, model_config, weight_init, frozen_layers),
                         daemon=True)
-
             # Se lanza el proceso
             p.start()
             p.join()

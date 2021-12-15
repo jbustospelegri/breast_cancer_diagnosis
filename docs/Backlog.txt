@@ -112,9 +112,9 @@ EJEC_ROI_TEST1:
     - acc train > 80% para modelo Gradient Boosting con all layers en imagenet
     - acc val   > 70% para modelo Densenet con all layers en imagenet
 
-EJEC_ROI_TEST2:
+EJEC_ROI_TEST2 (FALTA EJECUTAR IMAGENET 3FT/4FT y RANDOM ALL):
     - Se suprime el dataset MIAS del entrenamiento
-    - Se suprime fill mode cte del data augmentation manteniendo brightness y zoom.
+    - Se suprime fill mode cte y función brightness del data augmentation manteniendo zoom.
     - Post refactor de frozen layers
 
 EJEC_ROI_TEST3:
@@ -135,6 +135,21 @@ EJEC_ROI_TEST7:
 
 EJEC_ROI_TEST8:
     - Añadir imagen del fondo y imagen de ROI con overlap del 90% minimo.
+
+EJEC_SEGMENTATION_TEST1:
+    - Parches de tamaño 384, 192 y BS = 9
+
+EJEC_SEGMENTATION_TEST2:
+    - Parches de tamaño 512, 256 y BS = 5
+
+EJEC_SEGMENTATION_TEST3:
+    - Parches de tamaño 1024, 512 y BS = 1
+
+EJEC_SEGMENTATION_TEST4:
+    - Parches de tamaño 448, 224 y BS = 10
+
+
+
 
 
 

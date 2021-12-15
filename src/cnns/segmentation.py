@@ -5,13 +5,13 @@ import segmentation_models as sm
 from tensorflow.keras.layers import BatchNormalization
 
 from cnns.classification import GeneralModel
-from utils.config import SEGMENTATION_METRICS, SEGMENTATIO_LOSS, IMG_SHAPE
+from utils.config import SEGMENTATION_METRICS, SEGMENTATION_LOSS, IMG_SHAPE
 
 
 class UnetGeneralModel(GeneralModel):
 
     __name__ = 'UnetGeneral'
-    loss = SEGMENTATIO_LOSS
+    loss = SEGMENTATION_LOSS
     metrics = list(SEGMENTATION_METRICS.values())
     shape: tuple = IMG_SHAPE
 
