@@ -73,26 +73,29 @@ DONE
     11.1) DATASET CBIS
             -> LAS MASCARAS SE DEBEN DE LEER DEL CSV Y LINCAR LA PATOLOGÍA CON EL ID (ALERTA CON CAMBIOS DE NOMBRES) Y
                MULTIPLES PATOLOGÍAS PARA UNA MISMA IMAGEN.
-            -> LA FUNCIÓN DE CONVERT DEBE DE LEER LAS MASCARAS
+            -> LA FUNCIÓN DE CONVERT DEBE DE LEER LAS MASCARA
+13) Evitar segregación en train y val de parches de la misma patología con overlap -> Sesgo. (DEPRECATED)
+14) **Aplicación de recorte de parche a partir de la máscara obtenida por el modelo de segmentación.** (DEPRECATED)
+11) Implementación background y overlap para parches. (DEPRECATED)
+17) Revisión DataViz:
+        - Los logs de resultados salen con las métricas giradas. (DONE)
+        - Unificar extract features y finetunning en la misma gráfica. (DONE)
+        - **Añadir métricas IoU y dice para los modelos de segmentación.** (DEPRECATED)
+        - Arreglar visualización de data augmentation. (DONE)
+        - Añadir el número de epocas en time executions (DONE)
+
 -------
 TODO
 ------
 10) En model ensambler leer el csv y no la clase DataBreastCancer para poder hacer distintas pruebas
-11) Implementación background y overlap para parches. (DEPRECATED)
-12) Estratificación de train y val en función del label y de la base de datos
-13) Evitar segregación en train y val de parches de la misma patología con overlap -> Sesgo. (DEPRECATED)
-14) **Aplicación de recorte de parche a partir de la máscara obtenida por el modelo de segmentación.** (DEPRECATED)
+11) Realizar deployment
+12) No hacer resize de los crops
 15) Aplicar auto batch-balance.
 16) Aplicar regularización L2 con weight decay.
 17) Revisión DataViz:
-    - Los logs de resultados salen con las métricas giradas. (DONE)
-    - Unificar extract features y finetunning en la misma gráfica.
     - Añadir métrica AUC en la tabla de metrics. (NOT POSIBLE -> PROBS NECESSARY)
-    - **Añadir métricas IoU y dice para los modelos de segmentación.** (DEPRECATED)
     - Revisar que las visualizaciones son correctas.
-    - Arreglar visualización de data augmentation. (DONE)
     - Arreglar visualización de steps de processed imgs.
-    - Añadir el número de epocas en time executions (DONE)
 18) Procesado de imagenes.
     - Aplicar Global Contrast Norm como configuración 2 del dataset
     - Testear crops de rois cuadrados
