@@ -14,6 +14,8 @@ from tensorflow.keras.layers import (
     Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input, BatchNormalization
 )
 
+from segmentation_models import get_preprocessing
+
 from src.utils.functions import get_path, get_number_of_neurons
 from src.utils.config import CLASSIFICATION_LOSS
 
@@ -90,21 +92,19 @@ class GeneralModel:
         Función utilizada para setear layers del modelo como entrenables. Este metodo será sobreescrito por las clases
         heredadas
         """
-        self.baseline.trainable = False
+        self.baseline.trainable = True
 
         if unfrozen_layers == 'ALL':
-            self.baseline.trainable = True
+            pass
 
         elif unfrozen_layers in self.LAYERS_DICT.keys():
             list_keys = sorted(self.LAYERS_DICT.keys(), key=lambda x: int(x[0]))
             train_layers = \
                 [l for layers in list_keys[:list_keys.index(unfrozen_layers) + 1] for l in self.LAYERS_DICT[layers]]
-            for layer in train_layers:
-                try:
-                    assert not isinstance(self.baseline.get_layer(layer), BatchNormalization)
-                    self.baseline.get_layer(layer).trainable = True
-                except AssertionError:
-                    self.baseline.get_layer(layer).trainable = False
+
+            for layer in self.baseline.layers:
+                if layer.name not in train_layers:
+                    layer.trainable = False
 
         else:
             raise ValueError(f'Unfrozen layers parametrization for {unfrozen_layers}')
@@ -208,6 +208,9 @@ class VGG16Model(GeneralModel):
             preprocess_func=vgg16.preprocess_input
         )
 
+    def get_preprocessing_func(self):
+        return get_preprocessing('vgg16')
+
 
 class Resnet50Model(GeneralModel):
 
@@ -217,25 +220,35 @@ class Resnet50Model(GeneralModel):
         '1FT': [
             'conv5_block3_1_conv', 'conv5_block3_2_conv', 'conv5_block3_3_conv', 'conv5_block2_1_conv',
             'conv5_block2_2_conv', 'conv5_block2_3_conv', 'conv5_block1_1_conv', 'conv5_block1_2_conv',
-            'conv5_block1_0_conv', 'conv5_block1_3_conv'
+            'conv5_block1_0_conv', 'conv5_block1_3_conv', 'conv5_block1_1_bn', 'conv5_block1_2_bn',
+            'conv5_block1_0_bn', 'conv5_block1_3_bn', 'conv5_block2_1_bn', 'conv5_block2_2_bn', 'conv5_block2_3_bn',
+            'conv5_block3_1_bn', 'conv5_block3_2_bn', 'conv5_block3_3_bn'
         ],
         '2FT': [
             'conv4_block1_1_conv', 'conv4_block1_2_conv', 'conv4_block1_0_conv', 'conv4_block1_3_conv',
             'conv4_block2_1_conv', 'conv4_block2_2_conv', 'conv4_block2_3_conv', 'conv4_block3_1_conv',
             'conv4_block3_2_conv', 'conv4_block3_3_conv', 'conv4_block4_1_conv', 'conv4_block4_2_conv',
             'conv4_block4_3_conv', 'conv4_block5_1_conv', 'conv4_block5_2_conv', 'conv4_block5_3_conv',
-            'conv4_block6_1_conv', 'conv4_block6_2_conv', 'conv4_block6_3_conv'
+            'conv4_block6_1_conv', 'conv4_block6_2_conv', 'conv4_block6_3_conv', 'conv4_block1_1_bn',
+            'conv4_block1_2_bn', 'conv4_block1_0_bn', 'conv4_block1_3_bn', 'conv4_block2_1_bn', 'conv4_block2_2_bn',
+            'conv4_block2_3_bn', 'conv4_block3_1_bn', 'conv4_block3_2_bn', 'conv4_block3_3_bn', 'conv4_block4_1_bn',
+            'conv4_block4_2_bn', 'conv4_block4_3_bn', 'conv4_block5_1_bn', 'conv4_block5_2_bn', 'conv4_block5_3_bn',
+            'conv4_block6_1_bn', 'conv4_block6_2_bn', 'conv4_block6_3_bn'
         ],
         '3FT': [
             'conv3_block1_1_conv', 'conv3_block1_2_conv', 'conv3_block1_0_conv', 'conv3_block1_3_conv',
             'conv3_block2_1_conv', 'conv3_block2_2_conv', 'conv3_block2_3_conv', 'conv3_block3_1_conv',
             'conv3_block3_2_conv', 'conv3_block3_3_conv', 'conv3_block4_1_conv', 'conv3_block4_2_conv',
-            'conv3_block4_3_conv'
+            'conv3_block4_3_conv', 'conv3_block1_1_bn', 'conv3_block1_2_bn', 'conv3_block1_0_bn', 'conv3_block1_3_bn',
+            'conv3_block2_1_bn', 'conv3_block2_2_bn', 'conv3_block2_3_bn', 'conv3_block3_1_bn', 'conv3_block3_2_bn',
+            'conv3_block3_3_bn', 'conv3_block4_1_bn', 'conv3_block4_2_bn', 'conv3_block4_3_bn'
         ],
         '4FT': [
             'conv2_block1_1_conv', 'conv2_block1_2_conv', 'conv2_block1_0_conv', 'conv2_block1_3_conv',
             'conv2_block2_1_conv', 'conv2_block2_2_conv', 'conv2_block2_3_conv', 'conv2_block3_1_conv',
-            'conv2_block3_2_conv', 'conv2_block3_3_conv'
+            'conv2_block3_2_conv', 'conv2_block3_3_conv', 'conv2_block1_1_bn', 'conv2_block1_2_bn', 'conv2_block1_0_bn',
+            'conv2_block1_3_bn', 'conv2_block2_1_bn', 'conv2_block2_2_bn', 'conv2_block2_3_bn', 'conv2_block3_1_bn',
+            'conv2_block3_2_bn', 'conv2_block3_3_bn'
         ]
     }
     shape = (224, 224, 3)
@@ -246,6 +259,9 @@ class Resnet50Model(GeneralModel):
             preprocess_func=resnet50.preprocess_input
         )
 
+    def get_preprocessing_func(self):
+        return get_preprocessing('resnet50')
+
 
 class InceptionV3Model(GeneralModel):
 
@@ -254,18 +270,26 @@ class InceptionV3Model(GeneralModel):
         '0FT': [],
         '1FT': [
             'conv2d_89', 'conv2d_90', 'conv2d_91', 'conv2d_92', 'conv2d_86', 'conv2d_87', 'conv2d_88', 'conv2d_93',
-            'conv2d_85'
+            'conv2d_85', 'batch_normalization_89', 'batch_normalization_90', 'batch_normalization_91',
+            'batch_normalization_92', 'batch_normalization_86', 'batch_normalization_87', 'batch_normalization_88',
+            'batch_normalization_93', 'batch_normalization_85'
         ],
         '2FT': [
             'conv2d_80', 'conv2d_81', 'conv2d_82', 'conv2d_83', 'conv2d_77', 'conv2d_78', 'conv2d_79', 'conv2d_84',
-            'conv2d_76',
+            'conv2d_76', 'batch_normalization_80', 'batch_normalization_81', 'batch_normalization_82',
+            'batch_normalization_83', 'batch_normalization_77', 'batch_normalization_78', 'batch_normalization_79',
+            'batch_normalization_84', 'batch_normalization_76',
         ],
         '3FT': [
-            'conv2d_72', 'conv2d_73', 'conv2d_74', 'conv2d_75', 'conv2d_70', 'conv2d_71'
+            'conv2d_72', 'conv2d_73', 'conv2d_74', 'conv2d_75', 'conv2d_70', 'conv2d_71', 'batch_normalization_72',
+            'batch_normalization_73', 'batch_normalization_74', 'batch_normalization_75', 'batch_normalization_70',
+            'batch_normalization_71'
         ],
         '4FT': [
             'conv2d_64', 'conv2d_65', 'conv2d_66', 'conv2d_67', 'conv2d_68', 'conv2d_61', 'conv2d_62', 'conv2d_63',
-            'conv2d_69', 'conv2d_60',
+            'conv2d_69', 'conv2d_60', 'batch_normalization_64', 'batch_normalization_65', 'batch_normalization_66',
+            'batch_normalization_67', 'batch_normalization_68', 'batch_normalization_61', 'batch_normalization_62',
+            'batch_normalization_63', 'batch_normalization_69', 'batch_normalization_60',
         ]
     }
     shape = (299, 299, 3)
@@ -274,6 +298,9 @@ class InceptionV3Model(GeneralModel):
         super(InceptionV3Model, self).__init__(
             n=n, baseline=inception_v3.InceptionV3(include_top=False, weights=weights, input_shape=self.shape),
             preprocess_func=inception_v3.preprocess_input)
+
+    def get_preprocessing_func(self):
+        return get_preprocessing('inceptionv3')
 
 
 class DenseNetModel(GeneralModel):
@@ -289,7 +316,14 @@ class DenseNetModel(GeneralModel):
             'conv5_block9_1_conv', 'conv5_block9_2_conv', 'conv5_block10_1_conv', 'conv5_block10_2_conv',
             'conv5_block11_1_conv', 'conv5_block11_2_conv', 'conv5_block12_1_conv', 'conv5_block12_2_conv',
             'conv5_block13_1_conv', 'conv5_block13_2_conv', 'conv5_block14_1_conv', 'conv5_block14_2_conv',
-            'conv5_block15_1_conv', 'conv5_block15_2_conv', 'conv5_block16_1_conv', 'conv5_block16_2_conv'
+            'conv5_block15_1_conv', 'conv5_block15_2_conv', 'conv5_block16_1_conv', 'conv5_block16_2_conv',
+            'conv5_block1_0_bn', 'conv5_block1_1_bn', 'conv5_block2_0_bn', 'conv5_block2_1_bn', 'conv5_block3_0_bn',
+            'conv5_block3_1_bn', 'conv5_block4_0_bn', 'conv5_block4_1_bn', 'conv5_block5_0_bn', 'conv5_block5_1_bn',
+            'conv5_block6_0_bn', 'conv5_block6_1_bn', 'conv5_block7_0_bn', 'conv5_block7_1_bn', 'conv5_block8_0_bn',
+            'conv5_block8_1_bn', 'conv5_block9_0_bn', 'conv5_block9_1_bn', 'conv5_block10_0_bn', 'conv5_block10_1_bn',
+            'conv5_block11_0_bn', 'conv5_block11_1_bn', 'conv5_block12_0_bn', 'conv5_block12_1_bn',
+            'conv5_block13_0_bn', 'conv5_block13_1_bn', 'conv5_block14_0_bn', 'conv5_block14_1_bn',
+            'conv5_block15_0_bn', 'conv5_block15_1_bn', 'conv5_block16_0_bn', 'conv5_block16_1_bn', 'bn'
         ],
         '2FT': [
             'conv4_block1_1_conv', 'conv4_block1_2_conv', 'conv4_block2_1_conv', 'conv4_block2_2_conv',
@@ -303,7 +337,18 @@ class DenseNetModel(GeneralModel):
             'conv4_block17_1_conv', 'conv4_block17_2_conv', 'conv4_block18_1_conv', 'conv4_block18_2_conv',
             'conv4_block19_1_conv', 'conv4_block19_2_conv', 'conv4_block20_1_conv', 'conv4_block20_2_conv',
             'conv4_block21_1_conv', 'conv4_block21_2_conv', 'conv4_block22_1_conv', 'conv4_block22_2_conv',
-            'conv4_block23_1_conv', 'conv4_block23_2_conv', 'conv4_block24_1_conv', 'conv4_block24_2_conv'
+            'conv4_block23_1_conv', 'conv4_block23_2_conv', 'conv4_block24_1_conv', 'conv4_block24_2_conv',
+            'conv4_block1_0_bn', 'conv4_block1_1_bn', 'conv4_block2_0_bn', 'conv4_block2_1_bn', 'conv4_block3_0_bn',
+            'conv4_block3_1_bn', 'conv4_block4_0_bn', 'conv4_block4_1_bn', 'conv4_block5_0_bn', 'conv4_block5_1_bn',
+            'conv4_block6_0_bn', 'conv4_block6_1_bn', 'conv4_block7_0_bn', 'conv4_block7_1_bn', 'conv4_block8_0_bn',
+            'conv4_block8_1_bn', 'conv4_block9_0_bn', 'conv4_block9_1_bn', 'conv4_block10_0_bn', 'conv4_block10_1_bn',
+            'conv4_block11_0_bn', 'conv4_block11_1_bn', 'conv4_block12_0_bn', 'conv4_block12_1_bn',
+            'conv4_block13_0_bn', 'conv4_block13_1_bn', 'conv4_block14_0_bn', 'conv4_block14_1_bn',
+            'conv4_block15_0_bn', 'conv4_block15_1_bn', 'conv4_block16_0_bn', 'conv4_block16_1_bn',
+            'conv4_block17_0_bn', 'conv4_block17_1_bn', 'conv4_block18_0_bn', 'conv4_block18_1_bn',
+            'conv4_block19_0_bn', 'conv4_block19_1_bn', 'conv4_block20_0_bn', 'conv4_block20_1_bn',
+            'conv4_block21_0_bn', 'conv4_block21_1_bn', 'conv4_block22_0_bn', 'conv4_block22_1_bn',
+            'conv4_block23_0_bn', 'conv4_block23_1_bn', 'conv4_block24_0_bn', 'conv4_block24_1_bn'
         ],
         '3FT': [
             'conv3_block1_1_conv', 'conv3_block1_2_conv', 'conv3_block2_1_conv', 'conv3_block2_2_conv',
@@ -311,12 +356,20 @@ class DenseNetModel(GeneralModel):
             'conv3_block5_1_conv', 'conv3_block5_2_conv', 'conv3_block6_1_conv', 'conv3_block6_2_conv',
             'conv3_block7_1_conv', 'conv3_block7_2_conv', 'conv3_block8_1_conv', 'conv3_block8_2_conv',
             'conv3_block9_1_conv', 'conv3_block9_2_conv', 'conv3_block10_1_conv', 'conv3_block10_2_conv',
-            'conv3_block11_1_conv', 'conv3_block11_2_conv', 'conv3_block12_1_conv', 'conv3_block12_2_conv'
+            'conv3_block11_1_conv', 'conv3_block11_2_conv', 'conv3_block12_1_conv', 'conv3_block12_2_conv',
+            'conv3_block1_0_bn', 'conv3_block1_1_bn', 'conv3_block2_0_bn', 'conv3_block2_1_bn', 'conv3_block3_0_bn',
+            'conv3_block3_1_bn', 'conv3_block4_0_bn', 'conv3_block4_1_bn', 'conv3_block5_0_bn', 'conv3_block5_1_bn',
+            'conv3_block6_0_bn', 'conv3_block6_1_bn', 'conv3_block7_0_bn', 'conv3_block7_1_bn', 'conv3_block8_0_bn',
+            'conv3_block8_1_bn', 'conv3_block9_0_bn', 'conv3_block9_1_bn', 'conv3_block10_0_bn', 'conv3_block10_1_bn',
+            'conv3_block11_0_bn', 'conv3_block11_1_bn', 'conv3_block12_0_bn', 'conv3_block12_1_bn'
         ],
         '4FT': [
             'conv2_block1_1_conv', 'conv2_block1_2_conv', 'conv2_block2_1_conv', 'conv2_block2_2_conv',
             'conv2_block3_1_conv', 'conv2_block3_2_conv', 'conv2_block4_1_conv', 'conv2_block4_2_conv',
-            'conv2_block5_1_conv', 'conv2_block5_2_conv', 'conv2_block6_1_conv', 'conv2_block6_2_conv'
+            'conv2_block5_1_conv', 'conv2_block5_2_conv', 'conv2_block6_1_conv', 'conv2_block6_2_conv',
+            'conv2_block1_0_bn', 'conv2_block1_1_bn', 'conv2_block2_0_bn', 'conv2_block2_1_bn', 'conv2_block3_0_bn',
+            'conv2_block3_1_bn', 'conv2_block4_0_bn', 'conv2_block4_1_bn', 'conv2_block5_0_bn', 'conv2_block5_1_bn',
+            'conv2_block6_0_bn', 'conv2_block6_1_bn'
         ]
     }
 
@@ -325,3 +378,6 @@ class DenseNetModel(GeneralModel):
             n=n, baseline=densenet.DenseNet121(include_top=False, weights=weights, input_shape=self.shape),
             preprocess_func=densenet.preprocess_input
         )
+
+    def get_preprocessing_func(self):
+        return get_preprocessing('densenet121')

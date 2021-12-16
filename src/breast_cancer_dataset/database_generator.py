@@ -6,18 +6,19 @@ import cv2
 import pandas as pd
 import numpy as np
 
-from typing import Callable
+from typing import Callable, io
 from albumentations import Lambda, Compose
-from tensorflow.keras.preprocessing.image import ImageDataGenerator, Iterator
+from tensorflow import cast, float32
+from tensorflow.keras.preprocessing.image import Iterator
 from sklearn.model_selection import train_test_split
 
-from breast_cancer_dataset.base import Dataset, Dataloder
+from breast_cancer_dataset.base import SegmentationDataset, Dataloder, ClassificationDataset
 from src.breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from src.breast_cancer_dataset.databases.inbreast import DatasetINBreast, DatasetINBreastCrop
 from src.breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
 from src.utils.config import (
     MODEL_FILES, SEED, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS,
-    PREPROCESSING_CONFIG, EXPERIMENT, IMG_SHAPE, SEGMENTATION_DATA_AUGMENTATION_FUNCS, PATCH_SIZE
+    PREPROCESSING_CONFIG, IMG_SHAPE, SEGMENTATION_DATA_AUGMENTATION_FUNCS, PATCH_SIZE
 )
 from src.preprocessing.image_processing import resize_img
 
@@ -29,14 +30,22 @@ class BreastCancerDataset:
             'PATCHES': [DatasetCBISDDSMCrop , DatasetINBreastCrop]
         }
 
-    def __init__(self, get_class: bool = True, split_data: bool = True, excel_path: str = ''):
+    def __init__(self, img_type: str, task_type: str, get_class: bool = True, split_data: bool = True, xlsx_io: io = ''):
 
-        if not os.path.isfile(excel_path):
+        if img_type not in list(self.DBS.keys()):
+            raise ValueError(f'img_type param {img_type} not implemented')
+        if task_type not in ['classification', 'segmentation']:
+            raise ValueError(f'task_type param {task_type} not implemented')
+
+        self.img_type = img_type
+        self.task_type = task_type
+
+        if not os.path.isfile(xlsx_io):
             self.df = self.get_data_from_databases()
             self.split_dataset(train_prop=TRAIN_DATA_PROP if split_data else 1, stratify=True)
             self.bulk_data_desc_to_files(df=self.df)
         else:
-            self.df = pd.read_excel(excel_path, dtype=object, index_col=None)
+            self.df = pd.read_excel(xlsx_io, dtype=object, index_col=None)
 
         if get_class:
             self.class_dict = {x: l for x, l in enumerate(self.df.IMG_LABEL.unique())}
@@ -46,7 +55,7 @@ class BreastCancerDataset:
     def get_data_from_databases(self) -> pd.DataFrame:
 
         df_list = []
-        for database in self.DBS[EXPERIMENT]:
+        for database in self.DBS[self.img_type]:
 
             # Se inicializa la base de datos
             db = database()
@@ -57,7 +66,13 @@ class BreastCancerDataset:
 
         return pd.concat(objs=df_list, ignore_index=True)
 
-    def get_dataset_generator(self, batch_size: int, callback: Callable, size: tuple = PATCH_SIZE) -> \
+    def get_dataset_generator(self, **kwargs):
+        if self.task_type == 'classification':
+            return self.get_classification_dataset_generator(**kwargs)
+        else:
+            return self.get_segmentation_dataset_generator(**kwargs)
+
+    def get_classification_dataset_generator(self, batch_size: int, callback: Callable, size: tuple = PATCH_SIZE) -> \
             (Iterator, Iterator):
         """
 
@@ -78,46 +93,51 @@ class BreastCancerDataset:
         # representada por la columna 'img_label'. Para ajustar el tamaño de la imagen al tamaño definido por el
         # usuario mediante input, se utilizará la técnica de interpolación lanzcos. Por otra parte, para generar una
         # salida one hot encoding en función de la clase de cada muestra, se parametriza class_mode como 'categorical'.
-        params = dict(
-            x_col='PROCESSED_IMG',
-            y_col='IMG_LABEL',
-            target_size=size,
-            interpolation='lanczos',
-            shufle=True,
-            seed=SEED,
-            batch_size=batch_size,
-            class_mode='categorical',
-            directory=None,
-        )
+        train_augmentations = Compose([
+            *list(CLASSIFICATION_DATA_AUGMENTATION_FUNCS.values()),
+            Lambda(
+                image=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_LANCZOS4),
+                name='image resizing'
+            ),
+            Lambda(image=lambda x, **kwargs: cast(x, float32), name='floating point conversion'),
+            Lambda(image=callback, name='cnn processing function')
+        ])
 
-        # Parametrización del generador de entrenamiento. Las imagenes de entrenamiento recibirán un conjunto de
-        # modificaciones aleatorias con el objetivo de aumentar el set de datos de entrenamiento y evitar de esta forma
-        # el over fitting.
-        train_datagen = ImageDataGenerator(**CLASSIFICATION_DATA_AUGMENTATION_FUNCS, preprocessing_function=callback)
-
-        # Parametrización del generador de validación. Las imagenes de validación exclusivamente se les aplicará la
-        # técnica de preprocesado subministrada por el usuario.
-        val_datagen = ImageDataGenerator(preprocessing_function=callback)
+        val_augmentations = Compose([
+            Lambda(
+                image=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_LANCZOS4),
+                name='image resizing'
+            ),
+            Lambda(image=lambda x, **kwargs: cast(x, float32), name='floating point conversion'),
+            Lambda(image=callback, name='cnn processing function')
+        ])
 
         # Para evitar entrecruzamientos de imagenes entre train y validación a partir del atributo shuffle=True, cada
         # generador se aplicará sobre una muestra disjunta del set de datos representada mediante la columna dataset.
-        dataset = self.df.drop_duplicates(subset=['PROCESSED_IMG', 'IMG_LABEL'])
 
         # Se chequea que existen observaciones de entrenamiento para poder crear el dataframeiterator.
-        if len(dataset[dataset.TRAIN_VAL == 'train']) == 0:
-            train_df_iter = None
+        if len(self.df[self.df.TRAIN_VAL == 'train']) == 0:
+            train_dataloader = None
             logging.warning('No existen registros para generar un generador de train. Se retornará None')
         else:
-            train_df_iter = train_datagen.flow_from_dataframe(dataframe=dataset[dataset.TRAIN_VAL == 'train'], **params)
+            # Dataset for train images
+            train_df = ClassificationDataset(
+                self.df[self.df.TRAIN_VAL == 'train'], 'PROCESSED_IMG', 'IMG_LABEL', train_augmentations
+            )
+            train_dataloader = Dataloder(train_df, batch_size=batch_size, shuffle=True, seed=SEED)
 
         # Se chequea que existen observaciones de validación para poder crear el dataframeiterator.
-        if len(dataset[dataset.TRAIN_VAL == 'val']) == 0:
-            val_df_iter = None
+        if len(self.df[self.df.TRAIN_VAL == 'val']) == 0:
+            valid_dataloader = None
             logging.warning('No existen registros para generar un generador de validación. Se retornará None')
         else:
-            val_df_iter = val_datagen.flow_from_dataframe(dataframe=dataset[dataset.TRAIN_VAL == 'val'], **params)
+            # Dataset for validation images
+            val_df = ClassificationDataset(
+                self.df[self.df.TRAIN_VAL == 'val'], 'PROCESSED_IMG', 'IMG_LABEL', val_augmentations
+            )
+            valid_dataloader = Dataloder(val_df, batch_size=batch_size, shuffle=True, seed=SEED)
 
-        return train_df_iter, val_df_iter
+        return train_dataloader, valid_dataloader
 
     def get_segmentation_dataset_generator(self, batch_size: int, callback: Callable, size: tuple = IMG_SHAPE) \
             -> (Iterator, Iterator):
@@ -141,24 +161,32 @@ class BreastCancerDataset:
         # usuario mediante input, se utilizará la técnica de interpolación lanzcos. Por otra parte, para generar una
         # salida one hot encoding en función de la clase de cada muestra, se parametriza class_mode como 'categorical'.
 
-        train_aug = Compose([
+        train_augmentations = Compose([
             *list(SEGMENTATION_DATA_AUGMENTATION_FUNCS.values()),
             Lambda(
                 image=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_LANCZOS4),
-                mask=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_NEAREST),
                 name='image resizing'
             ),
+            Lambda(
+                mask=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_NEAREST),
+                name='mask resizing'
+            ),
             Lambda(mask=lambda x, **kwargs: np.float32(x.round().clip(0, 1)), name='normalize mask'),
+            Lambda(image=lambda x, **kwargs: cast(x, float32), name='image floating point conversion'),
             Lambda(image=callback, name='cnn processing function')
         ])
 
-        val_aug = Compose([
+        val_augmentations = Compose([
             Lambda(
                 image=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_LANCZOS4),
+                name='image resizing'
+            ),
+            Lambda(
                 mask=lambda x, **kgs: resize_img(x, height=size[0], width=size[1], interpolation=cv2.INTER_NEAREST),
-                name='image resizing',
+                name='mask resizing'
             ),
             Lambda(mask=lambda x, **kwargs: np.float32(x.round().clip(0, 1)), name='normalize mask'),
+            Lambda(image=lambda x, **kwargs: cast(x, float32), name='image floating point conversion'),
             Lambda(image=callback, name='cnn processing function')
         ])
 
@@ -171,7 +199,9 @@ class BreastCancerDataset:
             logging.warning('No existen registros para generar un generador de train. Se retornará None')
         else:
             # Dataset for train images
-            train_df = Dataset(self.df[self.df.TRAIN_VAL == 'train'], 'PROCESSED_IMG', 'PROCESSED_MASK', train_aug)
+            train_df = SegmentationDataset(
+                self.df[self.df.TRAIN_VAL == 'train'], 'PROCESSED_IMG', 'PROCESSED_MASK', train_augmentations
+            )
             train_dataloader = Dataloder(train_df, batch_size=batch_size, shuffle=True, seed=SEED)
 
         # Se chequea que existen observaciones de validación para poder crear el dataframeiterator.
@@ -180,7 +210,9 @@ class BreastCancerDataset:
             logging.warning('No existen registros para generar un generador de validación. Se retornará None')
         else:
             # Dataset for validation images
-            val_df = Dataset(self.df[self.df.TRAIN_VAL == 'val'], 'PROCESSED_IMG', 'PROCESSED_MASK', val_aug)
+            val_df = SegmentationDataset(
+                self.df[self.df.TRAIN_VAL == 'val'], 'PROCESSED_IMG', 'PROCESSED_MASK', val_augmentations
+            )
             valid_dataloader = Dataloder(val_df, batch_size=batch_size, shuffle=True, seed=SEED)
 
         return train_dataloader, valid_dataloader

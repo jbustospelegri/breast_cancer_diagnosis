@@ -1,4 +1,6 @@
 import os
+import warnings
+
 import tqdm
 import cv2
 
@@ -79,7 +81,7 @@ class GeneralDataBase:
 
         return df_def
 
-    def add_img_files(self, df: pd.DataFrame) -> None:
+    def add_img_files(self, df: pd.DataFrame) -> pd.DataFrame:
 
         # Se crea la clumna PROCESSED_IMG en la que se volcarán las imagenes preprocesadas
         df.loc[:, 'PROCESSED_IMG'] = df.apply(
@@ -254,14 +256,14 @@ class GeneralDataBase:
         self.delete_observations()
 
 
-class Dataset:
+class SegmentationDataset:
 
     def __init__(self, df: pd.DataFrame, img_col: str, mask_col: str, augmentation: Compose = None):
 
         assert img_col in df.columns, f'{img_col} not in df'
         assert mask_col in df.columns, f'{mask_col} not in df'
 
-        self.df = df
+        self.df = self._filter_valid_filepaths(df.copy(), img_col)
         self.img_col = img_col
         self.mask_col = mask_col
         self.augmentation = augmentation
@@ -282,6 +284,115 @@ class Dataset:
     def __len__(self):
         return len(self.df)
 
+    def _filter_valid_filepaths(self, df, x_col):
+        """Keep only dataframe rows with valid filenames
+
+        # Arguments
+            df: Pandas dataframe containing filenames in a column
+            x_col: string, column in `df` that contains the filenames or filepaths
+
+        # Returns
+            absolute paths to image files
+        """
+
+        mask = df[x_col].apply(lambda x: os.path.isfile(x))
+        n_invalid = (~mask).sum()
+        if n_invalid:
+            warnings.warn(
+                'Found {} invalid image filename(s) in x_col="{}". '
+                'These filename(s) will be ignored.'
+                .format(n_invalid, x_col)
+            )
+        return df[mask]
+
+
+class ClassificationDataset:
+
+    def __init__(self, df: pd.DataFrame, x_col: str, y_col: str = None, augmentation: Compose = None,
+                 class_mode: str = 'categorical', classes: list = None):
+
+        assert x_col in df.columns, f'{x_col} not in df'
+
+        self.df = self._filter_valid_filepaths(df.copy(), x_col)
+        self.x_col = x_col
+        self.augmentation = augmentation
+        self.filenames = self.df[x_col].values.tolist()
+
+        if class_mode not in ['categorical', 'binary', 'sparse']:
+            raise NotImplementedError(
+                f'{class_mode} not implemented. Available class_mode params: categorical, binary, sparse'
+            )
+
+        if y_col:
+            assert y_col in df.columns, f'{y_col} not in df'
+
+            if (class_mode == 'binary') & (df[y_col].nunique() > 2):
+                raise ValueError(f'Incorrect number of classes for binary mode')
+
+            if classes is None:
+                classes = sorted(df[y_col].unique().tolist())
+
+            self.y_col = y_col
+            self.class_indices = {lbl: indx for indx, lbl in enumerate(classes)}
+            self.classes = self.df[y_col].values.tolist()
+            self.class_list = classes
+            self.class_mode = class_mode
+
+            self.get_class()
+        else:
+            self.y_col = None
+            self.class_indices = None
+            self.classes = None
+            self.class_list = None
+            self.class_mode = None
+
+    def get_class(self):
+        if self.class_mode == 'binary' or self.class_mode == 'sparse':
+            self.df.loc[:, self.y_col] = self.df[self.y_col].map(self.class_indices).astype(np.float32)
+        elif self.class_mode == 'categorical':
+            self.df.loc[:, self.y_col] = \
+                pd.get_dummies(self.df, columns=[self.y_col], dtype=np.float32, prefix='dummy_') \
+                    [[f'dummy__{c}' for c in self.class_list]].apply(lambda x: list(x), axis=1)
+
+    def __getitem__(self, i):
+
+        # read data
+        image = cv2.cvtColor(cv2.imread(self.df.iloc[i][self.x_col]), cv2.COLOR_BGR2RGB)
+
+        # apply augmentations
+        if self.augmentation:
+            sample = self.augmentation(image=image)
+            image = sample['image']
+
+        if self.y_col:
+            return image, np.float32(self.df.iloc[i][self.y_col])
+        else:
+            return image
+
+    def __len__(self):
+        return len(self.df)
+
+    def _filter_valid_filepaths(self, df, x_col):
+        """Keep only dataframe rows with valid filenames
+
+        # Arguments
+            df: Pandas dataframe containing filenames in a column
+            x_col: string, column in `df` that contains the filenames or filepaths
+
+        # Returns
+            absolute paths to image files
+        """
+
+        mask = df[x_col].apply(lambda x: os.path.isfile(x))
+        n_invalid = (~mask).sum()
+        if n_invalid:
+            warnings.warn(
+                'Found {} invalid image filename(s) in x_col="{}". '
+                'These filename(s) will be ignored.'
+                .format(n_invalid, x_col)
+            )
+        return df[mask]
+
 
 class Dataloder(Sequence):
     """Load data from dataset and form batches
@@ -294,9 +405,15 @@ class Dataloder(Sequence):
 
     def __init__(self, dataset, batch_size=1, shuffle=False, seed=0):
         self.dataset = dataset
+        self.filenames = dataset.filenames
+        self.class_indices = dataset.class_indices
+        self.indexes = np.arange(len(dataset))
+
+        if dataset.classes:
+            self.classes = dataset.classes
+
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.indexes = np.arange(len(dataset))
         self.seed = seed
 
         self.on_epoch_end()
@@ -306,7 +423,7 @@ class Dataloder(Sequence):
         # collect batch data
         data = []
         for j in range(i * self.batch_size, (i + 1) * self.batch_size):
-            data.append(self.dataset[j])
+            data.append(self.dataset[self.indexes[j]])
 
         # transpose list of lists
         batch = [np.stack(samples, axis=0) for samples in zip(*data)]
@@ -321,3 +438,6 @@ class Dataloder(Sequence):
         """Callback function to shuffle indexes each epoch"""
         if self.shuffle:
             self.indexes = np.random.RandomState(seed=self.seed).permutation(self.indexes)
+
+    def set_batch_size(self, batch_size):
+        self.batch_size = batch_size
