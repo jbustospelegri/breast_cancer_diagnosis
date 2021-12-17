@@ -27,7 +27,7 @@ class BreastCancerDataset:
 
     DBS = {
             'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetINBreast],
-            'PATCHES': [DatasetCBISDDSMCrop , DatasetINBreastCrop]
+            'PATCHES': [DatasetCBISDDSMCrop, DatasetINBreastCrop]
         }
 
     def __init__(self, img_type: str, task_type: str, get_class: bool = True, split_data: bool = True, xlsx_io: io = ''):

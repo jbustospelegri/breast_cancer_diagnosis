@@ -29,7 +29,7 @@ if __name__ == '__main__':
     # Los valores disponibles son PATCHES, COMPLETE_IMAGE
     experiment = 'PATCHES'
     # Nombre del experimento
-    experiment_name = 'EJEC_ROI_TEST2'
+    experiment_name = 'EJEC_ROI_TEST2_1'
 
     available_models = {
         'classification': [DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model],
@@ -57,10 +57,9 @@ if __name__ == '__main__':
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
-    # for weight_init, frozen_layers in zip(['random', *repeat('imagenet', 6)], ['2FT', '0FT', '1FT', '2FT', '3FT', '4FT',
-    #                                                                            'ALL']):
+    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
+                                                                               'ALL']):
 
-    for weight_init, frozen_layers in zip(['imagenet'], ['2FT']):
         for cnn in available_models[task_type]:
             q = Queue()
 

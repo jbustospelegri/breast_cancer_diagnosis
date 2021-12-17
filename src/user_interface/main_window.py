@@ -175,21 +175,3 @@ class MainWindow(QWidget):
             self.label_info_process.hide()
             self.progress_bar.hide()
 
-    @staticmethod
-    def pipeline(excel_filepath: io, signal_information: SignalProgressBar, signal_error: SignalError,
-                 signal_complete: SignalCompleted):
-        info = ''
-        try:
-            info = f'Reading excel {excel_filepath}'
-            signal_information.emit_update_label_and_progress_bar(0, info)
-            from time import sleep
-            sleep(3)
-            signal_information.emit_update_label_and_progress_bar(25, 'jeje')
-            sleep(3)
-            signal_information.emit_update_label_and_progress_bar(50, 'shaito')
-            sleep(3)
-            signal_information.emit_update_label_and_progress_bar(75, 'bye')
-        except Exception as err:
-            signal_error.emit_error(__name__, info, err)
-        else:
-            signal_complete.finish_process()
