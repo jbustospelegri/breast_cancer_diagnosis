@@ -35,7 +35,10 @@ def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFra
              definidas por kwargs.
     """
 
-    class_labels = {v: i for i, v in data.class_indices.items()}
+    if data.class_indices:
+        class_labels = {v: i for i, v in data.class_indices.items()}
+    else:
+        class_labels = {0: 'BENIGN', 1: 'MALIGNANT'}
 
     # Se genera un orden aleatorio del datagenerator
     data.on_epoch_end()

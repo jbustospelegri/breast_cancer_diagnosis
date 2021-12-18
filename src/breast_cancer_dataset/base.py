@@ -426,7 +426,10 @@ class Dataloder(Sequence):
             data.append(self.dataset[self.indexes[j]])
 
         # transpose list of lists
-        batch = [np.stack(samples, axis=0) for samples in zip(*data)]
+        if self.dataset.y_col:
+            batch = [np.stack(samples, axis=0) for samples in zip(*data)]
+        else:
+            batch = [np.stack(samples, axis=0) for samples in zip(data)]
 
         return batch
 

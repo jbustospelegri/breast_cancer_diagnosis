@@ -1,4 +1,6 @@
 import os
+import sys
+
 import pydicom
 import numpy as np
 
@@ -20,6 +22,8 @@ def convert_img(args) -> None:
     """
     try:
         # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
+        error_path: io = get_value_from_args_if_exists(args, 3, LOGGING_DATA_PATH, IndexError, KeyError)
+
         if not (len(args) >= 2):
             raise ValueError('Not enough arguments for convert_dcm_img function. Minimum required arguments: 3')
 
@@ -44,11 +48,12 @@ def convert_img(args) -> None:
             raise KeyError(f'Conversion function for {os.path.splitext(img_path)} not implemented')
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Assertions).txt'), 'a') as f:
-            f.write(f'{"=" * 100}\nAssertion Error in convert_img\n{err}\n{"=" * 100}')
+        if not getattr(sys, 'frozen', False):
+            with open(get_path(error_path, f'Conversion Errors (Assertions).txt'), 'a') as f:
+                f.write(f'{"=" * 100}\nAssertion Error in convert_img\n{err}\n{"=" * 100}')
 
     except Exception as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+        with open(get_path(error_path, f'Conversion Errors.txt'), 'a') as f:
             f.write(f'{"=" * 100}\n{get_filename(img_path)}\n{err}\n{"=" * 100}')
 
 
@@ -84,35 +89,21 @@ def convert_dcm_imgs(ori_path: io, dest_path: io, filter_binary: bool) -> None:
         # Se almacena la imagen
         Image.fromarray(final_image).save(dest_path)
 
-    except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Assertions).txt'), 'a') as f:
-            f.write(f'{"=" * 100}\nAssertion Error in convert_dcm_imgs\n{err}\n{"=" * 100}')
-
-    except Exception as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
-            f.write(f'{"=" * 100}\n{get_filename(ori_path)}\n{err}\n{"=" * 100}')
+    except AssertionError:
+        pass
 
 
 def convert_pgm_imgs(ori_path: io, dest_path: io) -> None:
     """
     Función encargada de leer imagenes en formato pgm y convertirlas al formato especificado por el usuario.
     """
-    try:
-        # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
-        if os.path.splitext(dest_path)[1] not in ['.png', '.jpg']:
-            raise ValueError('Conversion only available for: png, jpg')
+    # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
+    if os.path.splitext(dest_path)[1] not in ['.png', '.jpg']:
+        raise ValueError('Conversion only available for: png, jpg')
 
-        # se crea el directorio y sus subdirectorios en caso de no existir
-        Path(get_dirname(dest_path)).mkdir(parents=True, exist_ok=True)
+    # se crea el directorio y sus subdirectorios en caso de no existir
+    Path(get_dirname(dest_path)).mkdir(parents=True, exist_ok=True)
 
-        # Se lee la información de las imagenes en formato pgm y se almacena en el formato deseado
-        img = Image.open(ori_path)
-        img.save(dest_path)
-
-    except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Assertions).txt'), 'a') as f:
-            f.write(f'{"=" * 100}\nAssertion Error in convert_pgm_imgs\n{err}\n{"=" * 100}')
-
-    except Exception as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
-            f.write(f'{"=" * 100}\n{get_filename(ori_path)}\n{err}\n{"=" * 100}')
+    # Se lee la información de las imagenes en formato pgm y se almacena en el formato deseado
+    img = Image.open(ori_path)
+    img.save(dest_path)

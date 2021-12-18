@@ -7,18 +7,28 @@ from PyQt5.QtWidgets import QMessageBox
 
 class SignalError(QObject):
 
-    signal = pyqtSignal(str, str, object)
+    signal = pyqtSignal(str, str, object, bool)
 
     def __init__(self):
         super(QObject, self).__init__()
 
-    def emit_error(self, error_module, error_hint, traceback):
-        self.signal.emit(error_module, error_hint, traceback)
+    def emit_error(self, error_module, error_hint, traceback, stop_exec):
+        self.signal.emit(error_module, error_hint, traceback, stop_exec)
 
     @pyqtSlot(str, str, object)
     def write_error(self, error_module, error_hint, traceback):
         print(error_module, error_hint, traceback)
 
+
+class SignalLogging(QObject):
+
+    signal = pyqtSignal(str)
+
+    def __init__(self):
+        super(SignalLogging, self).__init__()
+
+    def log(self, log_msg):
+        self.signal.emit(log_msg)
 
 class SignalCompleted(QObject):
 

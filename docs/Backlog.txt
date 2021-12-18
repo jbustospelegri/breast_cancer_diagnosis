@@ -116,16 +116,17 @@ EJEC_ROI_TEST1:
     - acc train > 80% para modelo Gradient Boosting con all layers en imagenet
     - acc val   > 70% para modelo Densenet con all layers en imagenet
 
-EJEC_ROI_TEST2 (FALTA EJECUTAR IMAGENET 3FT/4FT y RANDOM ALL):
+EJEC_ROI_TEST2
     - Se suprime el dataset MIAS del entrenamiento
     - Se suprime fill mode cte y función brightness del data augmentation manteniendo zoom.
+    - Se corrige la función de transformación prévia al paso de preprocesado de cada red (cast a float 32).
     - Post refactor de frozen layers
 
-EJEC_ROI_TEST2_1
-    - IDEM TEST 2 CON ALBUMENTATIONS
-
 EJEC_ROI_TEST3:
-    - Se aumenta el margin de los rois a 1.4.
+    - Añadir fully connected layers a la salida del baseline.
+
+EJEC_ROI_TEST4:
+    - El resize se hace una única vez y no dos (image preprocessing + data augmentation).
 
 EJEC_ROI_TEST4:
     - Se añade tercera fase de entrenamiento para fine-tunning añadiendo un unfroze all con SGD(1e-5) y
@@ -135,14 +136,13 @@ EJEC_ROI_TEST5:
     - Se añade regularización L2
 
 EJEC_ROI_TEST6:
-    - Añadir data augmentation al set de validacion
+    - Se aumenta el margin de los rois a 1.4.
 
 EJEC_ROI_TEST7:
-    - Añadir fully connected layers a la salida del baseline.
+    - Añadir data augmentation al set de validacion
 
-EJEC_ROI_TEST8:
-    - Añadir imagen del fondo y imagen de ROI con overlap del 90% minimo.
 
+---- EXPERIMENTOS DEPRECATED ----
 EJEC_SEGMENTATION_TEST1: (DEPRECATED)
     - Parches de tamaño 384, 192 y BS = 9
 

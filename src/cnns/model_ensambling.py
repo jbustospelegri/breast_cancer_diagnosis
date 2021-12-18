@@ -9,6 +9,7 @@ from tensorflow.keras.preprocessing.image import Iterator
 from sklearn.ensemble import GradientBoostingClassifier
 from typing import io
 
+from breast_cancer_dataset.base import Dataloder
 from src.utils.config import SEED, XGB_COLS, XGB_CONFIG, N_ESTIMATORS, MAX_DEPTH, MODEL_FILES
 from src.utils.functions import get_path, bulk_data, search_files, get_filename
 
@@ -17,12 +18,17 @@ class GradientBoosting:
 
     __name__ = 'GradientBoosting'
 
-    def __init__(self, db: pd.DataFrame = None):
+    def __init__(self, db: pd.DataFrame = None, model_path: io = None):
         self.db = db
-        self.model_gb = GradientBoostingClassifier(max_depth=N_ESTIMATORS, n_estimators=MAX_DEPTH, random_state=SEED)
+        if os.path.isfile(model_path):
+            self.load_model(model_path)
+        else:
+            self.model_gb = GradientBoostingClassifier(
+                max_depth=N_ESTIMATORS, n_estimators=MAX_DEPTH, random_state=SEED
+            )
 
     def load_model(self, model_filepath: io):
-        assert os.path.exists(model_filepath), f"File doesn't exists {model_filepath}"
+        assert os.path.isfile(model_filepath), f"File doesn't exists {model_filepath}"
         self.model_gb = pickle.load(open(model_filepath, 'rb'))
 
     @staticmethod
@@ -38,11 +44,12 @@ class GradientBoosting:
         for model, df in model_inputs.items():
             data = pd.merge(
                 left=data,
-                right=df.set_index('filename').rename(columns={'predictions': model})[[model]],
+                right=df.set_index('PROCESSED_IMG').rename(columns={'PREDICTION': model})[[model]],
                 right_index=True,
                 left_index=True,
                 how='left'
             )
+
         return data
 
     def train_model(self, cnn_predictions_dir: io, xgb_predictions_dir: io, save_model_dir: io):
@@ -98,7 +105,7 @@ class GradientBoosting:
         # se almacena el modelo en caso de que el usuario haya definido un nombre de archivo
         pickle.dump(self.model_gb, open(get_path(save_model_dir, f'{self.__name__}.sav'), 'wb'))
 
-    def predict(self, dirname: str, filename: str, data: Iterator, return_model_predictions: bool = False, **kwargs):
+    def predict(self, data: Dataloder, **kwargs):
         """
         Función utilizada para realizar la predicción del algorítmo de graadient boosting a partir de las predicciones
         del conjunto de redes convolucionales
@@ -114,17 +121,18 @@ class GradientBoosting:
 
         # Se genera un dataframe con los directorios de las imagenes a predecir
         gb_dataset = pd.DataFrame(index=data.filenames)
-        gb_dataset.index.name = 'image'
+        gb_dataset.index.name = 'PROCESSED_IMG'
 
         # Se unifica el set de datos obteniendo las predicciones de cada modelo representadas por input_models
         df = self.get_dataframe_from_kwargs(gb_dataset, **kwargs)
 
+        df_encoded = pd.get_dummies(df[kwargs.keys()])
+        for c in [col for col in df_encoded.columns if col not in self.model_gb.feature_names_in_]:
+            df_encoded.loc[:, c] = 0
+
         # Se añaden las predicciones
-        df.loc[:, 'label'] = self.model_gb.predict(pd.get_dummies(df[kwargs.keys()]))
+        df.loc[:, 'PATHOLOGY'] = self.model_gb.predict(df_encoded)
 
         # se escribe el log de errores con las predicciones individuales de cada arquitectura de red o únicamente las
         # generadas por gradient boosting
-        if return_model_predictions:
-            df.to_csv(get_path(dirname, filename), sep=';')
-        else:
-            df[['label']].to_csv(get_path(dirname, filename), sep=';')
+        return df.reset_index()[['PROCESSED_IMG', 'PATHOLOGY']]

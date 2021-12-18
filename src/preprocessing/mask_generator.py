@@ -10,7 +10,7 @@ from skimage.draw import polygon
 from PIL import Image
 
 from src.utils.config import INBREAST_DB_XML_ROI_PATH, LOGGING_DATA_PATH, CBIS_DDSM_DB_PATH
-from src.utils.functions import load_point, get_path, get_filename, search_files
+from src.utils.functions import load_point, get_path, get_filename, search_files, get_value_from_args_if_exists
 
 
 def get_inbreast_roi_mask(args) -> None:
@@ -130,8 +130,11 @@ def get_cbis_roi_mask(args) -> None:
 
 
 def get_test_mask(args) -> None:
+
+    error_path: io = get_value_from_args_if_exists(args, 5, LOGGING_DATA_PATH, IndexError, KeyError)
+
     try:
-        if len(args) != 5:
+        if len(args) < 5:
             raise ValueError('Incorrect number of args for function get_mias_roi')
 
         img_io_in = args[0]
@@ -163,13 +166,13 @@ def get_test_mask(args) -> None:
         cv2.imwrite(mask_io_out, mask)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors (Assertions).txt'), 'a') as f:
+        with open(get_path(error_path, f'Conversion Errors (Assertions).txt'), 'a') as f:
             f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
 
     except ValueError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
-            f.write(f'{"=" * 100}\nError calling function get_inbrest_roi_mask pipeline\n{err}\n{"=" * 100}')
+        with open(get_path(error_path, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nError calling function get_test_mask pipeline\n{err}\n{"=" * 100}')
 
     except Exception as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
+        with open(get_path(error_path, f'Conversion Errors.txt'), 'a') as f:
             f.write(f'{"=" * 100}\n{get_filename(get_filename(args[0]))}\n{err}\n{"=" * 100}')

@@ -29,7 +29,7 @@ if __name__ == '__main__':
     # Los valores disponibles son PATCHES, COMPLETE_IMAGE
     experiment = 'PATCHES'
     # Nombre del experimento
-    experiment_name = 'EJEC_ROI_TEST2_1'
+    experiment_name = 'EJEC_ROI_TEST2'
 
     available_models = {
         'classification': [DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model],
@@ -57,10 +57,10 @@ if __name__ == '__main__':
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
-    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
-                                                                               'ALL']):
-
-        for cnn in available_models[task_type]:
+    # for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
+    #                                                                            'ALL']):
+    for weight_init, frozen_layers in zip(['random'],['ALL']):
+        for cnn in available_models[task_type][1:]:
             q = Queue()
 
             # Se rea el proceso
@@ -79,17 +79,18 @@ if __name__ == '__main__':
                                 f'{cnn.__name__.replace("Model", "")}.csv')
                 bulk_data(path, **predictions.to_dict())
 
-                # Se crea el gradient boosting
-                print(f'{"-" * 75}\nGeneradando combinación secuencial de clasificadores.\n{"-" * 75}')
-                ensambler = GradientBoosting(db=db.df)
-                ensambler.train_model(
-                    cnn_predictions_dir=get_path(model_config.model_predictions_cnn_dir, weight_init, frozen_layers),
-                    save_model_dir=get_path(model_config.model_store_xgb_dir, XGB_CONFIG, weight_init, frozen_layers),
-                    xgb_predictions_dir=get_path(model_config.model_predictions_xgb_dir, XGB_CONFIG, weight_init,
-                                                 frozen_layers)
-                )
+        if task_type == 'classification':
+            # Se crea el gradient boosting
+            print(f'{"-" * 75}\nGeneradando combinación secuencial de clasificadores.\n{"-" * 75}')
+            ensambler = GradientBoosting(db=db.df)
+            ensambler.train_model(
+                cnn_predictions_dir=get_path(model_config.model_predictions_cnn_dir, weight_init, frozen_layers),
+                save_model_dir=get_path(model_config.model_store_xgb_dir, XGB_CONFIG, weight_init, frozen_layers),
+                xgb_predictions_dir=get_path(model_config.model_predictions_xgb_dir, XGB_CONFIG, weight_init,
+                                             frozen_layers)
+            )
 
-            print(f'{"-" * 50}\nProceso de entrenamiento finalizado\n{"-" * 50}')
+        print(f'{"-" * 50}\nProceso de entrenamiento finalizado\n{"-" * 50}')
 
     print(f'{"="* 75}\nGeneradando visualización de resultados.\n{"="* 75}')
 
