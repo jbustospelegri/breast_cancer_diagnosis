@@ -9,8 +9,8 @@ from tensorflow.keras.losses import CategoricalCrossentropy
 from segmentation_models.metrics import IOUScore
 from segmentation_models.losses import DiceLoss, BinaryFocalLoss
 
-from src.cnns.metrics import f1_score
-from src.utils.functions import get_path
+from cnns.metrics import f1_score
+from utils.functions import get_path
 
 
 """

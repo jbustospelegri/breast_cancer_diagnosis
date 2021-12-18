@@ -3,7 +3,7 @@ import cv2
 
 from typing import Union, Tuple, Any, List
 
-from src.utils.functions import detect_func_err, get_contours
+from utils.functions import detect_func_err, get_contours
 
 
 @detect_func_err

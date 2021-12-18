@@ -7,8 +7,8 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QStyleFactory, QApplication
 
 
-from src.user_interface.main_window import ApplicationWindow
-from src.utils.config import GUI_CSS_PATH, GUI_ICON_PATH
+from user_interface.main_window import ApplicationWindow
+from utils.config import GUI_CSS_PATH, GUI_ICON_PATH
 
 if __name__ == '__main__':
 

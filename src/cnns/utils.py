@@ -15,8 +15,8 @@ from tensorflow.keras.backend import argmax
 from tensorflow.keras.callbacks import CSVLogger, EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam
 
-from src.utils.functions import get_path, bulk_data
-from src.breast_cancer_dataset.database_generator import BreastCancerDataset
+from utils.functions import get_path, bulk_data
+from breast_cancer_dataset.database_generator import BreastCancerDataset
 
 
 def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFrame:

@@ -12,13 +12,13 @@ from PyQt5.QtWidgets import (
     QMessageBox, QMainWindow, QToolButton, QStackedWidget, QTextBrowser
 )
 
-from src.user_interface.signals_interface import SignalError, SignalProgressBar, SignalCompleted, SignalLogging
-from src.user_interface.pipeline import generate_predictions_pipeline
-from src.user_interface.utils import (
+from user_interface.signals_interface import SignalError, SignalProgressBar, SignalCompleted, SignalLogging
+from user_interface.pipeline import generate_predictions_pipeline
+from user_interface.utils import (
     center_widget_into_screen, LineStyled, populate_grid_layout, fix_application_width, fix_application_size
 )
-from src.utils.functions import get_path, log_error
-from src.utils.config import LOGGING_DATA_PATH, APPLICATION_NAME, GUI_HTML_PATH
+from utils.functions import get_path, log_error
+from utils.config import LOGGING_DATA_PATH, APPLICATION_NAME, GUI_HTML_PATH
 
 
 class ApplicationWindow(QMainWindow):

@@ -9,8 +9,8 @@ import pydicom
 from skimage.draw import polygon
 from PIL import Image
 
-from src.utils.config import INBREAST_DB_XML_ROI_PATH, LOGGING_DATA_PATH, CBIS_DDSM_DB_PATH
-from src.utils.functions import load_point, get_path, get_filename, search_files, get_value_from_args_if_exists
+from utils.config import INBREAST_DB_XML_ROI_PATH, LOGGING_DATA_PATH, CBIS_DDSM_DB_PATH
+from utils.functions import load_point, get_path, get_filename, search_files, get_value_from_args_if_exists
 
 
 def get_inbreast_roi_mask(args) -> None:

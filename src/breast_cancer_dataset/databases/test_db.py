@@ -6,13 +6,13 @@ from typing import io
 from tensorflow import cast, float32
 from albumentations import Compose, Lambda
 
-from src.breast_cancer_dataset.base import ClassificationDataset, Dataloder
-from src.preprocessing.image_conversion import convert_img
-from src.preprocessing.image_processing import crop_image_pipeline, resize_img
-from src.preprocessing.mask_generator import get_test_mask
-from src.utils.config import TEST_CONVERTED_DATA_PATH, TEST_PREPROCESSED_DATA_PATH, CROP_CONFIG, CROP_PARAMS
-from src.utils.functions import get_path, search_files, get_filename
-from src.user_interface.signals_interface import SignalProgressBar, SignalLogging
+from breast_cancer_dataset.base import ClassificationDataset, Dataloder
+from preprocessing.image_conversion import convert_img
+from preprocessing.image_processing import crop_image_pipeline, resize_img
+from preprocessing.mask_generator import get_test_mask
+from utils.config import TEST_CONVERTED_DATA_PATH, TEST_PREPROCESSED_DATA_PATH, CROP_CONFIG, CROP_PARAMS
+from utils.functions import get_path, search_files, get_filename
+from user_interface.signals_interface import SignalProgressBar, SignalLogging
 
 
 class DatasetTest:

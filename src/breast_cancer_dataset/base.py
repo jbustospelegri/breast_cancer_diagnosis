@@ -14,9 +14,9 @@ from tqdm import tqdm
 from tensorflow.keras.utils import Sequence
 from albumentations import Compose
 
-from src.preprocessing.image_conversion import convert_img
-from src.preprocessing.image_processing import full_image_pipeline
-from src.utils.functions import search_files, get_filename, get_path
+from preprocessing.image_conversion import convert_img
+from preprocessing.image_processing import full_image_pipeline
+from utils.functions import search_files, get_filename, get_path
 
 
 class GeneralDataBase:

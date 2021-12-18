@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import io
 from PIL import Image
 
-from src.utils.config import LOGGING_DATA_PATH
-from src.utils.functions import get_path, get_filename, get_dirname, get_value_from_args_if_exists
+from utils.config import LOGGING_DATA_PATH
+from utils.functions import get_path, get_filename, get_dirname, get_value_from_args_if_exists
 
 
 def convert_img(args) -> None:

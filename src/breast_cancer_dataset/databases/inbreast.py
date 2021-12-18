@@ -3,14 +3,14 @@ from typing import List
 import pandas as pd
 import numpy as np
 
-from src.breast_cancer_dataset.base import GeneralDataBase
-from src.preprocessing.image_processing import crop_image_pipeline
-from src.preprocessing.mask_generator import get_inbreast_roi_mask
-from src.utils.config import (
+from breast_cancer_dataset.base import GeneralDataBase
+from preprocessing.image_processing import crop_image_pipeline
+from preprocessing.mask_generator import get_inbreast_roi_mask
+from utils.config import (
     INBREAST_DB_PATH, INBREAST_CONVERTED_DATA_PATH, INBREAST_PREPROCESSED_DATA_PATH, INBREAST_CASE_DESC,
     CROP_CONFIG, CROP_PARAMS
 )
-from src.utils.functions import get_filename, get_path
+from utils.functions import get_filename, get_path
 
 
 class DatasetINBreast(GeneralDataBase):

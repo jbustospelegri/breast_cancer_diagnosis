@@ -10,8 +10,8 @@ from sklearn.ensemble import GradientBoostingClassifier
 from typing import io
 
 from breast_cancer_dataset.base import Dataloder
-from src.utils.config import SEED, XGB_COLS, XGB_CONFIG, N_ESTIMATORS, MAX_DEPTH, MODEL_FILES
-from src.utils.functions import get_path, bulk_data, search_files, get_filename
+from utils.config import SEED, XGB_COLS, XGB_CONFIG, N_ESTIMATORS, MAX_DEPTH, MODEL_FILES
+from utils.functions import get_path, bulk_data, search_files, get_filename
 
 
 class GradientBoosting:

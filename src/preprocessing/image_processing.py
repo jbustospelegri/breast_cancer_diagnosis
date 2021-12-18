@@ -11,9 +11,10 @@ from preprocessing.functions import (
     apply_clahe_transform, remove_artifacts, remove_noise, crop_borders, pad_image_into_square, resize_img, binarize,
     normalize_breast, flip_breast, correct_axis
 )
-from src.utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG
-from src.utils.functions import get_filename, save_img, get_path, get_value_from_args_if_exists, get_dirname, \
-    get_contours
+from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG
+from utils.functions import (
+    get_filename, save_img, get_path, get_value_from_args_if_exists, get_dirname, get_contours
+)
 
 
 def full_image_pipeline(args) -> None:

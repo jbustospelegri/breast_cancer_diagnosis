@@ -16,8 +16,8 @@ from tensorflow.keras.layers import (
 
 from segmentation_models import get_preprocessing
 
-from src.utils.functions import get_path, get_number_of_neurons
-from src.utils.config import CLASSIFICATION_LOSS
+from utils.functions import get_path, get_number_of_neurons
+from utils.config import CLASSIFICATION_LOSS
 
 
 class GeneralModel:
