@@ -25,6 +25,22 @@ def fix_application_width(gui: QWidget, scale_factor=550):
     gui.setMinimumWidth(scale_factor * scaling)
 
 
+def fix_application_height(gui: QWidget, scale_factor=550):
+    """
+    Function to fix an application width depending on screen resolution. Aplication height is not fixed.
+
+    :param gui: QWidget or QMainWindow object for PyQt5 library
+    :param scale_factor: scale factor to apply
+    """
+    scaling = QDesktopWidget().logicalDpiY() / 96
+    gui.setFixedSize(-1, -1)
+    gui.setMinimumHeight(scale_factor * scaling)
+
+def fix_application_size(gui: QWidget, scale_factor: tuple):
+    scaling = QDesktopWidget().logicalDpiY() / 96
+    gui.setFixedSize(-1, -1)
+    gui.setMinimumSize(scale_factor[1] * scaling, scale_factor[0] * scaling)
+
 def populate_grid_layout(layout: QGridLayout, *row_items: list, **kwargs):
     """
 

@@ -1,9 +1,9 @@
-from itertools import repeat
-
 import numpy as np
 import cv2
 import os
+import sys
 
+from itertools import repeat
 from typing import io
 from PIL import Image
 
@@ -34,6 +34,8 @@ def full_image_pipeline(args) -> None:
         3 - extensión con la que se debe de almacenar la imagen
         4 - directorio en el que se deben de almacenar los ejemplos.
     """
+
+    error_path: io = get_value_from_args_if_exists(args, 5, LOGGING_DATA_PATH, IndexError, KeyError)
 
     try:
 
@@ -145,15 +147,16 @@ def full_image_pipeline(args) -> None:
         Image.fromarray(np.uint8(images[list(images.keys())[-1]].copy())).save(dest_dirpath)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors (Assertions).txt'), 'a') as f:
-            f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
+        if not getattr(sys, 'frozen', False):
+            with open(get_path(error_path, f'Preprocessing Errors (Assertions).txt'), 'a') as f:
+                f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
 
     except IndexError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+        with open(get_path(error_path, f'Preprocessing Errors.txt'), 'a') as f:
             f.write(f'{"=" * 100}\nError calling function convert_dcm_img pipeline\n{err}\n{"=" * 100}')
 
     except Exception as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+        with open(get_path(error_path, f'Preprocessing Errors.txt'), 'a') as f:
             f.write(f'{"=" * 100}\n{get_filename(img_filepath)}\n{err}\n{"=" * 100}')
 
 
@@ -175,6 +178,8 @@ def crop_image_pipeline(args) -> None:
         3 - extensión con la que se debe de almacenar la imagen
         4 - directorio en el que se deben de almacenar los ejemplos.
     """
+
+    error_path: io = get_value_from_args_if_exists(args, 8, LOGGING_DATA_PATH, IndexError, KeyError)
 
     try:
         # Se recuperan los valores de arg. Deben de existir los 3 argumentos obligatorios.
@@ -272,10 +277,10 @@ def crop_image_pipeline(args) -> None:
             Image.fromarray(np.uint8(roi_synthetized)).save(path)
 
     except AssertionError as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors (Assertions).txt'), 'a') as f:
-            f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
+        if not getattr(sys, 'frozen', False):
+            with open(get_path(error_path, f'Preprocessing Errors (Assertions).txt'), 'a') as f:
+                f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
 
     except Exception as err:
-        with open(get_path(LOGGING_DATA_PATH, f'Preprocessing Errors.txt'), 'a') as f:
+        with open(get_path(error_path, f'Preprocessing Errors.txt'), 'a') as f:
             f.write(f'{"=" * 100}\n{get_filename(img_filepath)}\n{err}\n{"=" * 100}')
-

@@ -14,12 +14,6 @@ from src.utils.functions import get_path
 
 
 """
-    CONFIGURACION DEL EXPERIMENTO
-"""
-# Los valores disponibles son PATCHES, COMPLETE_IMAGE
-EXPERIMENT = 'COMPLETE_IMAGE'
-
-"""
     CONFIGURACION DEL DATASET
 """
 TRAIN_DATA_PROP: float = 0.7
@@ -27,28 +21,31 @@ TRAIN_DATA_PROP: float = 0.7
 """
     CONFIGURACION DATA AUGMENTATION
 """
-CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
-    'horizontal_flip': True,
-    'vertical_flip': True,
-    'rotation_range': 270,
-    'width_shift_range': 0.1,
-    'height_shift_range': 0.1,
-    # 'brightness_range': (0.6, 1), no tiene sentido debido a que se aplica la ecu
-    'zoom_range': [1, 1.5],
-}
+# CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
+#     'horizontal_flip': True,
+#     'vertical_flip': True,
+#     'rotation_range': 270,
+#     'width_shift_range': 0.1,
+#     'height_shift_range': 0.1,
+#     # 'brightness_range': (0.6, 1), no tiene sentido debido a que se aplica la ecu
+#     'zoom_range': [1, 1.5],
+# }
 
-CLASSIFICATION_DATA_AUGMENTATION_FUNCS2: dict = {
+CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': HorizontalFlip(),
     'vertical_flip': VerticalFlip(),
-    'rotation_range': RandomRotate90(),
-    'shift_range': ShiftScaleRotate(scale_limit=0, rotate_limit=0, shift_limit=0.1, border_mode=cv2.BORDER_WRAP),
-    'zoom': Affine(scale=[0.7, 1], interpolation=cv2.INTER_LANCZOS4),
+    'rotation_90': RandomRotate90(),
+    'shift_range': ShiftScaleRotate(scale_limit=0, rotate_limit=0, shift_limit=0.05, interpolation=cv2.INTER_NEAREST),
+    'zoom': Affine(scale=[1, 1.1], interpolation=cv2.INTER_LANCZOS4, mode=cv2.BORDER_REPLICATE),
+    'shear': Affine(shear=(-10, 10), interpolation=cv2.INTER_LANCZOS4, mode=cv2.BORDER_REPLICATE),
+    'rotate': Affine(rotate=(-15, 15), interpolation=cv2.INTER_LANCZOS4, mode=cv2.BORDER_REPLICATE, fit_output=True),
 }
 
 SEGMENTATION_DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': HorizontalFlip(),
     'vertical_flip': VerticalFlip(),
-    # 'brightness_range': RandomBrightnessContrast()
+    'zoom': Affine(scale=[1, 1.1], interpolation=cv2.INTER_LANCZOS4, mode=cv2.BORDER_REPLICATE),
+    'shear': Affine(shear=(-10, 10), interpolation=cv2.INTER_LANCZOS4, mode=cv2.BORDER_REPLICATE),
 }
 
 """
@@ -75,8 +72,8 @@ SEGMENTATION_METRICS = {
     'IoU': IOUScore(),
 }
 
-CLASSIFICATION_LOSS = CategoricalCrossentropy() + (1 * BinaryFocalLoss())
-SEGMENTATION_LOSS = DiceLoss()
+CLASSIFICATION_LOSS = CategoricalCrossentropy()
+SEGMENTATION_LOSS = DiceLoss() + (1 * BinaryFocalLoss())
 
 """
     CONFIGURACION PARA EL GRADIENT BOOSTING
@@ -93,7 +90,7 @@ XGB_COLS = {
     CONFIGURACIÓN DE PREPROCESADO DE IMAGENES
 """
 IMG_SHAPE: tuple = (384, 192)
-PATCH_SIZE: int = 300
+PATCH_SIZE: tuple = (300, 300)
 
 CROP_CONFIG: str = 'CONF0'
 CROP_PARAMS: dict = {
@@ -220,6 +217,7 @@ INBREAST_DB_XML_ROI_PATH = get_path(INBREAST_PATH, 'AllXML')
 CBIS_DDSM_CONVERTED_DATA_PATH: io = get_path(CONVERTED_DATA_PATH, 'CBIS_DDSM')
 MIAS_CONVERTED_DATA_PATH: io = get_path(CONVERTED_DATA_PATH, 'MIAS')
 INBREAST_CONVERTED_DATA_PATH: io = get_path(CONVERTED_DATA_PATH, 'INBreast')
+TEST_CONVERTED_DATA_PATH: io = get_path(CONVERTED_DATA_PATH, 'Test')
 
 """
     CARPETAS CON LAS IMAGENES PROCESADAS
@@ -227,16 +225,25 @@ INBREAST_CONVERTED_DATA_PATH: io = get_path(CONVERTED_DATA_PATH, 'INBreast')
 CBIS_DDSM_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'CBIS_DDSM')
 MIAS_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'MIAS')
 INBREAST_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'INBreast')
+TEST_PREPROCESSED_DATA_PATH: io = get_path(PROCESSED_DATA_PATH, PREPROCESSING_CONFIG, 'Test')
+
+
+"""
+    CONSTANTES INTERFAZ GRAFICA
+"""
+APPLICATION_NAME: str = 'Breast Cancer Diagnosis'
 
 """
     CARPETAS DE LA INTERFAZ GRÁFICA
 """
 GUI_CSS_PATH = get_path(WORKING_DIRECTORY, 'static', 'css')
-
+GUI_HTML_PATH = get_path(WORKING_DIRECTORY, 'static', 'html', 'help_window.html')
+GUI_ICON_PATH = get_path(WORKING_DIRECTORY, 'static', 'images', 'logo.png')
 
 """
     CARPETAS DE RESULTADOS DEL MODELO 
 """
+DEPLOYMENT_MODELS = get_path(MODEL_DATA_PATH, 'DEPLOYMENT')
 
 
 class ModelConstants:

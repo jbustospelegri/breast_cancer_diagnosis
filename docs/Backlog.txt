@@ -73,24 +73,28 @@ DONE
     11.1) DATASET CBIS
             -> LAS MASCARAS SE DEBEN DE LEER DEL CSV Y LINCAR LA PATOLOGÍA CON EL ID (ALERTA CON CAMBIOS DE NOMBRES) Y
                MULTIPLES PATOLOGÍAS PARA UNA MISMA IMAGEN.
-            -> LA FUNCIÓN DE CONVERT DEBE DE LEER LAS MASCARAS
+            -> LA FUNCIÓN DE CONVERT DEBE DE LEER LAS MASCARA
+13) Evitar segregación en train y val de parches de la misma patología con overlap -> Sesgo. (DEPRECATED)
+14) **Aplicación de recorte de parche a partir de la máscara obtenida por el modelo de segmentación.** (DEPRECATED)
+11) Implementación background y overlap para parches. (DEPRECATED)
+17) Revisión DataViz:
+        - Los logs de resultados salen con las métricas giradas. (DONE)
+        - Unificar extract features y finetunning en la misma gráfica. (DONE)
+        - **Añadir métricas IoU y dice para los modelos de segmentación.** (DEPRECATED)
+        - Arreglar visualización de data augmentation. (DONE)
+        - Añadir el número de epocas en time executions (DONE)
+
 -------
 TODO
 ------
 10) En model ensambler leer el csv y no la clase DataBreastCancer para poder hacer distintas pruebas
-11) Implementación background y overlap para parches.
-12) Estratificación de train y val en función del label y de la base de datos
-13) Evitar segregación en train y val de parches de la misma patología con overlap -> Sesgo.
-14) **Aplicación de recorte de parche a partir de la máscara obtenida por el modelo de segmentación.**
+11) Realizar deployment
+12) No hacer resize de los crops
 15) Aplicar auto batch-balance.
 16) Aplicar regularización L2 con weight decay.
 17) Revisión DataViz:
-    - Los logs de resultados salen con las métricas giradas.
-    - Unificar extract features y finetunning en la misma gráfica.
-    - Añadir métrica AUC en la tabla de metrics.
-    - **Añadir métricas IoU y dice para los modelos de segmentación.**
+    - Añadir métrica AUC en la tabla de metrics. (NOT POSIBLE -> PROBS NECESSARY)
     - Revisar que las visualizaciones son correctas.
-    - Arreglar visualización de data augmentation.
     - Arreglar visualización de steps de processed imgs.
 18) Procesado de imagenes.
     - Aplicar Global Contrast Norm como configuración 2 del dataset
@@ -112,13 +116,17 @@ EJEC_ROI_TEST1:
     - acc train > 80% para modelo Gradient Boosting con all layers en imagenet
     - acc val   > 70% para modelo Densenet con all layers en imagenet
 
-EJEC_ROI_TEST2 (FALTA EJECUTAR IMAGENET 3FT/4FT y RANDOM ALL):
+EJEC_ROI_TEST2
     - Se suprime el dataset MIAS del entrenamiento
     - Se suprime fill mode cte y función brightness del data augmentation manteniendo zoom.
+    - Se corrige la función de transformación prévia al paso de preprocesado de cada red (cast a float 32).
     - Post refactor de frozen layers
 
 EJEC_ROI_TEST3:
-    - Se aumenta el margin de los rois a 1.4.
+    - Añadir fully connected layers a la salida del baseline.
+
+EJEC_ROI_TEST4:
+    - El resize se hace una única vez y no dos (image preprocessing + data augmentation).
 
 EJEC_ROI_TEST4:
     - Se añade tercera fase de entrenamiento para fine-tunning añadiendo un unfroze all con SGD(1e-5) y
@@ -128,24 +136,23 @@ EJEC_ROI_TEST5:
     - Se añade regularización L2
 
 EJEC_ROI_TEST6:
-    - Añadir data augmentation al set de validacion
+    - Se aumenta el margin de los rois a 1.4.
 
 EJEC_ROI_TEST7:
-    - Añadir fully connected layers a la salida del baseline.
+    - Añadir data augmentation al set de validacion
 
-EJEC_ROI_TEST8:
-    - Añadir imagen del fondo y imagen de ROI con overlap del 90% minimo.
 
-EJEC_SEGMENTATION_TEST1:
+---- EXPERIMENTOS DEPRECATED ----
+EJEC_SEGMENTATION_TEST1: (DEPRECATED)
     - Parches de tamaño 384, 192 y BS = 9
 
-EJEC_SEGMENTATION_TEST2:
+EJEC_SEGMENTATION_TEST2: (DEPRECATED)
     - Parches de tamaño 512, 256 y BS = 5
 
-EJEC_SEGMENTATION_TEST3:
+EJEC_SEGMENTATION_TEST3: (DEPRECATED)
     - Parches de tamaño 1024, 512 y BS = 1
 
-EJEC_SEGMENTATION_TEST4:
+EJEC_SEGMENTATION_TEST4: (DEPRECATED)
     - Parches de tamaño 448, 224 y BS = 10
 
 

@@ -7,14 +7,17 @@ import pandas as pd
 import numpy as np
 
 from itertools import product
-from tensorflow.python.keras.preprocessing.image import load_img, img_to_array, ImageDataGenerator
+from tensorflow.python.keras.preprocessing.image import load_img, img_to_array
 from sklearn.metrics import recall_score, f1_score, precision_score, accuracy_score
 from typing import List
 from collections import defaultdict
+from albumentations import Compose
 
 from data_viz.functions import render_mpl_table, plot_image, create_countplot
 from preprocessing.image_processing import full_image_pipeline, crop_image_pipeline
-from utils.config import MODEL_FILES, XGB_CONFIG, CLASSIFICATION_METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, EXPERIMENT
+from utils.config import (
+    MODEL_FILES, XGB_CONFIG, CLASSIFICATION_METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS
+)
 from utils.functions import get_path, search_files, get_filename
 
 
@@ -26,8 +29,9 @@ class DataVisualizer:
 
     metrics = [f.lower() if type(f) is str else f.__name__ for f in CLASSIFICATION_METRICS.values()] + ['accuracy', 'loss']
 
-    def __init__(self, config: MODEL_FILES):
+    def __init__(self, config: MODEL_FILES, img_type: str):
         self.conf = config
+        self.img_type = img_type
 
     @staticmethod
     def get_dataframe_from_logs(dirname: io, metrics: list) -> pd.DataFrame:
@@ -289,15 +293,13 @@ class DataVisualizer:
 
             data_filtered = data[data.weights == weights]
 
-            data_plot = pd.concat(objs=[
-                data_filtered[data_filtered.FT != 'ALL'].groupby(['cnn', 'FT'], as_index=False).time.sum(),
-                data_filtered[data_filtered.FT == 'ALL']],
-            )
+            data_plot = data_filtered.groupby(['cnn', 'FT'], as_index=False).\
+                            apply(lambda x: pd.Series(x['time'].sum() / x['epochs'].sum(), index=['time_eps']))
 
-            sns.barplot(x='FT', y='time', hue='cnn', data=data_plot, ax=axes)
+            sns.barplot(x='FT', y='time_eps', hue='cnn', data=data_plot, ax=axes)
 
             axes.set_title(f'Tiempo de entrenamiento con inicialización de pesos: {weights}')
-            axes.set(ylabel='Tiempo (seg)', xlabel='Capas entrenables')
+            axes.set(ylabel='Tiempo / epocas (seg)', xlabel='Capas entrenables')
 
         fig.tight_layout()
         fig.savefig(get_path(self.conf.model_viz_results_dir, 'Comparación tiempos entrenamiento.jpg'))
@@ -352,9 +354,9 @@ class DataVisualizer:
                                 'framealpha': 1
                             }
                         } for title, metric, ylabel, in zip(
-                            ['Exactitud Modelos', 'Pérdidas Modelos', 'F1_Score Modelos', 'AUC Modelos',
-                             'Precisión Modelos', 'Recall Modelos'], self.metrics,
-                            ['Exactitud', 'Pérdidas', 'F1', 'AUC', 'Precisión', 'Recall'])
+                            ['AUC Modelos', 'Precisión Modelos', 'Recall Modelos', 'F1_Score Modelos',
+                             'Exactitud Modelos', 'Pérdidas Modelos'], self.metrics,
+                            ['AUC', 'Precisión', 'Recall', 'F1','Exactitud', 'Pérdidas' ])
                     ]
                 )
 
@@ -395,26 +397,29 @@ class DataVisualizer:
         image = load_img(example_imag)
         # Se transforma la imagen a formato array
         image = img_to_array(image)
+
         # Se añade una dimensión para obtener el dato de forma (1, width, height, channels)
         image_ori = np.expand_dims(image, axis=0)
 
         # Figura y subplots de matplotlib. Debido a que existen 4 transformaciones de data augmentation, se creará un
         # grid con 5 columnas que contendrán cada ejemplo de transformación y la imagen original
-        elements = len(CLASSIFICATION_DATA_AUGMENTATION_FUNCS.keys())
-        cols = 3
-        rows = elements // cols + elements % cols
+        elements = len(CLASSIFICATION_DATA_AUGMENTATION_FUNCS.keys()) + 1
+        cols = 4
+        rows = elements // cols + (elements % cols > 0)
         fig = plt.figure(figsize=(15, 4 * rows))
 
         # Se representa la imagen original en el primer subplot.
         plot_image(img=image_ori, title='Imagen Original', ax_=fig.add_subplot(rows, cols, 1))
 
         # Se iteran las transformaciones
-        for i, (k, v) in enumerate(CLASSIFICATION_DATA_AUGMENTATION_FUNCS.items(), 2):
+        for i, (transformation_name, transformation) in enumerate(CLASSIFICATION_DATA_AUGMENTATION_FUNCS.items(), 2):
 
             # Se crea al datagenerator con exclusivamente la transformación a aplicar.
-            datagen = ImageDataGenerator(**{k: v}, fill_mode='constant', cval=0)
+            transformation.p = 1
+            img = np.expand_dims(Compose([transformation])(image=image)['image'], axis=0)
+
             # Se recupera la imagen transformada mediante next() del método flow del objeto datagen
-            plot_image(img=next(datagen.flow(image_ori)), title=k, ax_=fig.add_subplot(rows, cols, i))
+            plot_image(img=img, title=transformation_name, ax_=fig.add_subplot(rows, cols, i))
 
         # Se ajusta la figura
         fig.tight_layout()
@@ -464,13 +469,13 @@ class DataVisualizer:
             axis=1
         )
 
-        if EXPERIMENT == 'COMPLETE_IMAGE':
+        if self.img_type == 'COMPLETE_IMAGE':
             for _, r in df[df.example_dir.notnull()].iterrows():
                 full_image_pipeline([r.CONVERTED_IMG, r.example_dir, True])
-        elif EXPERIMENT == 'PATCHES':
+        elif self.img_type == 'PATCHES':
             for _, r in df[df.example_dir.notnull()].iterrows():
                 crop_image_pipeline([r.CONVERTED_IMG, r.example_dir, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN, True])
-        elif EXPERIMENT == 'MASK':
+        elif self.img_type == 'MASK':
             pass
         else:
-            raise ValueError(f"Function {EXPERIMENT} doesn't defined")
+            raise ValueError(f"Function {self.img_type} doesn't defined")

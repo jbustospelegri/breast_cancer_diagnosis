@@ -10,7 +10,7 @@ from skimage.draw import polygon
 from PIL import Image
 
 from src.utils.config import INBREAST_DB_XML_ROI_PATH, LOGGING_DATA_PATH, CBIS_DDSM_DB_PATH
-from src.utils.functions import load_point, get_path, get_filename, search_files
+from src.utils.functions import load_point, get_path, get_filename, search_files, get_value_from_args_if_exists
 
 
 def get_inbreast_roi_mask(args) -> None:
@@ -127,3 +127,52 @@ def get_cbis_roi_mask(args) -> None:
     except Exception as err:
         with open(get_path(LOGGING_DATA_PATH, f'Conversion Errors.txt'), 'a') as f:
             f.write(f'{"=" * 100}\n{get_filename(args[1])}\n{err}\n{"=" * 100}')
+
+
+def get_test_mask(args) -> None:
+
+    error_path: io = get_value_from_args_if_exists(args, 5, LOGGING_DATA_PATH, IndexError, KeyError)
+
+    try:
+        if len(args) < 5:
+            raise ValueError('Incorrect number of args for function get_mias_roi')
+
+        img_io_in = args[0]
+        mask_io_out = args[1]
+        x_cord = args[2]
+        y_cord = args[3]
+        rad = args[4]
+
+        if not os.path.isfile(img_io_in):
+            raise FileNotFoundError(f'{img_io_in} not found')
+
+        assert not os.path.isfile(mask_io_out), f'Mask {mask_io_out} already created.'
+
+        shape = cv2.imread(img_io_in).shape[:2]
+
+        if not 0 <= x_cord <= shape[1]:
+            raise ValueError(f'{x_cord} is outside available pixels in image')
+
+        y_cord = shape[0] - y_cord
+
+        if not 0 <= y_cord <= shape[0]:
+            raise ValueError(f'{x_cord} is outside available pixels in image')
+
+        if rad <= 0:
+            raise ValueError(f'Incorrect value for {rad}')
+
+        mask = np.zeros(shape=shape, dtype=np.uint8)
+        cv2.circle(mask, center=(int(x_cord), int(y_cord)), radius=int(rad), thickness=-1, color=(255, 255, 255))
+        cv2.imwrite(mask_io_out, mask)
+
+    except AssertionError as err:
+        with open(get_path(error_path, f'Conversion Errors (Assertions).txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nAssertion Error in image processing\n{err}\n{"=" * 100}')
+
+    except ValueError as err:
+        with open(get_path(error_path, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\nError calling function get_test_mask pipeline\n{err}\n{"=" * 100}')
+
+    except Exception as err:
+        with open(get_path(error_path, f'Conversion Errors.txt'), 'a') as f:
+            f.write(f'{"=" * 100}\n{get_filename(get_filename(args[0]))}\n{err}\n{"=" * 100}')

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <div style="text-align: justify;">
+        <p>
+            This tool aims to predict if a mass pathology is malignant or non malignant.
+            In order to generate the predictions, you should have to introduce an excel file with the following fields:
+        </p>
+        <p><strong>ID:</strong> Identification field for every region of interest. This field must be unique.</p>
+        <p><strong>FILE_PATH:</strong> Absolute file path of the image.</p>
+        <p><strong>X_CORD:</strong> X-axis coordinates for center of abnormality.
+            Coordinate system origin is the bottom-left corner.</p>
+        <p><strong>Y_CORD:</strong> Y-axis coordinates for center of abnormality.
+         Coordinate system origin is the bottom-left corner.</p>
+        <p><strong>RAD:</strong> Approximate radious (in pixels) of a circle enclosing the abnormality.
+            Every radious lower than 15 pixels will be ommited</p>
+    </div>
+</body>
+</html>
