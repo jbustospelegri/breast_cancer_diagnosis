@@ -4,15 +4,15 @@ import tensorflow
 
 from multiprocessing import Queue, Process
 
-from src.breast_cancer_dataset.database_generator import BreastCancerDataset
-from src.cnns.classification import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
-from src.cnns.segmentation import UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model
-from src.cnns.model_ensambling import GradientBoosting
-from src.cnns.utils import training_pipe
-from src.data_viz.visualizacion_resultados import DataVisualizer
+from breast_cancer_dataset.database_generator import BreastCancerDataset
+from cnns.classification import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
+from cnns.segmentation import UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model
+from cnns.model_ensambling import GradientBoosting
+from cnns.utils import training_pipe
+from data_viz.visualizacion_resultados import DataVisualizer
 
-from src.utils.config import MODEL_FILES, XGB_CONFIG
-from src.utils.functions import bulk_data, get_path
+from utils.config import MODEL_FILES, XGB_CONFIG
+from utils.functions import bulk_data, get_path
 
 
 if __name__ == '__main__':
