@@ -6,18 +6,58 @@
 </head>
 <body>
     <div style="text-align: justify;">
-        <p>
-            This tool aims to predict if a mass pathology is malignant or non malignant.
-            In order to generate the predictions, you should have to introduce an excel file with the following fields:
-        </p>
-        <p><strong>ID:</strong> Identification field for every region of interest. This field must be unique.</p>
-        <p><strong>FILE_PATH:</strong> Absolute file path of the image.</p>
-        <p><strong>X_CORD:</strong> X-axis coordinates for center of abnormality.
-            Coordinate system origin is the bottom-left corner.</p>
-        <p><strong>Y_CORD:</strong> Y-axis coordinates for center of abnormality.
-         Coordinate system origin is the bottom-left corner.</p>
-        <p><strong>RAD:</strong> Approximate radious (in pixels) of a circle enclosing the abnormality.
-            Every radious lower than 15 pixels will be ommited</p>
+
+        <div>
+            <p>
+                This tool aims to predict if a mass pathology is malignant or non malignant.
+                In order to generate the predictions, you should have to introduce an excel file with the following fields:
+            </p>
+            <ul>
+                <li>
+                    <strong>ID:</strong> Identification field for every region of interest. This field must be unique.
+                </li>
+                <li>
+                    <strong>FILE_PATH:</strong> Absolute file path of the image. Only dicom and pgm formats are available.
+                </li>
+
+                <li>
+                    <strong>X_CORD:</strong> X-axis coordinates for center of abnormality. Coordinate system origin is
+                    the bottom-left corner.
+                </li>
+
+                <li>
+                    <strong>Y_CORD:</strong> Y-axis coordinates for center of abnormality. Coordinate system origin is
+                    the bottom-left corner.
+                </li>
+
+                <li>
+                    <strong>RAD:</strong> Approximate radious (in pixels) of a circle enclosing the abnormality.
+                    Every radious lower than 15 pixels will be ommited.
+                </li>
+            </ul>
+        </div>
+        <div>
+            <p>
+                Once the input excel has been selected, you must specify one folder in order to store application outputs.
+                Generated outputs are:
+            </p>
+            <ul>
+                <li>
+                    <strong>Excel File:</strong> File with benign-malign mass classification for every observation.
+                </li>
+                <li>
+                    <strong>Malignant File:</strong> Folder with malignant clasificated mass images in png format.
+                    Every image has its regions of interest marked in red.
+                </li>
+                <li>
+                    <strong>Benign File:</strong> Folder with benign clasificated mass images in png format.
+                    Every image has its regions of interest marked in red.
+                </li>
+                <li>
+                    <strong>Error log files:</strong> Text files generated during execution informing about any issue.
+                </li>
+            </ul>
+        </div>
     </div>
 </body>
 </html>

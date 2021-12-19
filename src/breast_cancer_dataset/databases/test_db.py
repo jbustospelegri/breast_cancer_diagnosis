@@ -1,3 +1,4 @@
+import os
 import cv2
 
 import pandas as pd
@@ -10,6 +11,7 @@ from breast_cancer_dataset.base import ClassificationDataset, Dataloder
 from preprocessing.image_conversion import convert_img
 from preprocessing.image_processing import crop_image_pipeline, resize_img
 from preprocessing.mask_generator import get_test_mask
+from user_interface.utils import ControledError
 from utils.config import TEST_CONVERTED_DATA_PATH, TEST_PREPROCESSED_DATA_PATH, CROP_CONFIG, CROP_PARAMS
 from utils.functions import get_path, search_files, get_filename
 from user_interface.signals_interface import SignalProgressBar, SignalLogging
@@ -32,19 +34,18 @@ class DatasetTest:
     def get_df_from_info_files(self, path) -> pd.DataFrame:
 
         # Lectura del excel con la información del dataset
-        df_pre = pd.read_excel(path, dtype=str)
+        df = pd.read_excel(path, dtype=str)
 
         # Se comprueban que las columnas son correctas
-        if not all([c in self.XLSX_COLS for c in df_pre.columns]):
-            raise ValueError(f'Incorrect column names. Please check excel contains next '
-                             f'column values: {", ".join(self.XLSX_COLS)}')
+        if not all([c in df.columns for c in self.XLSX_COLS]):
+            raise ControledError(f'Incorrect column names. Please check excel contains next '
+                                 f'column values: {", ".join(self.XLSX_COLS)}')
 
-        # Se crea el dataset con las columnas deseadas
-        df = df_pre[self.XLSX_COLS].copy()
+        self.XLSX_COLS = df.columns.values.tolist()
 
         # Se comprueba que el id es único
         if any(df.ID.value_counts() > 1):
-            raise ValueError(f'Duplicated id values found in excel')
+            raise ControledError(f'Duplicated id values found in excel')
 
         # Se realiza la conversión de datos para las columnas de análisis.
         for col in ['X_CORD', 'Y_CORD', 'RAD']:
@@ -58,22 +59,25 @@ class DatasetTest:
                 'Deleted files are:\n\t- File:' + "\n\t- File:".join(incorrect.ID.values.tolist())
             )
         df.drop(index=incorrect.index, inplace=True)
-
-        # Se crea la columna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
-        df.loc[:, 'CONVERTED_IMG'] = df.apply(lambda x: get_path(self.CONVERSION_PATH, 'FULL', f'{x.ID}.png'),
-                                              axis=1)
-
-        df.loc[:, 'CONVERTED_MASK'] = df.apply(lambda x: get_path(self.CONVERSION_PATH, 'MASK', f'{x.ID}.png'),
-                                               axis=1)
-
-        # Se crea la clumna PROCESSED_IMG en la que se volcarán las imagenes preprocesadas
-        df.loc[:, 'PROCESSED_IMG'] = df.apply(lambda x: get_path(self.PROCESED_PATH, f'{x.ID}.png'), axis=1)
+        
+        # Aquellos datos con posicionamiento invalido son eliminadas
+        incorrect = df[~ df.FILE_PATH.apply(lambda x: os.path.isfile(x))]
+        if len(incorrect) > 0:
+            self.signal_log.log(
+                f'Incorrect data found!\n{len(incorrect)} FILE_PATHS does not exists.' + \
+                'Deleted files are:\n\t- File:' + "\n\t- File:".join(incorrect.ID.values.tolist())
+            )
+        df.drop(index=incorrect.index, inplace=True)
 
         return df
 
     def convert_images_format(self, signal: SignalProgressBar, min_value: int, max_value: int):
 
         bar_range = max_value - min_value
+
+        # Se crea la columna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
+        self.df.loc[:, 'CONVERTED_IMG'] = self.df.apply(lambda x: get_path(self.CONVERSION_PATH, 'FULL', f'{x.ID}.png'),
+                                                        axis=1)
 
         for i, arg in enumerate(list(set(
                 [(row.FILE_PATH, row.CONVERTED_IMG, False, self.out_path) for _, row in self.df.iterrows()])), 1):
@@ -82,6 +86,13 @@ class DatasetTest:
             convert_img(arg)
 
     def preprocess_image(self, signal: SignalProgressBar, min_value: int, max_value: int):
+
+        self.df.loc[:, 'CONVERTED_MASK'] = self.df.apply(
+            lambda x: get_path(self.CONVERSION_PATH, 'MASK', f'{x.ID}.png'), axis=1
+        )
+
+        # Se crea la clumna PROCESSED_IMG en la que se volcarán las imagenes preprocesadas
+        self.df.loc[:, 'PROCESSED_IMG'] = self.df.apply(lambda x: get_path(self.PROCESED_PATH, f'{x.ID}.png'), axis=1)
 
         self.get_image_mask(signal, min_value, (min_value + max_value) // 2)
 

@@ -7,13 +7,13 @@ from PyQt5.QtWidgets import QMessageBox
 
 class SignalError(QObject):
 
-    signal = pyqtSignal(str, str, object, bool)
+    signal = pyqtSignal(str, str, object, bool, bool)
 
     def __init__(self):
         super(QObject, self).__init__()
 
-    def emit_error(self, error_module, error_hint, traceback, stop_exec):
-        self.signal.emit(error_module, error_hint, traceback, stop_exec)
+    def emit_error(self, error_module, error_hint, traceback, stop_exec, activate_window):
+        self.signal.emit(error_module, error_hint, traceback, stop_exec, activate_window)
 
     @pyqtSlot(str, str, object)
     def write_error(self, error_module, error_hint, traceback):

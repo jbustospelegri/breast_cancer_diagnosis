@@ -1,5 +1,6 @@
 import os
 import traceback
+import h5py
 
 from threading import Thread
 from typing import io
@@ -187,8 +188,9 @@ class MainWindow(QWidget):
         except AssertionError as err:
             QMessageBox.warning(self, 'Error', err.args[0], QMessageBox.Ok)
 
-    def callback_show_error_message(self, module_name:str, desc: str, trace: traceback, stop_exec: bool = True):
-        filename = get_path(LOGGING_DATA_PATH, f"error log {datetime.now():%Y%m%d}.csv")
+    def callback_show_error_message(self, module_name:str, desc: str, trace: traceback, stop_exec: bool = True,
+                                    activate_window: bool = True):
+        filename = get_path(self.OUT_PATH, f"error log {datetime.now():%Y%m%d}.csv")
 
         self.msg = QMessageBox()
         self.msg.setIcon(QMessageBox.Warning)
@@ -203,6 +205,7 @@ class MainWindow(QWidget):
 
         if stop_exec:
             log_error(module=module_name, description=desc, error=trace, file_path=filename)
+        if activate_window:
             self.callback_activate_buttons(flag=True, show_process_info=False)
 
     def callback_show_finish_message(self):

@@ -2,17 +2,15 @@ import cv2
 import pandas as pd
 
 from typing import io
-from segmentation_models import get_preprocessing
-from tensorflow.keras.models import load_model
 
 from breast_cancer_dataset.databases.test_db import DatasetTest
-from cnns.metrics import f1_score
+from cnns.classification import DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model
 from cnns.utils import get_predictions
 from cnns.model_ensambling import GradientBoosting
 from user_interface.signals_interface import SignalProgressBar, SignalError, SignalCompleted, SignalLogging
 from utils.config import DEPLOYMENT_MODELS
 from utils.functions import get_filename, get_path, get_contours
-
+from user_interface.utils import ControledError
 
 def generate_predictions_pipeline(
         excel_filepath: io, out_dirpath: io, signal_information: SignalProgressBar, signal_error: SignalError,
@@ -20,11 +18,11 @@ def generate_predictions_pipeline(
 ):
     info = ''
     predictions = {}
-    cnn_models = {
-        'densenet121':  get_path(DEPLOYMENT_MODELS, 'DenseNet.h5'),
-        'inceptionv3': get_path(DEPLOYMENT_MODELS, 'InceptionV3.h5'),
-        'resnet50': get_path(DEPLOYMENT_MODELS, 'ResNet50.h5'),
-        'vgg16': get_path(DEPLOYMENT_MODELS, 'VGG16.h5'),
+    weights = {
+        'DenseNet':  get_path(DEPLOYMENT_MODELS, 'DenseNet.h5'),
+        'InceptionV3': get_path(DEPLOYMENT_MODELS, 'InceptionV3.h5'),
+        'ResNet50': get_path(DEPLOYMENT_MODELS, 'ResNet50.h5'),
+        'VGG16': get_path(DEPLOYMENT_MODELS, 'VGG16.h5'),
     }
     ensambling_model = get_path(DEPLOYMENT_MODELS, 'GradientBoosting.sav')
 
@@ -32,6 +30,9 @@ def generate_predictions_pipeline(
         info = f'Reading excel file'
         signal_information.emit_update_label_and_progress_bar(0, info)
         db = DatasetTest(xlsx_io=excel_filepath, signal=signal_log, out_path=out_dirpath)
+
+        if len(db.df) <= 0:
+            raise ControledError('Excel not valid. Please check log error files generated for more information.')
 
         info = f'Converting images to png format'
         signal_information.emit_update_label_and_progress_bar(2, info)
@@ -43,13 +44,15 @@ def generate_predictions_pipeline(
 
         info = 'Generating ROI classification'
         signal_information.emit_update_label_and_progress_bar(68, info)
-        for i, (model_name, path) in enumerate(cnn_models.items(), 1):
+        for i, model in enumerate([DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model], 1):
 
-            model = load_model(path, custom_objects={'f1_score': f1_score})
+            cnn = model(n=2, weights=None)
 
-            data = db.get_iterator(get_preprocessing(model_name), size=model.input_shape[1:3])
+            cnn.load_weigths(weights[cnn.__name__])
 
-            predictions[get_filename(path)] = get_predictions(keras_model=model, data=data)
+            data = db.get_iterator(cnn.get_preprocessing_func(), size=cnn.shape[:2])
+
+            predictions[cnn.__name__] = get_predictions(keras_model=cnn, data=data)
 
             signal_information.emit_update_label_and_progress_bar(68 + i * 3, info)
 
@@ -60,7 +63,7 @@ def generate_predictions_pipeline(
             right=model_ensambler.predict(data, **predictions),
             on=['PROCESSED_IMG'],
             how='left'
-        )
+        )[[*db.XLSX_COLS, 'LABEL_IMG']]
 
         info = 'Bulking results'
         signal_information.emit_update_label_and_progress_bar(80, info)
@@ -85,10 +88,10 @@ def generate_predictions_pipeline(
                80 + bar_range * i // len(final_data), f'Saved image {i} of {len(final_data)}'
             )
 
-        # Recuperar información de los logs de errores.
-
+    except ControledError as err:
+        signal_error.emit_error(__name__, info, err, False, True)
 
     except Exception as err:
-        signal_error.emit_error(__name__, info, err, True)
+        signal_error.emit_error(__name__, info, err, True, False)
     else:
         signal_complete.finish_process()
