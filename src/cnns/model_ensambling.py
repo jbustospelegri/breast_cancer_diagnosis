@@ -18,7 +18,7 @@ class GradientBoosting:
 
     __name__ = 'GradientBoosting'
 
-    def __init__(self, db: pd.DataFrame = None, model_path: io = None):
+    def __init__(self, db: Dataloder = None, model_path: io = None):
         self.db = db
         if os.path.isfile(model_path):
             self.load_model(model_path)

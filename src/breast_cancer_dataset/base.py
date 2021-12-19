@@ -21,6 +21,10 @@ from utils.functions import search_files, get_filename, get_path
 
 class GeneralDataBase:
 
+    """
+        Clase padre con las funcionalidades básicas que serán heredadas por los datasets de entrenamiento.
+    """
+
     __name__ = 'GeneralDataBase'
     IMG_TYPE: str = 'FULL'
     DF_COLS = [
@@ -31,6 +35,14 @@ class GeneralDataBase:
 
     def __init__(self, ori_dir: io, ori_extension: str, dest_extension: str, converted_dir: io, procesed_dir: io,
                  database_info_file_paths: List[io]):
+        """
+        :param ori_dir: directorio con las imagenes
+        :param ori_extension: extensión de las imagenes del dataset
+        :param dest_extension: extensión final de las imagenes convertidas
+        :param converted_dir: directorio en el que se volcarán las imagenes convertidas
+        :param procesed_dir: directorio en el que se volcarán las imagenes procesadas
+        :param database_info_file_paths: lista con los ficheros que contienen información del dataset
+        """
 
         for p in database_info_file_paths:
             assert os.path.exists(p), f"Directory {p} doesn't exists."
@@ -45,26 +57,38 @@ class GeneralDataBase:
         self.database_info_file_paths = database_info_file_paths
 
     def get_df_from_info_files(self) -> pd.DataFrame:
-       pass
+        """
+        Función que procesa los archivos de entrada para generar el dataframe de cada base. Esta función, deberá
+        ser sobreesctira por las clases hija debido a que cada set de datos tendrá sus peculiaridades.
+        :return: dataframe con la información procesada.
+        """
+        pass
 
-    def add_dataset_columns(self, df: pd.DataFrame):
+    def add_dataset_columns(self, df: pd.DataFrame) -> None:
+        """
+        Función que añade dos columnas fijas para el dataframe de la clase que contiene los datos con información
+        referente al dataset utilizado.
+        :param df: dataframe al que se añadirán las colmnas
+        """
         # Se crea una columna con información acerca de qué dataset se trata.
         df.loc[:, 'DATASET'] = self.__name__
 
         # Se crea la columna IMG_TYPE que indicará si se trata de una imagen completa (FULL) o bien de una imagen
-        # recortada (CROP) o mascara (MASK). En este caso, todas las imagenes son FULL
+        # recortada (CROP)
         df.loc[:, 'IMG_TYPE'] = self.IMG_TYPE
 
     def add_extra_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Función que será sobreescrita por cada clase hija con el objetivo de añadir aquellas columnas que sean
+        necesarias.
+        :param df: dataframe al que se añadirán las columns
+        :return: pandas dataframe con las columnas añadidas.
+        """
         return df
 
     def get_raw_files(self, df: pd.DataFrame, get_id_func: callable = lambda x: get_filename(x)) -> pd.DataFrame:
         """
-        Función que creará un dataframe con información del dataset CBIS-DDSM. Para cada imagen, se pretende recuperar
-        la tipología (clase) detectada, el path de origen de la imagen y su nombre, el tipo de patología (massa o
-        calcificación) y el nombre del estudio que contiene el identificador del paciente, el seno sobre el cual se ha
-        realizado la mamografía, el tipo de mamografía (CC o MLO) y un índice para aquellas imagenes recortadas o
-        mascaras. Adicionalmente, se indicarán los paths de destino para la conversión y el procesado de las imagenes.
+        Función genérica para recuperar
 
         :return: Pandas dataframe con las columnas especificadas en la descripción
         """
@@ -152,7 +176,7 @@ class GeneralDataBase:
 
     def preproces_images(self, args: list = None, func: callable = full_image_pipeline) -> None:
         """
-        Función utilizara para realizar el preprocesado de las imagenes completas.
+        Función utilizada para realizar el preprocesado de las imagenes completas.
 
         """
         print(f'{"-" * 75}\n\tStarting preprocessing of {self.df_desc.PROCESSED_IMG.nunique()} images')

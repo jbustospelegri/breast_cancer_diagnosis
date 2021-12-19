@@ -63,12 +63,13 @@ def generate_predictions_pipeline(
             right=model_ensambler.predict(data, **predictions),
             on=['PROCESSED_IMG'],
             how='left'
-        )[[*db.XLSX_COLS, 'PATHOLOGY']]
+        )
 
         info = 'Bulking results'
         signal_information.emit_update_label_and_progress_bar(80, info)
 
-        final_data.to_excel(get_path(out_dirpath, f'{get_filename(excel_filepath)}.xlsx'), index=False)
+        final_data[[*db.XLSX_COLS, 'PATHOLOGY']].\
+            to_excel(get_path(out_dirpath, f'{get_filename(excel_filepath)}.xlsx'), index=False)
         for i, (idx, row) in enumerate(final_data.iterrows(), 1):
 
             try:
