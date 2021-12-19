@@ -63,7 +63,7 @@ def generate_predictions_pipeline(
             right=model_ensambler.predict(data, **predictions),
             on=['PROCESSED_IMG'],
             how='left'
-        )[[*db.XLSX_COLS, 'LABEL_IMG']]
+        )[[*db.XLSX_COLS, 'PATHOLOGY']]
 
         info = 'Bulking results'
         signal_information.emit_update_label_and_progress_bar(80, info)
