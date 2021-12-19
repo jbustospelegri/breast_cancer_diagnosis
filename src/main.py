@@ -6,7 +6,6 @@ from PyQt5 import QtCore
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QStyleFactory, QApplication
 
-
 from user_interface.main_window import ApplicationWindow
 from utils.config import GUI_CSS_PATH, GUI_ICON_PATH
 

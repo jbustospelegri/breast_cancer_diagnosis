@@ -57,10 +57,10 @@ if __name__ == '__main__':
 
     # Debido a que tensorflow no libera el espacio de GPU hasta finalizar un proceso, cada modelo se entrenará en
     # un subproceso daemonico para evitar la sobrecarga de memoria.
-    # for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
-    #                                                                            'ALL']):
-    for weight_init, frozen_layers in zip(['random'],['ALL']):
-        for cnn in available_models[task_type][1:]:
+    for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
+                                                                               'ALL']):
+
+        for cnn in available_models[task_type]:
             q = Queue()
 
             # Se rea el proceso

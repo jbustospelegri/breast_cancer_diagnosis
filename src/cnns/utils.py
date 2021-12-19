@@ -153,7 +153,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
         print(f'{"=" * 75}\nProceso de transfer learning finalizado\n{"=" * 75}')
 
     print(f'{"=" * 75}\nAlmacenando  modelo.\n{"=" * 75}')
-    cnn.save_model(dirname=get_path(c.model_store_cnn_dir, weight_init, frozen_layers), model_name=f"{name}.h5")
+    cnn.save_weights(dirname=get_path(c.model_store_cnn_dir, weight_init, frozen_layers), model_name=f"{name}.h5")
     print(f'{"=" * 75}\nModelo almacenado correctamente.\n{"=" * 75}')
 
     if task_type == 'classification':

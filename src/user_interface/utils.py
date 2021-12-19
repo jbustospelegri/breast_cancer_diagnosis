@@ -1,6 +1,12 @@
 from PyQt5.QtWidgets import QWidget, QDesktopWidget, QLineEdit, QSizePolicy, QGridLayout, QSpacerItem
 
 
+class ControledError(Exception):
+
+    def __init__(self, *args):
+        super(ControledError, self).__init__(*args)
+
+
 def center_widget_into_screen(gui: QWidget):
     """
     Function to center the application on the screen.

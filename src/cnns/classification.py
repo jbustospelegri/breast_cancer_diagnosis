@@ -168,13 +168,16 @@ class GeneralModel:
         t, e = self.start_train(train_data, val_data, epochs, opt, unfrozen_layers=unfrozen_layers)
         return t, e
 
-    def save_model(self, dirname: str, model_name: str):
+    def save_weights(self, dirname: str, model_name: str):
         """
         Función utilizada para almacenar el modelo entrenado
-        :param dirname: directorio en el cual se almacenara el modelo
+        :param dirname: directorio en el cual se almacenara el modelocv
         :param model_name: nombre del archivo para almacenar el modelo
         """
-        self.model.save(get_path(dirname, model_name))
+        self.model.save_weights(get_path(dirname, model_name))
+
+    def load_weigths(self, weights: io):
+        self.model.load_weights(weights)
 
     def predict(self, *args, **kwargs):
         """
