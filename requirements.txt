@@ -30,7 +30,7 @@ google-auth==2.3.3
 google-auth-oauthlib==0.4.6
 google-pasta==0.2.0
 grpcio==1.32.0
-h5py==2.10.0
+h5py==3.6.0
 hdfs==2.6.0
 idna==3.3
 image-classifiers==1.0.0
@@ -93,6 +93,7 @@ pygogo==0.13.2
 pyinstaller==4.7
 pyinstaller-hooks-contrib==2021.4
 pyparsing==3.0.6
+pypiwin32==223
 PyQt5==5.15.6
 PyQt5-Qt5==5.15.2
 PyQt5-sip==12.9.0
@@ -124,8 +125,8 @@ tensorboard==2.7.0
 tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.8.0
 tensorflow==2.7.0
-tensorflow-estimator==2.4.0
-tensorflow-gpu==2.4.1
+tensorflow-estimator==2.7.0
+tensorflow-gpu==2.7.0
 tensorflow-io-gcs-filesystem==0.22.0
 termcolor==1.1.0
 terminado==0.12.1
