@@ -236,9 +236,9 @@ APPLICATION_NAME: str = 'Breast Cancer Diagnosis'
 """
     CARPETAS DE LA INTERFAZ GRÁFICA
 """
-GUI_CSS_PATH = get_path(WORKING_DIRECTORY, 'static', 'css')
-GUI_HTML_PATH = get_path(WORKING_DIRECTORY, 'static', 'html', 'help_window.html')
-GUI_ICON_PATH = get_path(WORKING_DIRECTORY, 'static', 'images', 'logo.png')
+GUI_CSS_PATH = get_path(WORKING_DIRECTORY, 'static', 'css', create=False)
+GUI_HTML_PATH = get_path(WORKING_DIRECTORY, 'static', 'html', 'help_window.html', create=False)
+GUI_ICON_PATH = get_path(WORKING_DIRECTORY, 'static', 'images', 'logo.png', create=False)
 
 """
     CARPETAS DE RESULTADOS DEL MODELO 

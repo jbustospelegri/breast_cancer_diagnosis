@@ -55,13 +55,21 @@ def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFra
     # dada por la función de activacón softmax, se obtiene la clase predicha mediante el valor máximo (clase más
     # probable).
     data.set_batch_size(1)
+    probabilities = keras_model.predict(data)
     predictions = [
-        class_labels[pred] for pred in one_hot(argmax(keras_model.predict(data), axis=1), len(class_labels)).numpy().\
+        class_labels[pred] for pred in one_hot(argmax(probabilities, axis=1), len(class_labels)).numpy().\
             argmax(axis=-1).tolist()]
 
     # Se crea el dataset final
-    dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions, 'IMG_LABEL': true_labels}) \
-        if true_labels else pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions})
+    if true_labels:
+        dataset = pd.DataFrame({
+            'PROCESSED_IMG': fnames,
+            'PREDICTION': predictions,
+            'PROBABILTY': probabilities[:, 1],
+            'IMG_LABEL': true_labels
+        })
+    else:
+        dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions, 'PROBABILTY': probabilities[:, 1]})
 
     # Se añaden columnas adicionales al dataset
     for col, value in kwargs.get('add_columns', {}).items():
@@ -162,10 +170,12 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
         # Se generan las predicciones de entrenamiento y validación en formato de dataframe y se devuelven al proceso
         # ppal.
-        q.put(pd.concat(objs=[
-            get_predictions(keras_model=cnn, data=train, add_columns={'TRAIN_VAL': 'train'}),
-            get_predictions(keras_model=cnn, data=val, add_columns={'TRAIN_VAL': 'val'})],
-            ignore_index=True
+        q.put(
+            pd.concat(
+                objs=[
+                    get_predictions(keras_model=cnn, data=train, add_columns={'TRAIN_VAL': 'train'}),
+                    get_predictions(keras_model=cnn, data=val, add_columns={'TRAIN_VAL': 'val'})],
+                ignore_index=True
         ))
         print(f'{"=" * 75}\nPredicciones finalizadas.\n{"=" * 75}')
     else:
