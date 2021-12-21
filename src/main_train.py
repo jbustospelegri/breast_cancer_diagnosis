@@ -7,11 +7,11 @@ from multiprocessing import Queue, Process
 from breast_cancer_dataset.database_generator import BreastCancerDataset
 from cnns.classification import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
 from cnns.segmentation import UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model
-from cnns.model_ensambling import GradientBoosting
+from cnns.model_ensambling import RandomForest
 from cnns.utils import training_pipe
 from data_viz.visualizacion_resultados import DataVisualizer
 
-from utils.config import MODEL_FILES, XGB_CONFIG
+from utils.config import MODEL_FILES, ENSEMBLER_CONFIG
 from utils.functions import bulk_data, get_path
 
 
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     # Los valores disponibles son PATCHES, COMPLETE_IMAGE
     experiment = 'PATCHES'
     # Nombre del experimento
-    experiment_name = 'EJEC_ROI_TEST2'
+    experiment_name = 'EJEC_ROI_TEST2_1'
 
     available_models = {
         'classification': [DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model],
@@ -59,7 +59,6 @@ if __name__ == '__main__':
     # un subproceso daemonico para evitar la sobrecarga de memoria.
     for weight_init, frozen_layers in zip([*repeat('imagenet', 6), 'random'], ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT',
                                                                                'ALL']):
-
         for cnn in available_models[task_type]:
             q = Queue()
 
@@ -79,16 +78,15 @@ if __name__ == '__main__':
                                 f'{cnn.__name__.replace("Model", "")}.csv')
                 bulk_data(path, **predictions.to_dict())
 
-        if task_type == 'classification':
-            # Se crea el gradient boosting
-            print(f'{"-" * 75}\nGeneradando combinación secuencial de clasificadores.\n{"-" * 75}')
-            ensambler = GradientBoosting(db=db.df)
-            ensambler.train_model(
-                cnn_predictions_dir=get_path(model_config.model_predictions_cnn_dir, weight_init, frozen_layers),
-                save_model_dir=get_path(model_config.model_store_xgb_dir, XGB_CONFIG, weight_init, frozen_layers),
-                xgb_predictions_dir=get_path(model_config.model_predictions_xgb_dir, XGB_CONFIG, weight_init,
-                                             frozen_layers)
-            )
+    if task_type == 'classification':
+        # Se crea el grandom forest
+        print(f'{"-" * 75}\nGeneradando combinación secuencial de clasificadores.\n{"-" * 75}')
+        ensambler = RandomForest(db=db.df)
+        ensambler.train_model(
+            cnn_predictions_dir=get_path(model_config.model_predictions_cnn_dir),
+            save_model_dir=get_path(model_config.model_store_ensembler_dir, ENSEMBLER_CONFIG),
+            out_predictions_dir=get_path(model_config.model_predictions_ensembler_dir, ENSEMBLER_CONFIG)
+        )
 
         print(f'{"-" * 50}\nProceso de entrenamiento finalizado\n{"-" * 50}')
 
@@ -101,4 +99,7 @@ if __name__ == '__main__':
     data_viz.get_model_time_executions(summary_dir=model_config.model_summary_dir)
 
     print(f'{"-" * 75}\nGenerando matrices de confusión de los modelos.\n{"-" * 75}')
-    data_viz.get_model_predictions_metrics(predictions_dir=model_config.model_predictions_dir)
+    data_viz.get_model_predictions_metrics(
+        cnn_predictions_dir=model_config.model_predictions_cnn_dir,
+        ensembler_predictions_dir=model_config.model_predictions_ensembler_dir
+    )

@@ -55,21 +55,13 @@ def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFra
     # dada por la función de activacón softmax, se obtiene la clase predicha mediante el valor máximo (clase más
     # probable).
     data.set_batch_size(1)
-    probabilities = keras_model.predict(data)
-    predictions = [
-        class_labels[pred] for pred in one_hot(argmax(probabilities, axis=1), len(class_labels)).numpy().\
-            argmax(axis=-1).tolist()]
+    predictions = keras_model.predict(data)[:, 1]
 
     # Se crea el dataset final
     if true_labels:
-        dataset = pd.DataFrame({
-            'PROCESSED_IMG': fnames,
-            'PREDICTION': predictions,
-            'PROBABILTY': probabilities[:, 1],
-            'IMG_LABEL': true_labels
-        })
+        dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions, 'IMG_LABEL': true_labels})
     else:
-        dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions, 'PROBABILTY': probabilities[:, 1]})
+        dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions})
 
     # Se añaden columnas adicionales al dataset
     for col, value in kwargs.get('add_columns', {}).items():

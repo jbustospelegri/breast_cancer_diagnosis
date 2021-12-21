@@ -1,35 +1,35 @@
 import os
 import pickle
-from itertools import product
+from itertools import product, repeat
 
 import pandas as pd
 import numpy as np
 
-from tensorflow.keras.preprocessing.image import Iterator
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import roc_auc_score, accuracy_score, recall_score, precision_score, f1_score
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV
 from typing import io
 
 from breast_cancer_dataset.base import Dataloder
-from utils.config import SEED, XGB_COLS, XGB_CONFIG, N_ESTIMATORS, MAX_DEPTH, MODEL_FILES
+from utils.config import SEED, ENSEMBLER_COLS, ENSEMBLER_CONFIG
 from utils.functions import get_path, bulk_data, search_files, get_filename
 
 
-class GradientBoosting:
+class RandomForest:
 
-    __name__ = 'GradientBoosting'
+    __name__ = 'RandomForest'
+    PARAMETERS_GRID = {
+        'n_estimators': np.arange(50, 500, 50),
+        'max_depth': np.arange(0, 10)
+    }
 
-    def __init__(self, db: Dataloder = None, model_path: io = None):
+    def __init__(self, db: Dataloder = None):
         self.db = db
-        if os.path.isfile(model_path):
-            self.load_model(model_path)
-        else:
-            self.model_gb = GradientBoostingClassifier(
-                max_depth=N_ESTIMATORS, n_estimators=MAX_DEPTH, random_state=SEED
-            )
+        self.clf = None
 
     def load_model(self, model_filepath: io):
         assert os.path.isfile(model_filepath), f"File doesn't exists {model_filepath}"
-        self.model_gb = pickle.load(open(model_filepath, 'rb'))
+        self.clf = pickle.load(open(model_filepath, 'rb'))
 
     @staticmethod
     def get_dataframe_from_kwargs(data: pd.DataFrame, **model_inputs):
@@ -52,7 +52,7 @@ class GradientBoosting:
 
         return data
 
-    def train_model(self, cnn_predictions_dir: io, xgb_predictions_dir: io, save_model_dir: io):
+    def train_model(self, cnn_predictions_dir: io, out_predictions_dir: io, save_model_dir: io):
         """
         Función utilizada para generar el algorítmo de gradient boosting a partir de las predicciones generadas por cada
         modelo.
@@ -70,40 +70,69 @@ class GradientBoosting:
 
         # En caso de existir dataset de validación, se concatena train y val en un dataset único. En caso contrario,
         # se recupera unicamente el set de datos de train
-        data = self.db[['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', *XGB_COLS[XGB_CONFIG]]].copy()
-        cols = XGB_COLS[XGB_CONFIG].copy()
-        for file in search_files(cnn_predictions_dir, 'csv', in_subdirs=False):
-            model_name = get_filename(file)
-            df = pd.read_csv(file, sep=';')[['PROCESSED_IMG', 'PREDICTION']]
-            df_dumy = pd.concat(
-                objs=[
-                    pd.DataFrame(
-                        data=[['0', '0', '0']],
-                        columns=['PROCESSED_IMG',
-                                 *[f'{n}_{l}' for n, l in list(product([model_name], data.IMG_LABEL.unique()))]]
-                    ),
-                    pd.get_dummies(df.rename(columns={'PREDICTION': model_name}), columns=[model_name]).astype(str)
-                ],
-                ignore_index=True
-            ).ffill()
-            cols += [f'{n}_{l}' for n, l in list(product([model_name], data.IMG_LABEL.unique()))]
-            data = pd.merge(left=data, right=df_dumy, on='PROCESSED_IMG', how='left')
+        data = self.db[['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', *ENSEMBLER_COLS[ENSEMBLER_CONFIG]]].copy()
+        data.loc[:, 'LABEL'] = data.IMG_LABEL.map({k: v for v, k in enumerate(sorted(data.IMG_LABEL.unique()))})
+
+        merge_list = []
+        for weight, frozen_layers in zip([*repeat('imagenet', 6), 'random'],
+                                         ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT']):
+
+            l = []
+            for file in search_files(get_path(cnn_predictions_dir, weight, frozen_layers, create=False), ext='csv'):
+
+                l.append(
+                    pd.read_csv(file, sep=';')[['PROCESSED_IMG', 'PREDICTION']].\
+                        assign(WEIGHTS=weight, FT=frozen_layers, CNN=get_filename(file))
+                )
+
+            merge_list.append(
+                pd.merge(left=data, right=pd.concat(l, ignore_index=True), on='PROCESSED_IMG', how='left')
+            )
+
+        all_data = pd.concat(merge_list, ignore_index=True)
+
+        # Se escoge el mejor modelo en función de las metricas AUC de validacion
+        cnn_selection = all_data.groupby(['CNN', 'FT', 'WEIGHTS', 'TRAIN_VAL'], as_index=False).apply(
+            lambda x: pd.Series({'AUC': roc_auc_score(x.LABEL, x.PREDICTION)})
+        )
+
+        selected_cnns = cnn_selection[cnn_selection.TRAIN_VAL == 'val'].sort_values('AUC', ascending=False).\
+            groupby('CNN', as_index=False).first()
+
+        selected_cnns.to_csv(get_path(save_model_dir, 'Selected CNN Report.csv'), sep=';', index=False, decimal=',')
+
+        final_list = []
+        for _, row in selected_cnns.iterrows():
+            final_list.append(
+                all_data[(all_data.CNN == row.CNN) & (all_data.FT == row.FT) & (all_data.WEIGHTS == row.WEIGHTS)]
+            )
+
+        final_df = pd.concat(final_list, ignore_index=True).\
+            set_index(['PROCESSED_IMG', 'LABEL', 'TRAIN_VAL', *ENSEMBLER_COLS[ENSEMBLER_CONFIG], 'CNN'])['PREDICTION'].\
+            unstack().reset_index()
 
         # generación del conjunto de datos de train para gradient boosting
         data.dropna(how='any', inplace=True)
-        train_x, train_y = data.loc[data.TRAIN_VAL == 'train', cols], data.loc[data.TRAIN_VAL == 'train', 'IMG_LABEL']
+        cols = [*ENSEMBLER_COLS[ENSEMBLER_CONFIG], *all_data.CNN.unique().tolist()]
+        train_x = final_df.loc[final_df.TRAIN_VAL == 'train', cols]
+        train_y = final_df.loc[final_df.TRAIN_VAL == 'train', 'LABEL']
 
-        # entrenamiento del modelo
-        self.model_gb.fit(train_x, np.reshape(train_y.values, -1))
+        clf = GridSearchCV(
+            estimator=RandomForestRegressor(random_state=SEED),
+            param_grid=self.PARAMETERS_GRID,
+            scoring='roc_auc',
+            cv=10
+        )
+        clf.fit(train_x, train_y)
 
-        # se almacenan las predicciones
-        data_csv = data[['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL']].\
-            assign(PREDICTION=self.model_gb.predict(data[cols]))
+        data_csv = final_df[['PROCESSED_IMG', 'TRAIN_VAL', 'LABEL']].assign(PREDICTION=clf.predict(final_df[cols]))
 
-        bulk_data(file=get_path(xgb_predictions_dir, f'{self.__name__}.csv'), **data_csv.to_dict())
+        bulk_data(file=get_path(out_predictions_dir, f'{self.__name__}.csv'), **data_csv.to_dict())
+
+        self.clf = clf.best_estimator_
 
         # se almacena el modelo en caso de que el usuario haya definido un nombre de archivo
-        pickle.dump(self.model_gb, open(get_path(save_model_dir, f'{self.__name__}.sav'), 'wb'))
+        pickle.dump(clf.best_estimator_, open(get_path(save_model_dir, f'{self.__name__}.sav'), 'wb'))
 
     def predict(self, data: Dataloder, **kwargs):
         """
@@ -120,18 +149,19 @@ class GradientBoosting:
         """
 
         # Se genera un dataframe con los directorios de las imagenes a predecir
-        gb_dataset = pd.DataFrame(index=data.filenames)
-        gb_dataset.index.name = 'PROCESSED_IMG'
+        assert self.clf, 'Please,load model using load_model method'
+        dataset = pd.DataFrame(index=data.filenames)
+        dataset.index.name = 'PROCESSED_IMG'
 
         # Se unifica el set de datos obteniendo las predicciones de cada modelo representadas por input_models
-        df = self.get_dataframe_from_kwargs(gb_dataset, **kwargs)
+        df = self.get_dataframe_from_kwargs(dataset, **kwargs)
 
         df_encoded = pd.get_dummies(df[kwargs.keys()])
-        for c in [col for col in df_encoded.columns if col not in self.model_gb.feature_names_in_]:
+        for c in [col for col in df_encoded.columns if col not in self.clf.feature_names_in_]:
             df_encoded.loc[:, c] = 0
 
         # Se añaden las predicciones
-        df.loc[:, 'PATHOLOGY'] = self.model_gb.predict(df_encoded)
+        df.loc[:, 'PATHOLOGY'] = self.clf.predict(df_encoded)
 
         # se escribe el log de errores con las predicciones individuales de cada arquitectura de red o únicamente las
         # generadas por gradient boosting

@@ -6,7 +6,7 @@ from typing import io
 from breast_cancer_dataset.databases.test_db import DatasetTest
 from cnns.classification import DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model
 from cnns.utils import get_predictions
-from cnns.model_ensambling import GradientBoosting
+from cnns.model_ensambling import RandomForest
 from user_interface.signals_interface import SignalProgressBar, SignalError, SignalCompleted, SignalLogging
 from utils.config import DEPLOYMENT_MODELS
 from utils.functions import get_filename, get_path, get_contours
@@ -56,7 +56,7 @@ def generate_predictions_pipeline(
 
             signal_information.emit_update_label_and_progress_bar(68 + i * 3, info)
 
-        model_ensambler = GradientBoosting(db=data, model_path=ensambling_model)
+        model_ensambler = RandomForest(db=data, model_path=ensambling_model)
 
         final_data = pd.merge(
             left=db.df,

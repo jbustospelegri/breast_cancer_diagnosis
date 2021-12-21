@@ -21,16 +21,6 @@ TRAIN_DATA_PROP: float = 0.7
 """
     CONFIGURACION DATA AUGMENTATION
 """
-# CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
-#     'horizontal_flip': True,
-#     'vertical_flip': True,
-#     'rotation_range': 270,
-#     'width_shift_range': 0.1,
-#     'height_shift_range': 0.1,
-#     # 'brightness_range': (0.6, 1), no tiene sentido debido a que se aplica la ecu
-#     'zoom_range': [1, 1.5],
-# }
-
 CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': HorizontalFlip(),
     'vertical_flip': VerticalFlip(),
@@ -76,12 +66,11 @@ CLASSIFICATION_LOSS = CategoricalCrossentropy()
 SEGMENTATION_LOSS = DiceLoss() + (1 * BinaryFocalLoss())
 
 """
-    CONFIGURACION PARA EL GRADIENT BOOSTING
+    CONFIGURACION PARA EL MODEL ENSEMBLING
 """
-N_ESTIMATORS = 20
-MAX_DEPTH = 3
-XGB_CONFIG = 'CONF1'
-XGB_COLS = {
+THRESHOLD = 0.5
+ENSEMBLER_CONFIG = 'CONF1'
+ENSEMBLER_COLS = {
     'CONF1': [],
     'CONF2': ['BREAST', 'BREAST_VIEW', 'BREAST_DENSITY']
 }
@@ -256,7 +245,7 @@ class ModelConstants:
 
         self.model_store_dir: io = get_path(self.model_root_dir, 'STORED_MODELS')
         self.model_store_cnn_dir: io = get_path(self.model_store_dir, 'CNN')
-        self.model_store_xgb_dir: io = get_path(self.model_store_dir, 'GRADIENT_BOOSTING')
+        self.model_store_ensembler_dir: io = get_path(self.model_store_dir, 'MODEL_ENSEMBLING')
 
         self.model_log_dir: io = get_path(self.model_root_dir, 'TRAIN_LOGS')
         self.model_summary_dir: io = get_path(self.model_root_dir, 'SUMMARY_MODELS')
@@ -264,7 +253,7 @@ class ModelConstants:
 
         self.model_predictions_dir: io = get_path(self.model_root_dir, 'PREDICTIONS')
         self.model_predictions_cnn_dir = get_path(self.model_predictions_dir, 'CNN')
-        self.model_predictions_xgb_dir = get_path(self.model_predictions_dir, 'GRADIENT_BOOSTING')
+        self.model_predictions_ensembler_dir = get_path(self.model_predictions_dir, 'MODEL_ENSEMBLING')
 
         self.model_data_viz_dir: io = get_path(self.model_root_dir, 'DATA_VIZ')
 

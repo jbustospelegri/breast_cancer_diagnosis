@@ -8,7 +8,7 @@ import numpy as np
 
 from itertools import product
 from tensorflow.python.keras.preprocessing.image import load_img, img_to_array
-from sklearn.metrics import recall_score, f1_score, precision_score, accuracy_score
+from sklearn.metrics import recall_score, f1_score, precision_score, accuracy_score, roc_auc_score
 from typing import List
 from collections import defaultdict
 from albumentations import Compose
@@ -16,7 +16,7 @@ from albumentations import Compose
 from data_viz.functions import render_mpl_table, plot_image, create_countplot
 from preprocessing.image_processing import full_image_pipeline, crop_image_pipeline
 from utils.config import (
-    MODEL_FILES, XGB_CONFIG, CLASSIFICATION_METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS
+    MODEL_FILES, ENSEMBLER_CONFIG, CLASSIFICATION_METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, THRESHOLD
 )
 from utils.functions import get_path, search_files, get_filename
 
@@ -27,7 +27,12 @@ sns.despine()
 
 class DataVisualizer:
 
-    metrics = [f.lower() if type(f) is str else f.__name__ for f in CLASSIFICATION_METRICS.values()] + ['accuracy', 'loss']
+    metrics = [f.lower() if type(f) is str else f.__name__ for f in CLASSIFICATION_METRICS.values()] + \
+              ['accuracy', 'loss']
+    labels = {
+        'BENIGN': 0,
+        'MALIGNANT': 1
+    }
 
     def __init__(self, config: MODEL_FILES, img_type: str):
         self.conf = config
@@ -77,17 +82,14 @@ class DataVisualizer:
 
         return pd.concat(data_list, ignore_index=True)
 
-    @staticmethod
-    def get_dataframe_from_preds(dirname: io) -> pd.DataFrame:
+    def get_dataframe_from_preds(self, dirname: io) -> pd.DataFrame:
 
         l = []
         for file in search_files(dirname, 'csv'):
 
             df = pd.read_csv(file, sep=';')
             df.loc[:, ['Weight', 'Layer']] = file.split(os.sep)[-3:-1]
-            df.rename(columns={'PREDICTION': get_filename(file)}, inplace=True)
-
-            l.append(df)
+            l.append(df.rename(columns={'PREDICTION': get_filename(file)}, inplace=True))
 
         return pd.concat(l, ignore_index=True).groupby(['PROCESSED_IMG', 'Weight', 'Layer'], as_index=False).first()
 
@@ -177,7 +179,7 @@ class DataVisualizer:
                 fig.tight_layout()
                 # Se almacena la figura.
                 fig.savefig(get_path(self.conf.model_viz_results_confusion_matrix_dir, w, layer,
-                                     f'{XGB_CONFIG}_{mode}.jpg'))
+                                     f'{ENSEMBLER_CONFIG}_{mode}.jpg'))
 
     def plot_metrics_table(self, df: pd.DataFrame, models: list, class_metric: bool = True) -> None:
         """
@@ -260,7 +262,7 @@ class DataVisualizer:
                 merge_cells = [[(0, 0), (1, 0)], [(0, 1), (1, 1)], *merge_rows, *merge_cols] if class_metric else None
 
                 fig, _ = render_mpl_table(metric_df, merge_pos=merge_cells, header_rows=2)
-                filename = f'{XGB_CONFIG}_model_metrics{"_marginal"  if class_metric else ""}.jpg'
+                filename = f'{ENSEMBLER_CONFIG}_model_metrics{"_marginal"  if class_metric else ""}.jpg'
                 fig.savefig(get_path(self.conf.model_viz_results_metrics_dir, w, l, filename))
 
     def plot_accuracy_plots(self, df: pd.DataFrame, models: list, hue: str, title: str, img_name: str):
@@ -281,7 +283,7 @@ class DataVisualizer:
 
         fig.tight_layout()
         fig.suptitle(title, y=1.05, fontsize=14, fontweight='bold')
-        fig.savefig(get_path(self.conf.model_viz_results_accuracy_dir, XGB_CONFIG, f'{img_name}.png'))
+        fig.savefig(get_path(self.conf.model_viz_results_accuracy_dir, ENSEMBLER_CONFIG, f'{img_name}.png'))
 
     def get_model_time_executions(self, summary_dir: io):
 
@@ -360,7 +362,7 @@ class DataVisualizer:
                     ]
                 )
 
-    def get_model_predictions_metrics(self, predictions_dir: io):
+    def get_model_predictions_metrics(self, cnn_predictions_dir: io, ensembler_predictions_dir: io):
         """
         Función que permite crear una matriz de confusión a partir de las predicciones generadas por el modelo en la
         fase de entrenamiento para graficarla en un archivo.
@@ -371,13 +373,19 @@ class DataVisualizer:
        """
 
         # Lectura de los datos
-        df = self.get_dataframe_from_preds(dirname=predictions_dir)
-        models = [c for c in df.columns if c not in ['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', 'Weight', 'Layer']]
+        df = self.get_dataframe_from_preds(dirname=cnn_predictions_dir)
+        models = [
+            c for c in df.columns if c not in
+                                     ['PROCESSED_IMG', 'IMG_LABEL', 'PREDICTION', 'TRAIN_VAL', 'Weight', 'Layer']
+        ]
+
         self.plot_confusion_matrix(df, models)
-        # self.plot_metrics_table(df, models, class_metric=True)
+
         self.plot_metrics_table(df, models, class_metric=False)
+
         self.plot_accuracy_plots(df[df.Layer == 'ALL'], models, hue='Weight', img_name='Weight Init Accuracy',
                                  title='Random Initialization vs Imagenet')
+
         self.plot_accuracy_plots(df[df.Weight == 'imagenet'], models, hue='Layer', img_name='Frozen Layers Accuracy',
                                  title='Impact of the fraction of convolutional blocks fine-tuned on CNN performance')
 
