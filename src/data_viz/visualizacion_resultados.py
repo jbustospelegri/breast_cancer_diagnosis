@@ -13,12 +13,14 @@ from typing import List
 from collections import defaultdict
 from albumentations import Compose
 
+from algorithms.utils import optimize_threshold
 from data_viz.functions import render_mpl_table, plot_image, create_countplot
 from preprocessing.image_processing import full_image_pipeline, crop_image_pipeline
 from utils.config import (
-    MODEL_FILES, ENSEMBLER_CONFIG, CLASSIFICATION_METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, THRESHOLD
+    MODEL_FILES, ENSEMBLER_CONFIG, CLASSIFICATION_METRICS, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, THRESHOLD, SEED
 )
 from utils.functions import get_path, search_files, get_filename
+from algorithms.utils import apply_bootstrap
 
 
 sns.set(style='white')
@@ -89,12 +91,43 @@ class DataVisualizer:
 
             df = pd.read_csv(file, sep=';')
             df.loc[:, ['Weight', 'Layer']] = file.split(os.sep)[-3:-1]
-            l.append(df.rename(columns={'PREDICTION': get_filename(file)}, inplace=True))
+            l.append(df.rename(columns={'PREDICTION': get_filename(file)}))
 
         return pd.concat(l, ignore_index=True).groupby(['PROCESSED_IMG', 'Weight', 'Layer'], as_index=False).first()
 
     def get_dataframe_from_dataset_excel(self) -> pd.DataFrame:
         return pd.read_excel(self.conf.model_db_desc_csv, dtype=object, index_col=None)
+
+    def get_threshold_opt(self, df: pd.DataFrame, models: list):
+
+        thresholds = df[df.TRAIN_VAL == 'train'].groupby(['Weight', 'TRAIN_VAL', 'Layer'], as_index=False).apply(
+            lambda x: pd.Series(
+                {
+                    c: optimize_threshold(
+                        x.IMG_LABEL.map({'BENIGN': 0, 'MALIGNANT': 1}).values.tolist(), x[c].values.tolist()
+                    ) for c in models
+                }
+            )
+        )
+
+        thresholds.to_csv(get_path(self.conf.model_root_dir, 'thresholds.csv'), index=False, decimal=',', sep=';')
+
+        for model in models:
+            df.loc[:, f'{model}_LBL'] = np.nan
+
+        for w, layer in product(df.Weight.unique(), df.Layer.unique()):
+
+            for model in models:
+                try:
+                    thresh = thresholds.loc[(thresholds.Weight == w) & (thresholds.Layer == layer), model].values[0]
+                except IndexError:
+                    thresh = np.nan
+
+                if not pd.isna(thresh):
+                    df.loc[(df.Weight == w) & (df.Layer == layer), f'{model}_LBL'] = np.where(
+                        df.loc[(df.Weight == w) & (df.Layer == layer), model] >= thresh, 'MALIGNANT', 'BENIGN')
+
+                # Llamar a la función que hace el plot de los threshols
 
     @staticmethod
     def plot_model_metrics(plot_params: List[dict], dirname: io = None, filename: io = None, plots_per_line: int = 2):
@@ -142,46 +175,47 @@ class DataVisualizer:
         figure.tight_layout()
         figure.savefig(get_path(dirname, filename))
 
-    def plot_confusion_matrix(self, df: pd.DataFrame, models: list) -> None:
+    def plot_confusion_matrix(self, df: pd.DataFrame, best_models: pd.DataFrame, models: list) -> None:
         # En función del número de modelos, se generan n hileras para graficar los resultados. Cada hilera contendrá
         # dos modelos.
         nrows = (len(models) // 2) + 1
 
         # Se itera para cada fase de entrenamiento/validación de cada modelo.
-        for mode, w, layer in product(df.TRAIN_VAL.unique(), df.Weight.unique(), df.Layer.unique()):
+        for mode in df.TRAIN_VAL.unique():
 
-            plt_data = df[(df.TRAIN_VAL == mode) & (df.Weight == w) & (df.Layer == layer)].copy()
+            # Se crea la figura de matplotlib
+            fig = plt.figure(figsize=(15, 10))
 
-            if len(plt_data) > 0:
-                # Se crea la figura de matplotlib
-                fig = plt.figure(figsize=(15, 10))
+            # Se iteran los modelos
+            for i, col in enumerate(models, 1):
 
-                # Se iteran los modelos
-                for i, col in enumerate(models, 1):
+                layer = best_models.loc[best_models.CNN == col, 'FT'].values[0]
+                weights = best_models.loc[best_models.CNN == col, 'WEIGHTS'].values[0]
 
-                    # Se crea un subplot.
-                    ax = fig.add_subplot(nrows, 2, i)
+                plt_data = df[(df.TRAIN_VAL == mode) & (df.Layer == layer) & (df.Weight == weights)]
 
-                    # Se crea la tabla de contingencia a través de las clases verdaderas (columna true_label) y las
-                    # predecidas (columna definida por el nombre del modelo)..
-                    ct = pd.crosstab(plt_data.IMG_LABEL, plt_data[col], normalize=False)
+                # Se crea un subplot.
+                ax = fig.add_subplot(nrows, 2, i)
 
-                    # Se muestra la matriz de confusión.
-                    sns.set(font_scale=1)
-                    sns.heatmap(ct.reindex(sorted(ct.columns), axis=1), cmap="Blues", annot=True,
-                                annot_kws={"size": 15}, fmt="d", cbar=False, ax=ax)
+                # Se crea la tabla de contingencia a través de las clases verdaderas (columna true_label) y las
+                # predecidas (columna definida por el nombre del modelo)..
+                ct = pd.crosstab(plt_data.IMG_LABEL, plt_data[f'{col}_LBL'], normalize=False)
 
-                    # título y eje x del gráfico
-                    ax.set_title(f'Modelo: {col}\n{mode}', fontweight='bold', size=14)
-                    ax.set(xlabel='Predictions')
+                # Se muestra la matriz de confusión.
+                sns.set(font_scale=1)
+                sns.heatmap(ct.reindex(sorted(ct.columns), axis=1), cmap="Blues", annot=True,
+                            annot_kws={"size": 15}, fmt="d", cbar=False, ax=ax)
+
+                # título y eje x del gráfico
+                ax.set_title(f'Modelo: {col}\n{mode} ({weights} - {layer})', fontweight='bold', size=14)
+                ax.set(xlabel='Predictions')
 
                 # Se ajustan los subplots
                 fig.tight_layout()
                 # Se almacena la figura.
-                fig.savefig(get_path(self.conf.model_viz_results_confusion_matrix_dir, w, layer,
-                                     f'{ENSEMBLER_CONFIG}_{mode}.jpg'))
+                fig.savefig(get_path(self.conf.model_viz_results_confusion_matrix_dir, f'{mode}.png'))
 
-    def plot_metrics_table(self, df: pd.DataFrame, models: list, class_metric: bool = True) -> None:
+    def plot_metrics_table(self, df: pd.DataFrame, models: list, best: pd.DataFrame, class_metric: bool = True) -> None:
         """
         Función utilizada para generar una imagen con una tabla que contiene las métricas de accuracy, precision,
         recall y f1_score para entrenamiento y validación. Las métricas se calculan a partir del log de predicciones
@@ -195,95 +229,169 @@ class DataVisualizer:
                               global para cada modelo.
         """
 
-        metrics = ['accuracy', 'precision', 'recall', 'f1']
+        metrics = ['AUC', 'accuracy', 'precision', 'recall', 'f1']
 
-        for w, l in product(df.Weight.unique(), df.Layer.unique()):
+        # Se crea un dataset que contendrá las métricas accuracy, precision, recall y f1 para train y validación a
+        # nivel general. En caso de tener el parametro class_metrics a True, las columnas del dataset serán un
+        # multiindice con modelos y clases; en caso contrario, únicamente contendrá el nombre de los modelos.
+        metric_df = pd.DataFrame(
+            index=pd.MultiIndex.from_product([df.TRAIN_VAL.unique(), metrics]),
+            columns=pd.MultiIndex.from_product([models, df.IMG_LABEL.unique().tolist()]) if class_metric
+            else models
+        )
 
-            df_ = df[(df.Weight == w) & (df.Layer == l)].copy()
+        # Se asigna el nombre del índice
+        metric_df.index.set_names(['mode', 'metric'], inplace=True)
 
-            if len(df_) > 0:
-                # Se crea un dataset que contendrá las métricas accuracy, precision, recall y f1 para train y validación a
-                # nivel general. En caso de tener el parametro class_metrics a True, las columnas del dataset serán un
-                # multiindice con modelos y clases; en caso contrario, únicamente contendrá el nombre de los modelos.
-                metric_df = pd.DataFrame(
-                    index=pd.MultiIndex.from_product([df.TRAIN_VAL.unique(), metrics]),
-                    columns=pd.MultiIndex.from_product([models, df_.IMG_LABEL.unique().tolist()]) if class_metric
-                    else models
-                )
+        for phase, model in product(df.TRAIN_VAL.unique(), models):
 
-                # Se asigna el nombre del índice
-                metric_df.index.set_names(['mode', 'metric'], inplace=True)
+            layer = best.loc[best.CNN == model, 'FT'].values[0]
+            weights = best.loc[best.CNN == model, 'WEIGHTS'].values[0]
 
-                for phase, model in product(df_.TRAIN_VAL.unique(), models):
+            df_ = df[(df.TRAIN_VAL == phase) & (df.Layer == layer) & (df.Weight == weights)]
 
-                    df_2 = df_[df_.TRAIN_VAL == phase]
+            if class_metric:
+                # En caso de querer obtener las metricas de cada clase se itera sobre cada una de estas.
+                for class_label in df_.IMG_LABEL.unique():
 
-                    if class_metric:
-                        # En caso de querer obtener las metricas de cada clase se itera sobre cada una de estas.
-                        for class_label in df_.IMG_LABEL.unique():
-                            # Para poder generar las métricas deseadas, se considerará cada clase como verdadera
-                            # asignandole el valor 1, y el resto de clases con el valor 0. De esta forma, se evaluará
-                            # para cada clase. (Técnica one vs all)
-                            map_dict = defaultdict(lambda: 0, {class_label: 1})
+                    df_2 = df_[df_.TRAIN_VAL == phase][['IMG_LABEL', model]]
 
-                            # Creación del dataset de métricas
-                            metric_df.loc[(phase,), (model, class_label)] = [
-                                round(accuracy_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict)) * 100, 2),
-                                round(precision_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
-                                                      zero_division=0, average='weighted') * 100, 2),
-                                round(recall_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
-                                                   zero_division=0, average='weighted') * 100, 2),
-                                round(f1_score(df_2.IMG_LABEL.map(map_dict), df_2[model].map(map_dict),
-                                               zero_division=0, average='weighted') * 100, 2)]
-                    else:
-                        # Creación del dataset de métricas
-                        metric_df.loc[(phase,), model] = [
-                            round(accuracy_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist()) * 100, 2),
-                            round(precision_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
-                                                  average='weighted') * 100, 2),
-                            round(recall_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
-                                               average='weighted') * 100, 2),
-                            round(f1_score(df_2.IMG_LABEL.tolist(), df_2[model].tolist(), zero_division=0,
-                                           average='weighted') * 100, 2)]
+                    # Para poder generar las métricas deseadas, se considerará cada clase como verdadera
+                    # asignandole el valor 1, y el resto de clases con el valor 0. De esta forma, se evaluará
+                    # para cada clase. (Técnica one vs all)
+                    map_dict = defaultdict(lambda: 0, {class_label: 1})
 
-                # se resetea el índice para poder mostrar en la tabla si las métricas son de entrenamiento o de
-                # validación
-                metric_df.reset_index(inplace=True)
+                    # Creación del dataset de métricas
+                    metric_df.loc[(phase,), (model, class_label)] = [
+                        '{:.2f} [{:.2f}, {:.2f}]'.format(
+                            *apply_bootstrap(df_2.applymap(map_dict.get), true_col='IMG_LABEL', pred_col=model,
+                                            metric=roc_auc_score)
+                        ),
+                        '{:.2f} [{:.2f}, {:.2f}]'.format(
+                            *apply_bootstrap(df_2.applymap(map_dict.get), true_col='IMG_LABEL', pred_col=model,
+                                            metric=accuracy_score)
+                        ),
+                        '{:.2f} [{:.2f}, {:.2f}]'.format(
+                            *apply_bootstrap(df_2.applymap(map_dict.get), true_col='IMG_LABEL', pred_col=model,
+                                            metric=precision_score, zero_division=0, average='weighted')
+                        ),
+                        '{:.2f} [{:.2f}, {:.2f}]'.format(
+                            *apply_bootstrap(df_2.applymap(map_dict.get), true_col='IMG_LABEL', pred_col=model,
+                                            metric=recall_score, zero_division=0, average='weighted')
+                        ),
+                        '{:.2f} [{:.2f}, {:.2f}]'.format(
+                            *apply_bootstrap(df_2.applymap(map_dict.get), metric=f1_score, true_col='IMG_LABEL',
+                                            pred_col=model, zero_division=0, average='weighted')
+                        )
+                    ]
+            else:
+                # Creación del dataset de métricas
+                map_dict = {'BENIGN': 0, 'MALIGNANT': 1}
 
-                merge_rows = [
-                    [(i, 0) for i in range(l, l + len(metrics))] for l in
-                    range(metric_df.columns.nlevels, (len(metrics) + 1) * df_.TRAIN_VAL.nunique(), len(metrics))
+                df_2 = df_[df_.TRAIN_VAL == phase][['IMG_LABEL', f'{model}_LBL']]
+
+                metric_df.loc[(phase,), model] = [
+                    '{:.2f} [{:.2f}, {:.2f}]'.format(
+                        *apply_bootstrap(df_2.applymap(map_dict.get), true_col='IMG_LABEL', pred_col=f'{model}_LBL',
+                                         metric=roc_auc_score)
+                    ),
+                    '{:.2f} [{:.2f}, {:.2f}]'.format(
+                        *apply_bootstrap(df_2.applymap(map_dict.get), true_col='IMG_LABEL', pred_col=f'{model}_LBL',
+                                        metric=accuracy_score)
+                    ),
+                    '{:.2f} [{:.2f}, {:.2f}]'.format(
+                        *apply_bootstrap(df_2.applymap(map_dict.get), true_col='IMG_LABEL', pred_col=f'{model}_LBL',
+                                         metric=precision_score, zero_division=0, average='weighted')
+                    ),
+                    '{:.2f} [{:.2f}, {:.2f}]'.format(
+                        *apply_bootstrap(df_2.applymap(map_dict.get), true_col='IMG_LABEL', pred_col=f'{model}_LBL',
+                                         metric=recall_score, zero_division=0, average='weighted')
+                        ),
+                    '{:.2f} [{:.2f}, {:.2f}]'.format(
+                        *apply_bootstrap(df_2.applymap(map_dict.get), metric=f1_score, true_col='IMG_LABEL',
+                                         pred_col=f'{model}_LBL', zero_division=0, average='weighted')
+                    )
                 ]
 
-                merge_cols = [
-                    [(0, i) for i in range(l, l + df_.IMG_LABEL.nunique())]
-                    for l in range(2, (len(models) + 1) * df_.IMG_LABEL.nunique(), df_.IMG_LABEL.nunique())
-                ]
-                merge_cells = [[(0, 0), (1, 0)], [(0, 1), (1, 1)], *merge_rows, *merge_cols] if class_metric else None
+        # se resetea el índice para poder mostrar en la tabla si las métricas son de entrenamiento o de
+        # validación
+        metric_df.reset_index(inplace=True)
 
-                fig, _ = render_mpl_table(metric_df, merge_pos=merge_cells, header_rows=2)
-                filename = f'{ENSEMBLER_CONFIG}_model_metrics{"_marginal"  if class_metric else ""}.jpg'
-                fig.savefig(get_path(self.conf.model_viz_results_metrics_dir, w, l, filename))
+        merge_rows = [
+            [(i, 0) for i in range(l, l + len(metrics))] for l in
+            range(metric_df.columns.nlevels, (len(metrics) + 1) * df_.TRAIN_VAL.nunique(), len(metrics))
+        ]
+
+        merge_cols = [
+            [(0, i) for i in range(l, l + df_.IMG_LABEL.nunique())]
+            for l in range(2, (len(models) + 1) * df_.IMG_LABEL.nunique(), df_.IMG_LABEL.nunique())
+        ]
+        merge_cells = [[(0, 0), (1, 0)], [(0, 1), (1, 1)], *merge_rows, *merge_cols] if class_metric else None
+
+        fig, _ = render_mpl_table(metric_df, merge_pos=merge_cells, header_rows=2)
+        filename = f'{ENSEMBLER_CONFIG}_model_metrics{"_marginal"  if class_metric else ""}.jpg'
+        fig.savefig(get_path(self.conf.model_viz_results_metrics_dir, filename))
 
     def plot_accuracy_plots(self, df: pd.DataFrame, models: list, hue: str, title: str, img_name: str):
 
-        df_grouped = df.groupby(['Weight', 'Layer', 'TRAIN_VAL'], as_index=False). \
-            apply(lambda x: pd.Series({m: round(accuracy_score(x.IMG_LABEL, x[m]) * 100, 2) for m in models}))
+        metrics = {
+            'AUC': lambda x, y: apply_bootstrap(x, true_col='IMG_LABEL', pred_col=y, metric=roc_auc_score),
+            'ACCURACY': lambda x, y: apply_bootstrap(x, true_col='IMG_LABEL', pred_col=y, metric=accuracy_score),
+            'PRECISION': lambda x, y: apply_bootstrap(
+                x, true_col='IMG_LABEL', pred_col=y, metric=precision_score, zero_division=0, average='weighted'),
+            'RECALL': lambda x, y: apply_bootstrap(
+                x, true_col='IMG_LABEL', pred_col=y, metric=recall_score, zero_division=0, average='weighted'),
+            'F1': lambda x, y: apply_bootstrap(
+                x, true_col='IMG_LABEL', pred_col=y, metric=f1_score, zero_division=0, average='weighted')
+        }
 
-        df_melt = pd.melt(df_grouped, id_vars=['Weight', 'Layer', 'TRAIN_VAL'], value_vars=models, var_name='model',
-                          value_name='accuracy')
+        for metric, metric_clb in metrics.items():
 
-        fig, ax = plt.subplots(1, 2, figsize=(15, 8))
+            fig = plt.figure(figsize=(15, 10))
 
-        for mode, axes in zip(df_melt.TRAIN_VAL.unique(), ax.flatten()):
+            for i, phase in enumerate(df.TRAIN_VAL.unique(), 1):
 
-            sns.barplot(x='model', y='accuracy', hue=hue, data=df_melt[df_melt.TRAIN_VAL == mode], ax=axes)
+                df_grouped = df[df.TRAIN_VAL == phase].groupby(['Weight', 'Layer'], as_index=False). \
+                    apply(lambda x: pd.Series(
+                    {
+                        m: "{:.4f}-{:.4f}-{:.4f}".format(
+                            *metric_clb(x[['IMG_LABEL', f'{m}_LBL']].applymap(self.labels.get), f'{m}_LBL')
+                        ) for m in models
+                    }
+                ))
 
-            axes.set(xlabel=mode, ylim=[0, 100])
+                for m in models:
+                    df_grouped.loc[:, [m, f'{m}_l', f'{m}_u']] = (
+                            df_grouped[m].str.split('-', expand=True).applymap(float) * 100
+                    ).values
 
-        fig.tight_layout()
-        fig.suptitle(title, y=1.05, fontsize=14, fontweight='bold')
-        fig.savefig(get_path(self.conf.model_viz_results_accuracy_dir, ENSEMBLER_CONFIG, f'{img_name}.png'))
+                df_melt = pd.concat(
+                    objs=[
+                        pd.melt(df_grouped, id_vars=['Weight', 'Layer'], value_vars=models, var_name='model',
+                                value_name=metric),
+                        pd.melt(df_grouped, id_vars=['Weight', 'Layer'], value_vars=[f'{m}_u' for m in models],
+                                var_name='model', value_name=f'{metric}_u')[[f'{metric}_u']],
+                        pd.melt(df_grouped, id_vars=['Weight', 'Layer'], value_vars=[f'{m}_l' for m in models],
+                                var_name='model', value_name=f'{metric}_l')[[f'{metric}_l']]
+                    ], axis=1
+                )
+
+                axes = fig.add_subplot(1, 2, i)
+
+                sns.barplot(x='model', y=metric, hue=hue, data=df_melt, ax=axes)
+
+                for x, (lgnd, patch) in zip(axes.patches, product(axes.get_legend_handles_labels()[1],
+                                                                  axes.xaxis.get_ticklabels())):
+                    cond = (df_melt.model == patch.get_text()) & (df_melt[hue] == lgnd)
+
+                    low, high = df_melt.loc[cond, [f'{metric}_l', f'{metric}_u']].values.tolist()[0]
+                    plt.vlines(x.get_x() + x.get_width() * 0.5, ymin=low, ymax=high, edgecolor='black')
+
+                axes.set(xlabel=phase, ylim=[0, 100])
+
+                fig.tight_layout()
+                fig.suptitle(title, y=1.05, fontsize=14, fontweight='bold')
+                fig.savefig(get_path(self.conf.model_viz_results_dir, metric, ENSEMBLER_CONFIG, f'{img_name}.png'))
 
     def get_model_time_executions(self, summary_dir: io):
 
@@ -298,7 +406,7 @@ class DataVisualizer:
             data_plot = data_filtered.groupby(['cnn', 'FT'], as_index=False).\
                             apply(lambda x: pd.Series(x['time'].sum() / x['epochs'].sum(), index=['time_eps']))
 
-            sns.barplot(x='FT', y='time_eps', hue='cnn', data=data_plot, ax=axes)
+            sns.barplot(x='cnn', y='time_eps', hue='FT', data=data_plot, ax=axes)
 
             axes.set_title(f'Tiempo de entrenamiento con inicialización de pesos: {weights}')
             axes.set(ylabel='Tiempo / epocas (seg)', xlabel='Capas entrenables')
@@ -373,21 +481,44 @@ class DataVisualizer:
        """
 
         # Lectura de los datos
-        df = self.get_dataframe_from_preds(dirname=cnn_predictions_dir)
-        models = [
-            c for c in df.columns if c not in
-                                     ['PROCESSED_IMG', 'IMG_LABEL', 'PREDICTION', 'TRAIN_VAL', 'Weight', 'Layer']
-        ]
+        df = pd.merge(
+            left=self.get_dataframe_from_preds(dirname=cnn_predictions_dir),
+            right=self.get_dataframe_from_preds(dirname=ensembler_predictions_dir).\
+                assign(Weight='imagenet', Layer='ALL'),
+            on=['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', 'Weight', 'Layer'],
+            how='left'
+        )
 
-        self.plot_confusion_matrix(df, models)
+        best_model = pd.concat(
+            objs=[
+                pd.read_csv(
+                    get_path(self.conf.model_store_ensembler_dir, ENSEMBLER_CONFIG, 'Selected CNN Report.csv'), ';'
+                ),
+                pd.DataFrame(
+                    [['RandomForest', 'ALL', 'imagenet', '-', 0]], columns=['CNN', 'FT', 'WEIGHTS', 'TRAIN_VAL', 'AUC']
+                )
+            ], axis=0
+        )
 
-        self.plot_metrics_table(df, models, class_metric=False)
+        models = [c for c in df.columns if c not in ['PROCESSED_IMG', 'IMG_LABEL',  'TRAIN_VAL', 'Weight', 'Layer']]
 
-        self.plot_accuracy_plots(df[df.Layer == 'ALL'], models, hue='Weight', img_name='Weight Init Accuracy',
-                                 title='Random Initialization vs Imagenet')
+        self.get_threshold_opt(df, models)
 
-        self.plot_accuracy_plots(df[df.Weight == 'imagenet'], models, hue='Layer', img_name='Frozen Layers Accuracy',
-                                 title='Impact of the fraction of convolutional blocks fine-tuned on CNN performance')
+        self.plot_confusion_matrix(df=df, models=models, best_models=best_model)
+
+        self.plot_metrics_table(df, models, best_model, class_metric=False)
+
+        self.plot_accuracy_plots(
+            df[df.Weight == 'imagenet'], models[:-1], hue='Layer', img_name='Frozen Layers Accuracy',
+            title='Impact of the fraction of convolutional blocks fine-tuned on CNN performance'
+        )
+
+        self.plot_accuracy_plots(
+            df[df.Layer == 'ALL'], models[:-1], hue='Weight', img_name='Weight Init Accuracy',
+            title='Random Initialization vs Imagenet'
+        )
+
+
 
     def get_data_augmentation_examples(self) -> None:
         """

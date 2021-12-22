@@ -16,7 +16,6 @@ from utils.functions import get_path, bulk_data, search_files, get_filename
 
 
 class RandomForest:
-
     __name__ = 'RandomForest'
     PARAMETERS_GRID = {
         'n_estimators': np.arange(50, 500, 50),
@@ -75,13 +74,12 @@ class RandomForest:
 
         merge_list = []
         for weight, frozen_layers in zip([*repeat('imagenet', 6), 'random'],
-                                         ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT']):
+                                         ['ALL', '0FT', '1FT', '2FT', '3FT', '4FT', 'ALL']):
 
             l = []
             for file in search_files(get_path(cnn_predictions_dir, weight, frozen_layers, create=False), ext='csv'):
-
                 l.append(
-                    pd.read_csv(file, sep=';')[['PROCESSED_IMG', 'PREDICTION']].\
+                    pd.read_csv(file, sep=';')[['PROCESSED_IMG', 'PREDICTION']]. \
                         assign(WEIGHTS=weight, FT=frozen_layers, CNN=get_filename(file))
                 )
 
@@ -96,7 +94,7 @@ class RandomForest:
             lambda x: pd.Series({'AUC': roc_auc_score(x.LABEL, x.PREDICTION)})
         )
 
-        selected_cnns = cnn_selection[cnn_selection.TRAIN_VAL == 'val'].sort_values('AUC', ascending=False).\
+        selected_cnns = cnn_selection[cnn_selection.TRAIN_VAL == 'val'].sort_values('AUC', ascending=False). \
             groupby('CNN', as_index=False).first()
 
         selected_cnns.to_csv(get_path(save_model_dir, 'Selected CNN Report.csv'), sep=';', index=False, decimal=',')
@@ -107,9 +105,9 @@ class RandomForest:
                 all_data[(all_data.CNN == row.CNN) & (all_data.FT == row.FT) & (all_data.WEIGHTS == row.WEIGHTS)]
             )
 
-        final_df = pd.concat(final_list, ignore_index=True).\
-            set_index(['PROCESSED_IMG', 'LABEL', 'TRAIN_VAL', *ENSEMBLER_COLS[ENSEMBLER_CONFIG], 'CNN'])['PREDICTION'].\
-            unstack().reset_index()
+        final_df = pd.concat(final_list, ignore_index=True). \
+            set_index(['PROCESSED_IMG', 'LABEL', 'IMG_LABEL', 'TRAIN_VAL', *ENSEMBLER_COLS[ENSEMBLER_CONFIG], 'CNN']) \
+            ['PREDICTION'].unstack().reset_index()
 
         # generación del conjunto de datos de train para gradient boosting
         data.dropna(how='any', inplace=True)
@@ -125,7 +123,7 @@ class RandomForest:
         )
         clf.fit(train_x, train_y)
 
-        data_csv = final_df[['PROCESSED_IMG', 'TRAIN_VAL', 'LABEL']].assign(PREDICTION=clf.predict(final_df[cols]))
+        data_csv = final_df[['PROCESSED_IMG', 'TRAIN_VAL', 'IMG_LABEL']].assign(PREDICTION=clf.predict(final_df[cols]))
 
         bulk_data(file=get_path(out_predictions_dir, f'{self.__name__}.csv'), **data_csv.to_dict())
 

@@ -9,7 +9,7 @@ from tensorflow.keras.losses import CategoricalCrossentropy
 from segmentation_models.metrics import IOUScore
 from segmentation_models.losses import DiceLoss, BinaryFocalLoss
 
-from cnns.metrics import f1_score
+from algorithms.metrics import f1_score
 from utils.functions import get_path
 
 
@@ -265,7 +265,6 @@ class ModelConstants:
         self.model_viz_results_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'RESULTS')
         self.model_viz_results_model_history_dir: io = get_path(self.model_viz_results_dir, 'MODEL_HISTORY')
         self.model_viz_results_confusion_matrix_dir: io = get_path(self.model_viz_results_dir, 'CONFUSION_MATRIX')
-        self.model_viz_results_accuracy_dir: io = get_path(self.model_viz_results_dir, 'ACCURACY')
         self.model_viz_results_metrics_dir: io = get_path(self.model_viz_results_dir, 'METRICS')
 
 

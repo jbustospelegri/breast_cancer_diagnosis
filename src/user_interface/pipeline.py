@@ -4,9 +4,9 @@ import pandas as pd
 from typing import io
 
 from breast_cancer_dataset.databases.test_db import DatasetTest
-from cnns.classification import DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model
-from cnns.utils import get_predictions
-from cnns.model_ensambling import RandomForest
+from algorithms.classification import DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model
+from algorithms.utils import get_predictions
+from algorithms.model_ensambling import RandomForest
 from user_interface.signals_interface import SignalProgressBar, SignalError, SignalCompleted, SignalLogging
 from utils.config import DEPLOYMENT_MODELS
 from utils.functions import get_filename, get_path, get_contours

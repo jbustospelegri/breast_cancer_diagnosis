@@ -1,11 +1,12 @@
-import os
-
 import pandas as pd
+import numpy as np
 
 import utils.config as conf
 
 from multiprocessing import Queue
 from typing import Union, io, Callable
+from sklearn.metrics import roc_curve
+from sklearn.utils import resample
 
 from tensorflow.keras import models
 from tensorflow.keras.preprocessing.image import Iterator
@@ -34,11 +35,6 @@ def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFra
     :return: dataframe con el path de la imagen, la clase verdadera (en caso de existir), la clase predicha y columnas
              definidas por kwargs.
     """
-
-    if data.class_indices:
-        class_labels = {v: i for i, v in data.class_indices.items()}
-    else:
-        class_labels = {0: 'BENIGN', 1: 'MALIGNANT'}
 
     # Se genera un orden aleatorio del datagenerator
     data.on_epoch_end()
@@ -172,3 +168,32 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
         print(f'{"=" * 75}\nPredicciones finalizadas.\n{"=" * 75}')
     else:
         q.put(True)
+
+
+def optimize_threshold(true_labels: np.array, pred_labels: np.array):
+
+    try:
+        fpr, tpr, thresholds = roc_curve(true_labels, pred_labels)
+
+        return thresholds[argmax(tpr - fpr)]
+    except Exception:
+        return None
+
+
+def apply_bootstrap(data: pd.DataFrame, true_col: str, pred_col: str, metric: callable, iters: int = 100,
+                    ci: float = 0.95, **kwargs) -> \
+        tuple:
+
+    assert true_col in data.columns, f'{true_col} not in dataframe'
+    assert pred_col in data.columns, f'{pred_col} not in dataframe'
+
+    results = []
+    for i in range(iters):
+
+        sample = resample(data, n_samples=int(len(data) * 0.75))
+
+        results.append(metric(sample[true_col].values.tolist(), sample[pred_col].values.tolist(), **kwargs))
+
+    lower = max(0.0, np.percentile(results, ((1.0 - ci) / 2.0) * 100))
+    upper = min(1.0, np.percentile(results, (ci + ((1.0 - ci) / 2.0)) * 100))
+    return np.mean(results), lower, upper

@@ -4,7 +4,7 @@ import segmentation_models as sm
 
 from tensorflow.keras.layers import BatchNormalization
 
-from cnns.classification import GeneralModel
+from algorithms.classification import GeneralModel
 from utils.config import SEGMENTATION_METRICS, SEGMENTATION_LOSS, IMG_SHAPE
 
 
