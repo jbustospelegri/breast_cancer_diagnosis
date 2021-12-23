@@ -265,6 +265,7 @@ class ModelConstants:
         self.model_viz_results_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'RESULTS')
         self.model_viz_results_model_history_dir: io = get_path(self.model_viz_results_dir, 'MODEL_HISTORY')
         self.model_viz_results_confusion_matrix_dir: io = get_path(self.model_viz_results_dir, 'CONFUSION_MATRIX')
+        self.model_viz_results_auc_curves_dir: io = get_path(self.model_viz_results_dir, 'AUC_CURVES')
         self.model_viz_results_metrics_dir: io = get_path(self.model_viz_results_dir, 'METRICS')
 
 

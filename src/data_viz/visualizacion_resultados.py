@@ -8,7 +8,7 @@ import numpy as np
 
 from itertools import product
 from tensorflow.python.keras.preprocessing.image import load_img, img_to_array
-from sklearn.metrics import recall_score, f1_score, precision_score, accuracy_score, roc_auc_score
+from sklearn.metrics import recall_score, f1_score, precision_score, accuracy_score, roc_auc_score, roc_curve
 from typing import List
 from collections import defaultdict
 from albumentations import Compose
@@ -126,8 +126,6 @@ class DataVisualizer:
                 if not pd.isna(thresh):
                     df.loc[(df.Weight == w) & (df.Layer == layer), f'{model}_LBL'] = np.where(
                         df.loc[(df.Weight == w) & (df.Layer == layer), model] >= thresh, 'MALIGNANT', 'BENIGN')
-
-                # Llamar a la función que hace el plot de los threshols
 
     @staticmethod
     def plot_model_metrics(plot_params: List[dict], dirname: io = None, filename: io = None, plots_per_line: int = 2):
@@ -393,6 +391,40 @@ class DataVisualizer:
                 fig.suptitle(title, y=1.05, fontsize=14, fontweight='bold')
                 fig.savefig(get_path(self.conf.model_viz_results_dir, metric, ENSEMBLER_CONFIG, f'{img_name}.png'))
 
+    def plot_auc_roc_curves(self, df: pd.DataFrame, best_models: pd.DataFrame, models: list):
+
+        # Se itera para cada fase de entrenamiento/validación de cada modelo.
+        for model in models:
+
+            # Se crea la figura de matplotlib
+            fig = plt.figure(figsize=(15, 10))
+
+            plt.plot([0, 1], [0, 1], linestyle='--', label='No Skill')
+
+            layer = best_models.loc[best_models.CNN == model, 'FT'].values[0]
+            weights = best_models.loc[best_models.CNN == model, 'WEIGHTS'].values[0]
+
+            for phase in df.TRAIN_VAL.unique():
+
+                plt_data = df[(df.TRAIN_VAL == phase) & (df.Layer == layer) & (df.Weight == weights)]
+
+                fpr, tpr, thresholds = roc_curve(plt_data['IMG_LABEL'].map(self.labels), plt_data[model])
+
+                if phase == 'train':
+                    ix = np.argmax(tpr - fpr)
+                    plt.scatter(fpr[ix], tpr[ix], marker='o', color='black', label='Best')
+
+                plt.plot(fpr, tpr, marker='.', label=phase)
+
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True positve rate')
+            plt.legend()
+
+            # Se ajustan los subplots
+            fig.tight_layout()
+            # Se almacena la figura.
+            fig.savefig(get_path(self.conf.model_viz_results_auc_curves_dir, f'{model}.png'))
+
     def get_model_time_executions(self, summary_dir: io):
 
         data = pd.read_csv(search_files(summary_dir, 'csv', in_subdirs=False)[0], sep=';', decimal='.')
@@ -504,6 +536,8 @@ class DataVisualizer:
 
         self.get_threshold_opt(df, models)
 
+        self.plot_auc_roc_curves(df=df, models=models, best_models=best_model)
+
         self.plot_confusion_matrix(df=df, models=models, best_models=best_model)
 
         self.plot_metrics_table(df, models, best_model, class_metric=False)
@@ -517,8 +551,6 @@ class DataVisualizer:
             df[df.Layer == 'ALL'], models[:-1], hue='Weight', img_name='Weight Init Accuracy',
             title='Random Initialization vs Imagenet'
         )
-
-
 
     def get_data_augmentation_examples(self) -> None:
         """
