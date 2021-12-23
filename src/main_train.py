@@ -1,18 +1,20 @@
-from itertools import repeat
-
 import tensorflow
+import warnings
 
+from itertools import repeat
 from multiprocessing import Queue, Process
 
 from breast_cancer_dataset.database_generator import BreastCancerDataset
-from cnns.classification import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
-from cnns.segmentation import UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model
-from cnns.model_ensambling import RandomForest
-from cnns.utils import training_pipe
+from algorithms.classification import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
+from algorithms.segmentation import UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model
+from algorithms.model_ensambling import RandomForest
+from algorithms.utils import training_pipe
 from data_viz.visualizacion_resultados import DataVisualizer
 
 from utils.config import MODEL_FILES, ENSEMBLER_CONFIG
 from utils.functions import bulk_data, get_path
+
+warnings.filterwarnings('ignore')
 
 
 if __name__ == '__main__':
@@ -29,7 +31,7 @@ if __name__ == '__main__':
     # Los valores disponibles son PATCHES, COMPLETE_IMAGE
     experiment = 'PATCHES'
     # Nombre del experimento
-    experiment_name = 'EJEC_ROI_TEST2_1'
+    experiment_name = 'EJEC_ROI_TEST3'
 
     available_models = {
         'classification': [DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model],

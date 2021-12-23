@@ -122,11 +122,19 @@ EJEC_ROI_TEST2
     - Se corrige la función de transformación prévia al paso de preprocesado de cada red (cast a float 32).
     - Post refactor de frozen layers
 
-EJEC_ROI_TEST3:
-    - Añadir fully connected layers a la salida del baseline.
+    **RESULTADOS**:
+    - acc train 88 % para modelo Gradient Boosting
+    - acc val 84 % para modelo gradient boosting
+
+EJEC_ROI_TEST3
+    - Se hace el split dataset teniendo en cuenta la base de datos y la clase
+    - Se mantiene el learning train de extract featuers a fine tuning.
 
 EJEC_ROI_TEST4:
-    - El resize se hace una única vez y no dos (image preprocessing + data augmentation).
+- El resize se hace una única vez y no dos (image preprocessing + data augmentation).
+
+EJEC_ROI_TEST5:
+    - Añadir fully connected layers a la salida del baseline.
 
 EJEC_ROI_TEST4:
     - Se añade tercera fase de entrenamiento para fine-tunning añadiendo un unfroze all con SGD(1e-5) y

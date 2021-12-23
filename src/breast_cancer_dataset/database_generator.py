@@ -41,7 +41,7 @@ class BreastCancerDataset:
 
         if not os.path.isfile(xlsx_io):
             self.df = self.get_data_from_databases()
-            self.split_dataset(train_prop=TRAIN_DATA_PROP if split_data else 1, stratify=True)
+            self.split_dataset(train_prop=TRAIN_DATA_PROP if split_data else 1, strat_cols=['IMG_LABEL', 'DATASET'])
             self.bulk_data_desc_to_files(df=self.df)
         else:
             self.df = pd.read_excel(xlsx_io, dtype=object, index_col=None)
@@ -216,7 +216,7 @@ class BreastCancerDataset:
 
         return train_dataloader, valid_dataloader
 
-    def split_dataset(self, train_prop: float, stratify: bool = True):
+    def split_dataset(self, train_prop: float, strat_cols: list = None):
         """
         Función que permite dividir el dataset en un subconjunto de entrenamiento y otro de validación. La división
         puede ser estratificada.
@@ -233,7 +233,7 @@ class BreastCancerDataset:
         # Se filtran los datos en función de si se desea obtener el conjunto de train y val
         train_x, _, _, _ = train_test_split(
             self.df.PROCESSED_IMG, self.df.IMG_LABEL, random_state=SEED, train_size=train_prop,
-            stratify=self.df.IMG_LABEL if stratify else None
+            stratify=self.df[strat_cols].apply(lambda r: '_'.join(r.values.astype(str)), axis=1) if strat_cols else None
         )
 
         # Se asigna el valor de 'train' a aquellas imagenes (representadas por sus paths) que estén presentes en train_x
