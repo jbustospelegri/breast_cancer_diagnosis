@@ -130,10 +130,11 @@ EJEC_ROI_TEST3
     - Se hace el split dataset teniendo en cuenta la base de datos y la clase
     - Se mantiene el learning train de extract featuers a fine tuning.
 
-EJEC_ROI_TEST4:
-- El resize se hace una única vez y no dos (image preprocessing + data augmentation).
+    **RESULTADOS**:
+    - acc train 92 % para el randomforest
+    - acc val 82 % para el modelo randomforest
 
-EJEC_ROI_TEST5:
+EJEC_ROI_TEST4:
     - Añadir fully connected layers a la salida del baseline.
 
 EJEC_ROI_TEST4:

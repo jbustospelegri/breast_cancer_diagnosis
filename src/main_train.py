@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # Los valores disponibles son PATCHES, COMPLETE_IMAGE
     experiment = 'PATCHES'
     # Nombre del experimento
-    experiment_name = 'EJEC_ROI_TEST3'
+    experiment_name = 'EJEC_ROI_TEST4'
 
     available_models = {
         'classification': [DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model],

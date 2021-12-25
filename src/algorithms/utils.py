@@ -132,7 +132,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
         print(f'{"-" * 75}\n\tEmpieza proceso de extract-features (warm up)\n{"-" * 75}')
 
-        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, Adam(conf.WARM_UP_LEARNING_RATE))
+        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, Adam(conf.LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='ExtractFeatures', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
@@ -140,7 +140,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
         print(f'{"-" * 75}\n\tEmpieza proceso de fine-tunning\n{"-" * 75}')
 
-        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, Adam(conf.LEARNING_RATE), frozen_layers)
+        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, Adam(cnn.get_learning_rate()), frozen_layers)
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='FineTunning', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())

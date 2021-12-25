@@ -15,6 +15,7 @@ from sklearn.model_selection import train_test_split
 from breast_cancer_dataset.base import SegmentationDataset, Dataloder, ClassificationDataset
 from breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from breast_cancer_dataset.databases.inbreast import DatasetINBreast, DatasetINBreastCrop
+from breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
 from utils.config import (
     MODEL_FILES, SEED, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS,
     PREPROCESSING_CONFIG, IMG_SHAPE, SEGMENTATION_DATA_AUGMENTATION_FUNCS, PATCH_SIZE
