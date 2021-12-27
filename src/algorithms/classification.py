@@ -37,6 +37,13 @@ class GeneralModel:
         '3FT': ['block1_maxpool', 'block1_conv1'],
         '4FT': []
     }
+    BS_DICT = {
+        '0FT': 32,
+        '1FT': 32,
+        '2FT': 32,
+        '3FT': 32,
+        '4FT': 32
+    }
 
     def __init__(self, n: int = 1, baseline: Model = None, preprocess_func: Callable = None):
         self.baseline = baseline if baseline is not None else self.create_baseline()
@@ -210,6 +217,14 @@ class VGG16Model(GeneralModel):
         '3FT': ['block3_conv1', 'block3_conv2', 'block3_conv3'],
         '4FT': ['block2_conv1', 'block2_conv2']
     }
+    BS_DICT = {
+        '0FT': 96,
+        '1FT': 88,
+        '2FT': 80,
+        '3FT': 72,
+        '4FT': 64,
+        'ALL': 40
+    }
 
     def __init__(self, n: int, weights: Union[str, io] = None):
         super(VGG16Model, self).__init__(
@@ -260,6 +275,14 @@ class Resnet50Model(GeneralModel):
             'conv2_block3_2_bn', 'conv2_block3_3_bn'
         ]
     }
+    BS_DICT = {
+        '0FT': 128,
+        '1FT': 128,
+        '2FT': 112,
+        '3FT': 56,
+        '4FT': 32,
+        'ALL': 28
+    }
     shape = (224, 224, 3)
 
     def __init__(self, n: int, weights: Union[str, io] = None):
@@ -300,6 +323,14 @@ class InceptionV3Model(GeneralModel):
             'batch_normalization_67', 'batch_normalization_68', 'batch_normalization_61', 'batch_normalization_62',
             'batch_normalization_63', 'batch_normalization_69', 'batch_normalization_60',
         ]
+    }
+    BS_DICT = {
+        '0FT': 128,
+        '1FT': 128,
+        '2FT': 128,
+        '3FT': 128,
+        '4FT': 128,
+        'ALL': 24
     }
     shape = (299, 299, 3)
 
@@ -357,7 +388,8 @@ class DenseNetModel(GeneralModel):
             'conv4_block17_0_bn', 'conv4_block17_1_bn', 'conv4_block18_0_bn', 'conv4_block18_1_bn',
             'conv4_block19_0_bn', 'conv4_block19_1_bn', 'conv4_block20_0_bn', 'conv4_block20_1_bn',
             'conv4_block21_0_bn', 'conv4_block21_1_bn', 'conv4_block22_0_bn', 'conv4_block22_1_bn',
-            'conv4_block23_0_bn', 'conv4_block23_1_bn', 'conv4_block24_0_bn', 'conv4_block24_1_bn'
+            'conv4_block23_0_bn', 'conv4_block23_1_bn', 'conv4_block24_0_bn', 'conv4_block24_1_bn',
+            'pool2_bn', 'pool2_conv'
         ],
         '3FT': [
             'conv3_block1_1_conv', 'conv3_block1_2_conv', 'conv3_block2_1_conv', 'conv3_block2_2_conv',
@@ -370,7 +402,8 @@ class DenseNetModel(GeneralModel):
             'conv3_block3_1_bn', 'conv3_block4_0_bn', 'conv3_block4_1_bn', 'conv3_block5_0_bn', 'conv3_block5_1_bn',
             'conv3_block6_0_bn', 'conv3_block6_1_bn', 'conv3_block7_0_bn', 'conv3_block7_1_bn', 'conv3_block8_0_bn',
             'conv3_block8_1_bn', 'conv3_block9_0_bn', 'conv3_block9_1_bn', 'conv3_block10_0_bn', 'conv3_block10_1_bn',
-            'conv3_block11_0_bn', 'conv3_block11_1_bn', 'conv3_block12_0_bn', 'conv3_block12_1_bn'
+            'conv3_block11_0_bn', 'conv3_block11_1_bn', 'conv3_block12_0_bn', 'conv3_block12_1_bn',
+            'pool3_bn', 'pool3_conv'
         ],
         '4FT': [
             'conv2_block1_1_conv', 'conv2_block1_2_conv', 'conv2_block2_1_conv', 'conv2_block2_2_conv',
@@ -378,8 +411,16 @@ class DenseNetModel(GeneralModel):
             'conv2_block5_1_conv', 'conv2_block5_2_conv', 'conv2_block6_1_conv', 'conv2_block6_2_conv',
             'conv2_block1_0_bn', 'conv2_block1_1_bn', 'conv2_block2_0_bn', 'conv2_block2_1_bn', 'conv2_block3_0_bn',
             'conv2_block3_1_bn', 'conv2_block4_0_bn', 'conv2_block4_1_bn', 'conv2_block5_0_bn', 'conv2_block5_1_bn',
-            'conv2_block6_0_bn', 'conv2_block6_1_bn'
+            'conv2_block6_0_bn', 'conv2_block6_1_bn', 'pool4_bn', 'pool4_conv'
         ]
+    }
+    BS_DICT = {
+        '0FT': 128,
+        '1FT': 128,
+        '2FT': 26,
+        '3FT': 24,
+        '4FT': 22,
+        'ALL': 20
     }
 
     def __init__(self, n: int, weights: Union[str, io] = None):

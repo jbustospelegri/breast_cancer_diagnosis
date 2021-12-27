@@ -89,6 +89,10 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
     if task_type == 'classification':
         cnn.register_metric(*list(conf.CLASSIFICATION_METRICS.values()))
 
+        # train, val = db.get_classification_dataset_generator(
+        #     batch_size=cnn.BS_DICT[frozen_layers], callback=cnn.get_preprocessing_func(), size=cnn.shape[:2]
+        # )
+
         train, val = db.get_classification_dataset_generator(
             batch_size=conf.BATCH_SIZE, callback=cnn.get_preprocessing_func(), size=cnn.shape[:2]
         )

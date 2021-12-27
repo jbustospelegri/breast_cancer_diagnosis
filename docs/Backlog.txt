@@ -151,6 +151,8 @@ EJEC_LAST -> La última ejección con el método ganador y maximizando el batch 
 -- TODOS CODIFICACION --
 - Terminar Deployment con los nuevos modelos (Jueves)
 - DataViz de Test
+- GradCam
+- Feature Importance de model ensambling
 
 
 

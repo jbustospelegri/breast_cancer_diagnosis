@@ -29,7 +29,7 @@ if __name__ == '__main__':
     # Los valores posibles son segmentation, classification
     task_type = 'classification'
     # Los valores disponibles son PATCHES, COMPLETE_IMAGE
-    experiment = 'PATCHES'
+    experiment = 'COMPLETE_IMAGE'
     # Nombre del experimento
     experiment_name = 'EJEC_COMPLETE_IMG'
 
