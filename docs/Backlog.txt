@@ -135,37 +135,22 @@ EJEC_ROI_TEST3
     - acc val 82 % para el modelo randomforest
 
 EJEC_ROI_TEST4:
-    - Añadir fully connected layers a la salida del baseline.
-
-EJEC_ROI_TEST4:
-    - Se añade tercera fase de entrenamiento para fine-tunning añadiendo un unfroze all con SGD(1e-5) y
-      reducción de learning rate en un factor de 10.
-
-EJEC_ROI_TEST5:
-    - Se añade regularización L2
-
-EJEC_ROI_TEST6:
-    - Se aumenta el margin de los rois a 1.4.
-
-EJEC_ROI_TEST7:
-    - Añadir data augmentation al set de validacion
+    - Añadir fully connected layers a la salida del baseline + regularización L2.
 
 
----- EXPERIMENTOS DEPRECATED ----
-EJEC_SEGMENTATION_TEST1: (DEPRECATED)
-    - Parches de tamaño 384, 192 y BS = 9
-
-EJEC_SEGMENTATION_TEST2: (DEPRECATED)
-    - Parches de tamaño 512, 256 y BS = 5
-
-EJEC_SEGMENTATION_TEST3: (DEPRECATED)
-    - Parches de tamaño 1024, 512 y BS = 1
-
-EJEC_SEGMENTATION_TEST4: (DEPRECATED)
-    - Parches de tamaño 448, 224 y BS = 10
+EJEC_COMPLT_IMG_TEST1
+    - Ejecutar ROI_TEST3 con imagenes completas
 
 
+EJEC_COMPLT_IMG_TEST2
+    - Ejecutar ROI_TEST4 con imagenes completas
 
+EJEC_LAST -> La última ejección con el método ganador y maximizando el batch disponible.
+
+
+-- TODOS CODIFICACION --
+- Terminar Deployment con los nuevos modelos (Jueves)
+- DataViz de Test
 
 
 

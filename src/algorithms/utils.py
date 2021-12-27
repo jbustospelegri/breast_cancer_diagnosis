@@ -162,7 +162,8 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
             pd.concat(
                 objs=[
                     get_predictions(keras_model=cnn, data=train, add_columns={'TRAIN_VAL': 'train'}),
-                    get_predictions(keras_model=cnn, data=val, add_columns={'TRAIN_VAL': 'val'})],
+                    get_predictions(keras_model=cnn, data=val, add_columns={'TRAIN_VAL': 'val'})
+                ],
                 ignore_index=True
         ))
         print(f'{"=" * 75}\nPredicciones finalizadas.\n{"=" * 75}')

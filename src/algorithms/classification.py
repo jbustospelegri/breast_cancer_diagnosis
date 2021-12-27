@@ -73,12 +73,18 @@ class GeneralModel:
 
         input = Input(shape=self.shape)
         x = self.baseline(input, training=False)
-        x = Flatten()(x)
-        x = Dense(512, activation='relu')(x)
-        x = Dense(128, activation='relu')(x)
-        x = Dense(64, activation='relu', kernel_constraint=max_norm(3))(x)
-        x = Dropout(0.25)(x)
-        x = Dense(32, activation='relu', kernel_constraint=max_norm(3), activity_regularizer=L2(l2=0.01))(x)
+
+        #  Test con extract features y sigmoide
+        x = GlobalAveragePooling2D()(x)
+        x = Dropout(0.2)(x)
+
+        # Test añadiendo capas fully connected
+        # x = Flatten()(x)
+        # x = Dense(512, activation='relu')(x)
+        # x = Dense(128, activation='relu')(x)
+        # x = Dense(64, activation='relu', kernel_constraint=max_norm(3))(x)
+        # x = Dropout(0.25)(x)
+        # x = Dense(32, activation='relu', kernel_constraint=max_norm(3), activity_regularizer=L2(l2=0.01))(x)
 
         output = Dense(self.n, activation='softmax')(x)
 

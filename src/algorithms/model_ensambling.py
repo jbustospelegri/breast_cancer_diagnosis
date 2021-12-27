@@ -69,7 +69,8 @@ class RandomForest:
 
         # En caso de existir dataset de validación, se concatena train y val en un dataset único. En caso contrario,
         # se recupera unicamente el set de datos de train
-        data = self.db[['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', *ENSEMBLER_COLS[ENSEMBLER_CONFIG]]].copy()
+        data = self.db.loc[self.db.TRAIN_VAL != 'test',
+                           ['PROCESSED_IMG', 'IMG_LABEL', 'TRAIN_VAL', *ENSEMBLER_COLS[ENSEMBLER_CONFIG]]].copy()
         data.loc[:, 'LABEL'] = data.IMG_LABEL.map({k: v for v, k in enumerate(sorted(data.IMG_LABEL.unique()))})
 
         merge_list = []

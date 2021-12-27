@@ -31,10 +31,10 @@ if __name__ == '__main__':
     # Los valores disponibles son PATCHES, COMPLETE_IMAGE
     experiment = 'PATCHES'
     # Nombre del experimento
-    experiment_name = 'EJEC_ROI_TEST4'
+    experiment_name = 'EJEC_COMPLETE_IMG'
 
     available_models = {
-        'classification': [DenseNetModel, Resnet50Model, InceptionV3Model, VGG16Model],
+        'classification': [InceptionV3Model, DenseNetModel, Resnet50Model, VGG16Model],
         'segmentation': [UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model]
     }
 
@@ -43,7 +43,9 @@ if __name__ == '__main__':
     model_config.set_model_name(name=experiment_name)
 
     # Se inicializa el procesado de las imagenes para los distintos datasets.
-    db = BreastCancerDataset(xlsx_io=model_config.model_db_desc_csv, img_type=experiment, task_type=task_type)
+    db = BreastCancerDataset(
+        xlsx_io=model_config.model_db_desc_csv, img_type=experiment, task_type=task_type, test_dataset=['MIAS']
+    )
 
     # Se generarán algunos ejemplos de la base de datos
     data_viz = DataVisualizer(config=model_config, img_type=experiment)
