@@ -100,12 +100,13 @@ class DataVisualizer:
 
     def get_threshold_opt(self, df: pd.DataFrame, models: list):
 
-        thresholds = df[df.TRAIN_VAL == 'train'].groupby(['Weight', 'TRAIN_VAL', 'Layer'], as_index=False).apply(
+        thresholds = df[df.TRAIN_VAL == 'val'].groupby(['Weight', 'TRAIN_VAL', 'Layer'], as_index=False).apply(
             lambda x: pd.Series(
                 {
-                    c: optimize_threshold(
-                        x.IMG_LABEL.map({'BENIGN': 0, 'MALIGNANT': 1}).values.tolist(), x[c].values.tolist()
-                    ) for c in models
+                    c: apply_bootstrap(
+                        x[['IMG_LABEL', c]].assign(LABEL=x.IMG_LABEL.map(self.labels)), metric=optimize_threshold,
+                        true_col='LABEL', pred_col=c
+                    )[0] for c in models
                 }
             )
         )

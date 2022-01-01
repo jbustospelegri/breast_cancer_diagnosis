@@ -185,7 +185,7 @@ def optimize_threshold(true_labels: np.array, pred_labels: np.array):
         return None
 
 
-def apply_bootstrap(data: pd.DataFrame, true_col: str, pred_col: str, metric: callable, iters: int = 100,
+def apply_bootstrap(data: pd.DataFrame, true_col: str, pred_col: str, metric: callable, iters: int = 1000,
                     ci: float = 0.95, **kwargs) -> \
         tuple:
 
@@ -199,6 +199,9 @@ def apply_bootstrap(data: pd.DataFrame, true_col: str, pred_col: str, metric: ca
 
         results.append(metric(sample[true_col].values.tolist(), sample[pred_col].values.tolist(), **kwargs))
 
-    lower = max(0.0, np.percentile(results, ((1.0 - ci) / 2.0) * 100))
-    upper = min(1.0, np.percentile(results, (ci + ((1.0 - ci) / 2.0)) * 100))
-    return np.mean(results), lower, upper
+    try:
+        lower = max(0.0, np.percentile(results, ((1.0 - ci) / 2.0) * 100))
+        upper = min(1.0, np.percentile(results, (ci + ((1.0 - ci) / 2.0)) * 100))
+        return np.mean(results), lower, upper
+    except TypeError:
+        return None, None, None

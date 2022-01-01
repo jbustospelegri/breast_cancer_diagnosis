@@ -101,21 +101,6 @@ class DatasetMIAS(GeneralDataBase):
         ]
         super(DatasetMIAS, self).get_image_mask(func=func, args=args)
 
-    def clean_dataframe(self) -> None:
-        """
-        Función utilzada para limpiar el set de datos. En caso del set de datos de MIAS, al contener las zonas roi
-        de cada imagen, existen obervaciones que presentan patolgías benignas y malignas. Estas, se descartan.
-        """
-
-        # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
-        # una zona benigna y otra maligna).
-        duplicated_tags = self.df_desc.groupby('ID').IMG_LABEL.nunique()
-        print(f'\tExcluding {len(duplicated_tags[duplicated_tags > 1]) * 2} samples for ambiguous pathologys')
-        self.df_desc.drop(
-            index=self.df_desc[self.df_desc.ID.isin(duplicated_tags[duplicated_tags > 1].index.tolist())].index,
-            inplace=True
-        )
-
 
 class DatasetMIASCrop(DatasetMIAS):
 

@@ -7,7 +7,7 @@ import numpy as np
 
 from sklearn.metrics import roc_auc_score, accuracy_score, recall_score, precision_score, f1_score
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, PredefinedSplit
 from typing import io
 
 from breast_cancer_dataset.base import Dataloder
@@ -113,16 +113,15 @@ class RandomForest:
         # generación del conjunto de datos de train para gradient boosting
         data.dropna(how='any', inplace=True)
         cols = [*ENSEMBLER_COLS[ENSEMBLER_CONFIG], *all_data.CNN.unique().tolist()]
-        train_x = final_df.loc[final_df.TRAIN_VAL == 'train', cols]
-        train_y = final_df.loc[final_df.TRAIN_VAL == 'train', 'LABEL']
+        x, y = final_df.loc[:, cols], final_df.loc[:, 'LABEL']
 
         clf = GridSearchCV(
             estimator=RandomForestRegressor(random_state=SEED),
             param_grid=self.PARAMETERS_GRID,
             scoring='roc_auc',
-            cv=10
+            cv=PredefinedSplit(test_fold=np.where(final_df.TRAIN_VAL == 'train', -1, 0))
         )
-        clf.fit(train_x, train_y)
+        clf.fit(x, y)
 
         data_csv = final_df[['PROCESSED_IMG', 'TRAIN_VAL', 'IMG_LABEL']].assign(PREDICTION=clf.predict(final_df[cols]))
 
