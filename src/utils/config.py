@@ -46,10 +46,10 @@ WARM_UP_EPOCHS: int = 5
 LEARNING_RATE: float = 1e-4
 
 SEGMENTATION_BATCH_SIZE: int = 9
-BATCH_SIZE: int = 18
+# BATCH_SIZE: int = 18
 
 # Batch size para fc on top
-# BATCH_SIZE: int = 14
+BATCH_SIZE: int = 14
 
 SEED: int = 81
 

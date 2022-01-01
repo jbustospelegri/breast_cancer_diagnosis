@@ -9,6 +9,7 @@ from tensorflow.keras.callbacks import History
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import L2
 from tensorflow.keras.constraints import max_norm
+from tensorflow.keras.models import Model
 from tensorflow.keras.applications import resnet50, densenet, vgg16, inception_v3
 from tensorflow.python.keras.preprocessing.image import DataFrameIterator
 from tensorflow.keras.layers import (
@@ -45,11 +46,11 @@ class GeneralModel:
         '4FT': 32
     }
 
-    def __init__(self, n: int = 1, baseline: Model = None, preprocess_func: Callable = None):
+    def __init__(self, n: int = 1, baseline: Model = None, preprocess_func: Callable = None, top_fc: str = 'simple'):
         self.baseline = baseline if baseline is not None else self.create_baseline()
         self.n = n
         self.preprocess_func = preprocess_func
-        self.create_model()
+        self.create_model(top_fc)
 
     def create_baseline(self):
         """
@@ -70,7 +71,7 @@ class GeneralModel:
 
         return baseline
 
-    def create_model(self):
+    def create_model(self, fc_type: str = 'simple'):
         """
         Función utilizada para crear la estructura de un modelo. Esta, estará formada por la estructura básica devuelta
         por self.baseline juntamente con dos capas FC de 512 neuronas con función de activación relu. La capa de salida
@@ -82,16 +83,21 @@ class GeneralModel:
         x = self.baseline(input, training=False)
 
         #  Test con extract features y sigmoide
-        x = GlobalAveragePooling2D()(x)
-        x = Dropout(0.2)(x)
+        if fc_type == 'simple':
+            x = GlobalAveragePooling2D()(x)
+            x = Dropout(0.2)(x)
 
         # Test añadiendo capas fully connected
-        # x = Flatten()(x)
-        # x = Dense(512, activation='relu')(x)
-        # x = Dense(128, activation='relu')(x)
-        # x = Dense(64, activation='relu', kernel_constraint=max_norm(3))(x)
-        # x = Dropout(0.25)(x)
-        # x = Dense(32, activation='relu', kernel_constraint=max_norm(3), activity_regularizer=L2(l2=0.01))(x)
+        elif fc_type == 'complex':
+            x = Flatten()(x)
+            x = Dense(512, activation='relu')(x)
+            x = Dense(128, activation='relu')(x)
+            x = Dense(64, activation='relu', kernel_constraint=max_norm(3))(x)
+            x = Dropout(0.25)(x)
+            x = Dense(32, activation='relu', kernel_constraint=max_norm(3), activity_regularizer=L2(l2=0.01))(x)
+
+        else:
+            raise ValueError('Incorrect fc type param')
 
         output = Dense(self.n, activation='softmax')(x)
 
@@ -184,9 +190,11 @@ class GeneralModel:
         :param dirname: directorio en el cual se almacenara el modelocv
         :param model_name: nombre del archivo para almacenar el modelo
         """
+        self.freeze_layers()
         self.model.save_weights(get_path(dirname, model_name))
 
     def load_weigths(self, weights: io):
+        self.freeze_layers()
         self.model.load_weights(weights)
 
     def predict(self, *args, **kwargs):
@@ -206,6 +214,13 @@ class GeneralModel:
     def get_learning_rate(self) -> float:
         return eval(self.model.optimizer.lr)
 
+    def freeze_layers(self):
+        for i in self.model.layers:
+            i.trainable = False
+            if isinstance(i, Model):
+                for layer in i.layers:
+                    layer.trainable = False
+
 
 class VGG16Model(GeneralModel):
 
@@ -222,13 +237,13 @@ class VGG16Model(GeneralModel):
         '1FT': 88,
         '2FT': 80,
         '3FT': 72,
-        '4FT': 64,
-        'ALL': 40
+        '4FT': 62,
+        'ALL': 24
     }
 
-    def __init__(self, n: int, weights: Union[str, io] = None):
+    def __init__(self, n: int, weights: Union[str, io] = None, top_fc: str = 'simple'):
         super(VGG16Model, self).__init__(
-            n=n, baseline=vgg16.VGG16(include_top=False, weights=weights, input_shape=self.shape),
+            n=n, baseline=vgg16.VGG16(include_top=False, weights=weights, input_shape=self.shape), top_fc=top_fc,
             preprocess_func=vgg16.preprocess_input
         )
 
@@ -279,15 +294,15 @@ class Resnet50Model(GeneralModel):
         '0FT': 128,
         '1FT': 128,
         '2FT': 112,
-        '3FT': 56,
-        '4FT': 32,
-        'ALL': 28
+        '3FT': 52,
+        '4FT': 28,
+        'ALL': 22
     }
     shape = (224, 224, 3)
 
-    def __init__(self, n: int, weights: Union[str, io] = None):
+    def __init__(self, n: int, weights: Union[str, io] = None, top_fc: str = 'simple'):
         super(Resnet50Model, self).__init__(
-            n=n, baseline=resnet50.ResNet50(include_top=False, weights=weights, input_shape=self.shape),
+            n=n, baseline=resnet50.ResNet50(include_top=False, weights=weights, input_shape=self.shape), top_fc=top_fc,
             preprocess_func=resnet50.preprocess_input
         )
 
@@ -330,14 +345,15 @@ class InceptionV3Model(GeneralModel):
         '2FT': 128,
         '3FT': 128,
         '4FT': 128,
-        'ALL': 24
+        'ALL': 22
     }
     shape = (299, 299, 3)
 
-    def __init__(self, n: int, weights: Union[str, io] = None):
+    def __init__(self, n: int, weights: Union[str, io] = None, top_fc: str = 'simple'):
         super(InceptionV3Model, self).__init__(
             n=n, baseline=inception_v3.InceptionV3(include_top=False, weights=weights, input_shape=self.shape),
-            preprocess_func=inception_v3.preprocess_input)
+            preprocess_func=inception_v3.preprocess_input, top_fc=top_fc
+        )
 
     def get_preprocessing_func(self):
         return get_preprocessing('inceptionv3')
@@ -419,14 +435,14 @@ class DenseNetModel(GeneralModel):
         '1FT': 128,
         '2FT': 26,
         '3FT': 24,
-        '4FT': 22,
-        'ALL': 20
+        '4FT': 20,
+        'ALL': 18
     }
 
-    def __init__(self, n: int, weights: Union[str, io] = None):
+    def __init__(self, n: int, weights: Union[str, io] = None, top_fc: str = 'simple'):
         super(DenseNetModel, self).__init__(
             n=n, baseline=densenet.DenseNet121(include_top=False, weights=weights, input_shape=self.shape),
-            preprocess_func=densenet.preprocess_input
+            preprocess_func=densenet.preprocess_input, top_fc=top_fc
         )
 
     def get_preprocessing_func(self):

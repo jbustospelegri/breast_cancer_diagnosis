@@ -66,7 +66,7 @@ def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFra
     return dataset
 
 
-def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FILES, task_type: str,
+def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FILES, task_type: str, fc: str = 'simple',
                   weight_init: Union[str, io] = None, frozen_layers: Union[str, int] = None) -> None:
     """
     Función utilizada para generar el pipeline de entrenamiento de cada modelo.
@@ -83,12 +83,12 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
     """
     # Se inicializa cada modelo:
-    cnn = m(n=len(db.class_dict), weights=None if weight_init == 'random' else weight_init)
+    cnn = m(n=len(db.class_dict), weights=None if weight_init == 'random' else weight_init, fc=fc)
 
     # Se registran las métricas que se desean almacenar:
     if task_type == 'classification':
         cnn.register_metric(*list(conf.CLASSIFICATION_METRICS.values()))
-
+        #
         # train, val = db.get_classification_dataset_generator(
         #     batch_size=cnn.BS_DICT[frozen_layers], callback=cnn.get_preprocessing_func(), size=cnn.shape[:2]
         # )

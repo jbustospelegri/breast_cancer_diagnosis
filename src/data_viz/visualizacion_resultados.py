@@ -646,7 +646,5 @@ class DataVisualizer:
         elif self.img_type == 'PATCHES':
             for _, r in df[df.example_dir.notnull()].iterrows():
                 crop_image_pipeline([r.CONVERTED_IMG, r.example_dir, r.X_MAX, r.Y_MAX, r.X_MIN, r.Y_MIN, True])
-        elif self.img_type == 'MASK':
-            pass
         else:
             raise ValueError(f"Function {self.img_type} doesn't defined")
