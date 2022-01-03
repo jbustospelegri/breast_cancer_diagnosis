@@ -5,7 +5,7 @@ from itertools import repeat
 from multiprocessing import Queue, Process
 
 from breast_cancer_dataset.database_generator import BreastCancerDataset
-from algorithms.classification import VGG16Model, InceptionV3Model, DenseNetModel, Resnet50Model
+from algorithms.classification import VGG16Model, InceptionV3Model, DenseNetModel, ResNet50Model
 from algorithms.segmentation import UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model
 from algorithms.model_ensambling import RandomForest
 from algorithms.utils import training_pipe
@@ -29,15 +29,15 @@ if __name__ == '__main__':
     # Los valores posibles son segmentation, classification
     task_type = 'classification'
     # Los valores disponibles son PATCHES, COMPLETE_IMAGE
-    experiment = 'COMPLETE_IMAGE'
+    experiment = 'PATCHES'
     # El tipo de arquitectura escogida: valores 'simple', 'complex'
     fc = 'complex'
 
     # Nombre del experimento
-    experiment_name = 'EJEC_COMPLETE_IMG_FC_COMPLEX'
+    experiment_name = 'EJEC_ROI_TEST_FC_COMPLEX'
 
     available_models = {
-        'classification': [InceptionV3Model, DenseNetModel, Resnet50Model, VGG16Model],
+        'classification': [InceptionV3Model, DenseNetModel, ResNet50Model, VGG16Model],
         'segmentation': [UnetVGG16Model, UnetDenseNetModel, UnetInceptionV3Model, UnetResnet50Model]
     }
 

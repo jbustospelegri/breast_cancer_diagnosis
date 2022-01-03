@@ -83,7 +83,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
     """
     # Se inicializa cada modelo:
-    cnn = m(n=len(db.class_dict), weights=None if weight_init == 'random' else weight_init, fc=fc)
+    cnn = m(n=len(db.class_dict), weights=None if weight_init == 'random' else weight_init, top_fc=fc)
 
     # Se registran las métricas que se desean almacenar:
     if task_type == 'classification':
@@ -186,7 +186,7 @@ def optimize_threshold(true_labels: np.array, pred_labels: np.array):
 
 
 def apply_bootstrap(data: pd.DataFrame, true_col: str, pred_col: str, metric: callable, iters: int = 1000,
-                    ci: float = 0.95, **kwargs) -> \
+                    ci: float = 0.95, prop = 0.75, **kwargs) -> \
         tuple:
 
     assert true_col in data.columns, f'{true_col} not in dataframe'
@@ -195,7 +195,7 @@ def apply_bootstrap(data: pd.DataFrame, true_col: str, pred_col: str, metric: ca
     results = []
     for i in range(iters):
 
-        sample = resample(data, n_samples=int(len(data) * 0.75))
+        sample = resample(data, n_samples=int(len(data) * prop))
 
         results.append(metric(sample[true_col].values.tolist(), sample[pred_col].values.tolist(), **kwargs))
 

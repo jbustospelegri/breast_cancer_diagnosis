@@ -104,27 +104,6 @@ TODO
 ---------
   TESTS
 ---------
-EJEC_ROI_TEST1:
-    - Modelo previo al refactor de frozen layers (se excluyen bn en train y se añaden capas en algunos modelos).
-    - El data augmentation contenia fill_mode cte con pixeles negros
-    - Se utilizan todos los dataset
-    - El Crop presenta un margen de 1.2, sin tener background y con un único crop por ROI (NO OVERLAP).
-    - En el data augmentation hay funciones como brightness (no tiene sentido al aplicar clahe)
-      y zoom que pueden meter ruido al hacer desaparecer las patologías.
-
-    **RESULTADOS**:
-    - acc train > 80% para modelo Gradient Boosting con all layers en imagenet
-    - acc val   > 70% para modelo Densenet con all layers en imagenet
-
-EJEC_ROI_TEST2
-    - Se suprime el dataset MIAS del entrenamiento
-    - Se suprime fill mode cte y función brightness del data augmentation manteniendo zoom.
-    - Se corrige la función de transformación prévia al paso de preprocesado de cada red (cast a float 32).
-    - Post refactor de frozen layers
-
-    **RESULTADOS**:
-    - acc train 88 % para modelo Gradient Boosting
-    - acc val 84 % para modelo gradient boosting
 
 EJEC_ROI_TEST3
     - Se hace el split dataset teniendo en cuenta la base de datos y la clase
@@ -140,7 +119,6 @@ EJEC_ROI_TEST4:
 
 EJEC_COMPLT_IMG_TEST1
     - Ejecutar ROI_TEST3 con imagenes completas
-
 
 EJEC_COMPLT_IMG_TEST2
     - Ejecutar ROI_TEST4 con imagenes completas

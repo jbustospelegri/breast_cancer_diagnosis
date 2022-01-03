@@ -132,7 +132,7 @@ class RandomForest:
         # se almacena el modelo en caso de que el usuario haya definido un nombre de archivo
         pickle.dump(clf.best_estimator_, open(get_path(save_model_dir, f'{self.__name__}.sav'), 'wb'))
 
-    def predict(self, data: Dataloder, **kwargs):
+    def predict(self, data: Dataloder, threshold: float = 0.5, **kwargs):
         """
         Función utilizada para realizar la predicción del algorítmo de graadient boosting a partir de las predicciones
         del conjunto de redes convolucionales
@@ -154,13 +154,12 @@ class RandomForest:
         # Se unifica el set de datos obteniendo las predicciones de cada modelo representadas por input_models
         df = self.get_dataframe_from_kwargs(dataset, **kwargs)
 
-        df_encoded = pd.get_dummies(df[kwargs.keys()])
-        for c in [col for col in df_encoded.columns if col not in self.clf.feature_names_in_]:
-            df_encoded.loc[:, c] = 0
-
         # Se añaden las predicciones
-        df.loc[:, 'PATHOLOGY'] = self.clf.predict(df_encoded)
+        df.loc[:, 'MALIGNANT_PROBABILITY'] = self.clf.predict(df[self.clf.feature_names_in_])
+
+        # Se mete el threshold
+        df.loc[:, 'PATHOLOGY'] = np.where(df.MALIGNANT_PROBABILITY > threshold, 'MALIGNANT', 'BENIGN')
 
         # se escribe el log de errores con las predicciones individuales de cada arquitectura de red o únicamente las
         # generadas por gradient boosting
-        return df.reset_index()[['PROCESSED_IMG', 'PATHOLOGY']]
+        return df.reset_index()[['PROCESSED_IMG', 'PATHOLOGY', 'MALIGNANT_PROBABILITY']]

@@ -251,7 +251,7 @@ class VGG16Model(GeneralModel):
         return get_preprocessing('vgg16')
 
 
-class Resnet50Model(GeneralModel):
+class ResNet50Model(GeneralModel):
 
     __name__ = 'ResNet50'
     LAYERS_DICT = {
@@ -301,7 +301,7 @@ class Resnet50Model(GeneralModel):
     shape = (224, 224, 3)
 
     def __init__(self, n: int, weights: Union[str, io] = None, top_fc: str = 'simple'):
-        super(Resnet50Model, self).__init__(
+        super(ResNet50Model, self).__init__(
             n=n, baseline=resnet50.ResNet50(include_top=False, weights=weights, input_shape=self.shape), top_fc=top_fc,
             preprocess_func=resnet50.preprocess_input
         )
