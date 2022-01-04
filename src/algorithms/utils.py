@@ -1,11 +1,12 @@
-import os
-
 import pandas as pd
+import numpy as np
 
 import utils.config as conf
 
 from multiprocessing import Queue
 from typing import Union, io, Callable
+from sklearn.metrics import roc_curve
+from sklearn.utils import resample
 
 from tensorflow.keras import models
 from tensorflow.keras.preprocessing.image import Iterator
@@ -35,11 +36,6 @@ def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFra
              definidas por kwargs.
     """
 
-    if data.class_indices:
-        class_labels = {v: i for i, v in data.class_indices.items()}
-    else:
-        class_labels = {0: 'BENIGN', 1: 'MALIGNANT'}
-
     # Se genera un orden aleatorio del datagenerator
     data.on_epoch_end()
 
@@ -55,13 +51,13 @@ def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFra
     # dada por la función de activacón softmax, se obtiene la clase predicha mediante el valor máximo (clase más
     # probable).
     data.set_batch_size(1)
-    predictions = [
-        class_labels[pred] for pred in one_hot(argmax(keras_model.predict(data), axis=1), len(class_labels)).numpy().\
-            argmax(axis=-1).tolist()]
+    predictions = keras_model.predict(data)[:, 1]
 
     # Se crea el dataset final
-    dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions, 'IMG_LABEL': true_labels}) \
-        if true_labels else pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions})
+    if true_labels:
+        dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions, 'IMG_LABEL': true_labels})
+    else:
+        dataset = pd.DataFrame({'PROCESSED_IMG': fnames, 'PREDICTION': predictions})
 
     # Se añaden columnas adicionales al dataset
     for col, value in kwargs.get('add_columns', {}).items():
@@ -70,7 +66,7 @@ def get_predictions(keras_model: models, data: Iterator, **kwargs) -> pd.DataFra
     return dataset
 
 
-def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FILES, task_type: str,
+def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FILES, task_type: str, fc: str = 'simple',
                   weight_init: Union[str, io] = None, frozen_layers: Union[str, int] = None) -> None:
     """
     Función utilizada para generar el pipeline de entrenamiento de cada modelo.
@@ -87,11 +83,15 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
     """
     # Se inicializa cada modelo:
-    cnn = m(n=len(db.class_dict), weights=None if weight_init == 'random' else weight_init)
+    cnn = m(n=len(db.class_dict), weights=None if weight_init == 'random' else weight_init, top_fc=fc)
 
     # Se registran las métricas que se desean almacenar:
     if task_type == 'classification':
         cnn.register_metric(*list(conf.CLASSIFICATION_METRICS.values()))
+        #
+        # train, val = db.get_classification_dataset_generator(
+        #     batch_size=cnn.BS_DICT[frozen_layers], callback=cnn.get_preprocessing_func(), size=cnn.shape[:2]
+        # )
 
         train, val = db.get_classification_dataset_generator(
             batch_size=conf.BATCH_SIZE, callback=cnn.get_preprocessing_func(), size=cnn.shape[:2]
@@ -136,7 +136,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
         print(f'{"-" * 75}\n\tEmpieza proceso de extract-features (warm up)\n{"-" * 75}')
 
-        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, Adam(conf.WARM_UP_LEARNING_RATE))
+        t, e = cnn.extract_features(train, val, conf.WARM_UP_EPOCHS, Adam(conf.LEARNING_RATE))
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='ExtractFeatures', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
@@ -144,7 +144,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
         print(f'{"-" * 75}\n\tEmpieza proceso de fine-tunning\n{"-" * 75}')
 
-        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, Adam(conf.LEARNING_RATE), frozen_layers)
+        t, e = cnn.fine_tunning(train, val, conf.EPOCHS, Adam(cnn.get_learning_rate()), frozen_layers)
 
         bulk_data(file=c.model_summary_train_csv, mode='a', cnn=name, process='FineTunning', FT=frozen_layers,
                   weights=weight_init, time=t, epochs=e, trainable_layers=cnn.get_trainable_layers())
@@ -162,11 +162,46 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
 
         # Se generan las predicciones de entrenamiento y validación en formato de dataframe y se devuelven al proceso
         # ppal.
-        q.put(pd.concat(objs=[
-            get_predictions(keras_model=cnn, data=train, add_columns={'TRAIN_VAL': 'train'}),
-            get_predictions(keras_model=cnn, data=val, add_columns={'TRAIN_VAL': 'val'})],
-            ignore_index=True
+        q.put(
+            pd.concat(
+                objs=[
+                    get_predictions(keras_model=cnn, data=train, add_columns={'TRAIN_VAL': 'train'}),
+                    get_predictions(keras_model=cnn, data=val, add_columns={'TRAIN_VAL': 'val'})
+                ],
+                ignore_index=True
         ))
         print(f'{"=" * 75}\nPredicciones finalizadas.\n{"=" * 75}')
     else:
         q.put(True)
+
+
+def optimize_threshold(true_labels: np.array, pred_labels: np.array):
+
+    try:
+        fpr, tpr, thresholds = roc_curve(true_labels, pred_labels)
+
+        return thresholds[argmax(tpr - fpr)]
+    except Exception:
+        return None
+
+
+def apply_bootstrap(data: pd.DataFrame, true_col: str, pred_col: str, metric: callable, iters: int = 1000,
+                    ci: float = 0.95, prop = 0.75, **kwargs) -> \
+        tuple:
+
+    assert true_col in data.columns, f'{true_col} not in dataframe'
+    assert pred_col in data.columns, f'{pred_col} not in dataframe'
+
+    results = []
+    for i in range(iters):
+
+        sample = resample(data, n_samples=int(len(data) * prop))
+
+        results.append(metric(sample[true_col].values.tolist(), sample[pred_col].values.tolist(), **kwargs))
+
+    try:
+        lower = max(0.0, np.percentile(results, ((1.0 - ci) / 2.0) * 100))
+        upper = min(1.0, np.percentile(results, (ci + ((1.0 - ci) / 2.0)) * 100))
+        return np.mean(results), lower, upper
+    except TypeError:
+        return None, None, None

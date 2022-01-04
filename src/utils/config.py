@@ -9,7 +9,7 @@ from tensorflow.keras.losses import CategoricalCrossentropy
 from segmentation_models.metrics import IOUScore
 from segmentation_models.losses import DiceLoss, BinaryFocalLoss
 
-from cnns.metrics import f1_score
+from algorithms.metrics import f1_score
 from utils.functions import get_path
 
 
@@ -21,16 +21,6 @@ TRAIN_DATA_PROP: float = 0.7
 """
     CONFIGURACION DATA AUGMENTATION
 """
-# CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
-#     'horizontal_flip': True,
-#     'vertical_flip': True,
-#     'rotation_range': 270,
-#     'width_shift_range': 0.1,
-#     'height_shift_range': 0.1,
-#     # 'brightness_range': (0.6, 1), no tiene sentido debido a que se aplica la ecu
-#     'zoom_range': [1, 1.5],
-# }
-
 CLASSIFICATION_DATA_AUGMENTATION_FUNCS: dict = {
     'horizontal_flip': HorizontalFlip(),
     'vertical_flip': VerticalFlip(),
@@ -52,12 +42,14 @@ SEGMENTATION_DATA_AUGMENTATION_FUNCS: dict = {
     CONFIGURACION DE EJECUCIONES DE LOS MODELOS
 """
 EPOCHS: int = 150
-WARM_UP_EPOCHS: int = 30
-WARM_UP_LEARNING_RATE: float = 1e-3
+WARM_UP_EPOCHS: int = 5
 LEARNING_RATE: float = 1e-4
 
 SEGMENTATION_BATCH_SIZE: int = 9
-BATCH_SIZE: int = 18
+# BATCH_SIZE: int = 18
+
+# Batch size para fc on top
+BATCH_SIZE: int = 14
 
 SEED: int = 81
 
@@ -76,12 +68,11 @@ CLASSIFICATION_LOSS = CategoricalCrossentropy()
 SEGMENTATION_LOSS = DiceLoss() + (1 * BinaryFocalLoss())
 
 """
-    CONFIGURACION PARA EL GRADIENT BOOSTING
+    CONFIGURACION PARA EL MODEL ENSEMBLING
 """
-N_ESTIMATORS = 20
-MAX_DEPTH = 3
-XGB_CONFIG = 'CONF1'
-XGB_COLS = {
+THRESHOLD = 0.5
+ENSEMBLER_CONFIG = 'CONF1'
+ENSEMBLER_COLS = {
     'CONF1': [],
     'CONF2': ['BREAST', 'BREAST_VIEW', 'BREAST_DENSITY']
 }
@@ -236,9 +227,9 @@ APPLICATION_NAME: str = 'Breast Cancer Diagnosis'
 """
     CARPETAS DE LA INTERFAZ GRÁFICA
 """
-GUI_CSS_PATH = get_path(WORKING_DIRECTORY, 'static', 'css')
-GUI_HTML_PATH = get_path(WORKING_DIRECTORY, 'static', 'html', 'help_window.html')
-GUI_ICON_PATH = get_path(WORKING_DIRECTORY, 'static', 'images', 'logo.png')
+GUI_CSS_PATH = get_path(WORKING_DIRECTORY, 'static', 'css', create=False)
+GUI_HTML_PATH = get_path(WORKING_DIRECTORY, 'static', 'html', 'help_window.html', create=False)
+GUI_ICON_PATH = get_path(WORKING_DIRECTORY, 'static', 'images', 'logo.png', create=False)
 
 """
     CARPETAS DE RESULTADOS DEL MODELO 
@@ -256,7 +247,7 @@ class ModelConstants:
 
         self.model_store_dir: io = get_path(self.model_root_dir, 'STORED_MODELS')
         self.model_store_cnn_dir: io = get_path(self.model_store_dir, 'CNN')
-        self.model_store_xgb_dir: io = get_path(self.model_store_dir, 'GRADIENT_BOOSTING')
+        self.model_store_ensembler_dir: io = get_path(self.model_store_dir, 'MODEL_ENSEMBLING')
 
         self.model_log_dir: io = get_path(self.model_root_dir, 'TRAIN_LOGS')
         self.model_summary_dir: io = get_path(self.model_root_dir, 'SUMMARY_MODELS')
@@ -264,7 +255,7 @@ class ModelConstants:
 
         self.model_predictions_dir: io = get_path(self.model_root_dir, 'PREDICTIONS')
         self.model_predictions_cnn_dir = get_path(self.model_predictions_dir, 'CNN')
-        self.model_predictions_xgb_dir = get_path(self.model_predictions_dir, 'GRADIENT_BOOSTING')
+        self.model_predictions_ensembler_dir = get_path(self.model_predictions_dir, 'MODEL_ENSEMBLING')
 
         self.model_data_viz_dir: io = get_path(self.model_root_dir, 'DATA_VIZ')
 
@@ -276,7 +267,7 @@ class ModelConstants:
         self.model_viz_results_dir: io = get_path(self.model_root_dir, 'DATA_VIZ', 'RESULTS')
         self.model_viz_results_model_history_dir: io = get_path(self.model_viz_results_dir, 'MODEL_HISTORY')
         self.model_viz_results_confusion_matrix_dir: io = get_path(self.model_viz_results_dir, 'CONFUSION_MATRIX')
-        self.model_viz_results_accuracy_dir: io = get_path(self.model_viz_results_dir, 'ACCURACY')
+        self.model_viz_results_auc_curves_dir: io = get_path(self.model_viz_results_dir, 'AUC_CURVES')
         self.model_viz_results_metrics_dir: io = get_path(self.model_viz_results_dir, 'METRICS')
 
 

@@ -104,59 +104,33 @@ TODO
 ---------
   TESTS
 ---------
-EJEC_ROI_TEST1:
-    - Modelo previo al refactor de frozen layers (se excluyen bn en train y se añaden capas en algunos modelos).
-    - El data augmentation contenia fill_mode cte con pixeles negros
-    - Se utilizan todos los dataset
-    - El Crop presenta un margen de 1.2, sin tener background y con un único crop por ROI (NO OVERLAP).
-    - En el data augmentation hay funciones como brightness (no tiene sentido al aplicar clahe)
-      y zoom que pueden meter ruido al hacer desaparecer las patologías.
+
+EJEC_ROI_TEST3
+    - Se hace el split dataset teniendo en cuenta la base de datos y la clase
+    - Se mantiene el learning train de extract featuers a fine tuning.
 
     **RESULTADOS**:
-    - acc train > 80% para modelo Gradient Boosting con all layers en imagenet
-    - acc val   > 70% para modelo Densenet con all layers en imagenet
-
-EJEC_ROI_TEST2
-    - Se suprime el dataset MIAS del entrenamiento
-    - Se suprime fill mode cte y función brightness del data augmentation manteniendo zoom.
-    - Se corrige la función de transformación prévia al paso de preprocesado de cada red (cast a float 32).
-    - Post refactor de frozen layers
-
-EJEC_ROI_TEST3:
-    - Añadir fully connected layers a la salida del baseline.
+    - acc train 92 % para el randomforest
+    - acc val 82 % para el modelo randomforest
 
 EJEC_ROI_TEST4:
-    - El resize se hace una única vez y no dos (image preprocessing + data augmentation).
-
-EJEC_ROI_TEST4:
-    - Se añade tercera fase de entrenamiento para fine-tunning añadiendo un unfroze all con SGD(1e-5) y
-      reducción de learning rate en un factor de 10.
-
-EJEC_ROI_TEST5:
-    - Se añade regularización L2
-
-EJEC_ROI_TEST6:
-    - Se aumenta el margin de los rois a 1.4.
-
-EJEC_ROI_TEST7:
-    - Añadir data augmentation al set de validacion
+    - Añadir fully connected layers a la salida del baseline + regularización L2.
 
 
----- EXPERIMENTOS DEPRECATED ----
-EJEC_SEGMENTATION_TEST1: (DEPRECATED)
-    - Parches de tamaño 384, 192 y BS = 9
+EJEC_COMPLT_IMG_TEST1
+    - Ejecutar ROI_TEST3 con imagenes completas
 
-EJEC_SEGMENTATION_TEST2: (DEPRECATED)
-    - Parches de tamaño 512, 256 y BS = 5
+EJEC_COMPLT_IMG_TEST2
+    - Ejecutar ROI_TEST4 con imagenes completas
 
-EJEC_SEGMENTATION_TEST3: (DEPRECATED)
-    - Parches de tamaño 1024, 512 y BS = 1
-
-EJEC_SEGMENTATION_TEST4: (DEPRECATED)
-    - Parches de tamaño 448, 224 y BS = 10
+EJEC_LAST -> La última ejección con el método ganador y maximizando el batch disponible.
 
 
-
+-- TODOS CODIFICACION --
+- Terminar Deployment con los nuevos modelos (Jueves)
+- DataViz de Test
+- GradCam
+- Feature Importance de model ensambling
 
 
 

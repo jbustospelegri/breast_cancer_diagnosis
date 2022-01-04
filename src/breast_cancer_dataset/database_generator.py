@@ -15,6 +15,7 @@ from sklearn.model_selection import train_test_split
 from breast_cancer_dataset.base import SegmentationDataset, Dataloder, ClassificationDataset
 from breast_cancer_dataset.databases.cbis_ddsm import DatasetCBISDDSM, DatasetCBISDDSMCrop
 from breast_cancer_dataset.databases.inbreast import DatasetINBreast, DatasetINBreastCrop
+from breast_cancer_dataset.databases.mias import DatasetMIAS, DatasetMIASCrop
 from utils.config import (
     MODEL_FILES, SEED, CLASSIFICATION_DATA_AUGMENTATION_FUNCS, TRAIN_DATA_PROP, PREPROCESSING_FUNCS,
     PREPROCESSING_CONFIG, IMG_SHAPE, SEGMENTATION_DATA_AUGMENTATION_FUNCS, PATCH_SIZE
@@ -25,23 +26,36 @@ from preprocessing.image_processing import resize_img
 class BreastCancerDataset:
 
     DBS = {
-            'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetINBreast],
-            'PATCHES': [DatasetCBISDDSMCrop, DatasetINBreastCrop]
+            'COMPLETE_IMAGE': [DatasetCBISDDSM, DatasetINBreast, DatasetMIAS],
+            'PATCHES': [DatasetCBISDDSMCrop, DatasetINBreastCrop, DatasetMIASCrop]
         }
 
-    def __init__(self, img_type: str, task_type: str, get_class: bool = True, split_data: bool = True, xlsx_io: io = ''):
+    def __init__(
+            self,
+            img_type: str,
+            task_type: str,
+            get_class: bool = True,
+            split_data: bool = True,
+            xlsx_io: io = '',
+            test_dataset: list = None
+    ):
 
         if img_type not in list(self.DBS.keys()):
             raise ValueError(f'img_type param {img_type} not implemented')
         if task_type not in ['classification', 'segmentation']:
             raise ValueError(f'task_type param {task_type} not implemented')
 
+        if split_data:
+            train_proportion = TRAIN_DATA_PROP
+        else:
+            train_proportion = 1
+
         self.img_type = img_type
         self.task_type = task_type
 
         if not os.path.isfile(xlsx_io):
             self.df = self.get_data_from_databases()
-            self.split_dataset(train_prop=TRAIN_DATA_PROP if split_data else 1, stratify=True)
+            self.split_dataset(train_prop=train_proportion, strat_cols=['IMG_LABEL', 'DATASET'], test_id=test_dataset)
             self.bulk_data_desc_to_files(df=self.df)
         else:
             self.df = pd.read_excel(xlsx_io, dtype=object, index_col=None)
@@ -216,7 +230,7 @@ class BreastCancerDataset:
 
         return train_dataloader, valid_dataloader
 
-    def split_dataset(self, train_prop: float, stratify: bool = True):
+    def split_dataset(self, train_prop: float, strat_cols: list = None, test_id: list = None):
         """
         Función que permite dividir el dataset en un subconjunto de entrenamiento y otro de validación. La división
         puede ser estratificada.
@@ -227,18 +241,30 @@ class BreastCancerDataset:
         :param stratify: booleano que determina si la división debe ser estratificada o no.
         """
 
+        if test_id is None:
+            test_id = []
+
         # Se confirma que el valor de train_prop no sea superior a 1
         assert train_prop < 1, 'Proporción de datos de validación superior al 100%'
 
+        # Se filtran los datasets del campo test_id para no incorporarlos en el split de train y validacion
+        df = self.df[~self.df.DATASET.isin(test_id)].copy()
+
+        if strat_cols is None:
+            stratify = None
+        else:
+            stratify = df[strat_cols].apply(lambda r: '_'.join(r.values.astype(str)), axis=1)
+
         # Se filtran los datos en función de si se desea obtener el conjunto de train y val
         train_x, _, _, _ = train_test_split(
-            self.df.PROCESSED_IMG, self.df.IMG_LABEL, random_state=SEED, train_size=train_prop,
-            stratify=self.df.IMG_LABEL if stratify else None
+            df.PROCESSED_IMG, df.IMG_LABEL, random_state=SEED, train_size=train_prop, stratify=stratify
         )
 
         # Se asigna el valor de 'train' a aquellas imagenes (representadas por sus paths) que estén presentes en train_x
         # en caso contrario, se asignará el valor 'val'.
-        self.df.loc[:, 'TRAIN_VAL'] = np.where(self.df.PROCESSED_IMG.isin(train_x), 'train', 'val')
+        self.df.loc[:, 'TRAIN_VAL'] = np.where(
+            self.df.DATASET.isin(test_id), 'test', np.where(self.df.PROCESSED_IMG.isin(train_x), 'train', 'val')
+        )
 
     @staticmethod
     def bulk_data_desc_to_files(df: pd.DataFrame) -> None:
