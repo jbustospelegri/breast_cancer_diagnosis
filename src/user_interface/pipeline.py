@@ -9,7 +9,7 @@ from algorithms.utils import get_predictions
 from algorithms.model_ensambling import RandomForest
 from user_interface.signals_interface import SignalProgressBar, SignalError, SignalCompleted, SignalLogging
 from utils.config import DEPLOYMENT_MODELS
-from utils.functions import get_filename, get_path, get_contours
+from utils.functions import get_filename, get_path, get_contours, excel_column_name
 from user_interface.utils import ControledError
 
 
@@ -71,8 +71,18 @@ def generate_predictions_pipeline(
         info = 'Bulking results'
         signal_information.emit_update_label_and_progress_bar(80, info)
 
-        final_data[[*db.XLSX_COLS, 'PATHOLOGY', 'MALIGNANT_PROBABILITY']].\
-            to_excel(get_path(out_dirpath, f'{get_filename(excel_filepath)}.xlsx'), index=False)
+        writer = pd.ExcelWriter(get_path(out_dirpath, f'{get_filename(excel_filepath)}.xlsx'), engine='xlsxwriter')
+        final_data[[*db.XLSX_COLS, 'PATHOLOGY', 'MALIGNANT_PROBABILITY']].to_excel(writer, sheet_name='0', index=False)
+
+        book = writer.book
+        sheet = writer.sheets['0']
+
+        format_percentage = book.add_format({'num_format': '0.00%'})
+        column_letter = excel_column_name(n=len([*db.XLSX_COLS, 'PATHOLOGY', 'MALIGNANT_PROBABILITY']))
+        sheet.set_column(f'{column_letter}:{column_letter}', None, format_percentage)
+
+        writer.save()
+
         for i, (idx, row) in enumerate(final_data.iterrows(), 1):
 
             try:

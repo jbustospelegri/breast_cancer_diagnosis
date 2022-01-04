@@ -177,3 +177,11 @@ def load_point(point_string):
 
 def get_contours(img: np.ndarray) -> list:
     return cv2.findContours(image=img, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE)[0]
+
+
+def excel_column_name(n: int) -> str:
+    name = ''
+    while n > 0:
+        n, r = divmod(n-1, 26)
+        name = chr(r + ord('A')) + name
+        return name
