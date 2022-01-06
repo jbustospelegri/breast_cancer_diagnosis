@@ -30,6 +30,7 @@ def convert_img(args) -> None:
         img_path: io = args[0]
         dest_path: io = args[1]
 
+        # Para las imagenes dicom este valor permite recuperar las máscaras
         filter_binary: bool = get_value_from_args_if_exists(args, 2, False, IndexError, TypeError)
 
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
@@ -40,6 +41,7 @@ def convert_img(args) -> None:
 
         assert not os.path.isfile(dest_path), f'Image converted {dest_path} currently exists'
 
+        # En función del formato de origen se realiza una conversión u otra
         if os.path.splitext(img_path)[1] == '.dcm':
             convert_dcm_imgs(ori_path=img_path, dest_path=dest_path, filter_binary=filter_binary)
         elif os.path.splitext(img_path)[1] == '.pgm':
@@ -60,6 +62,9 @@ def convert_img(args) -> None:
 def convert_dcm_imgs(ori_path: io, dest_path: io, filter_binary: bool) -> None:
     """
     Función encargada de leer imagenes en formato dcm y convertirlas al formato especificado por el usuario.
+    :param ori_path: ruta de origen de la imagen
+    :param dest_path: ruta de destino de la imgen
+    :param filter_binary: en caso de imagenes dicom, se permite recuperar una máscara para su conversion
     """
     try:
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
@@ -75,13 +80,14 @@ def convert_dcm_imgs(ori_path: io, dest_path: io, filter_binary: bool) -> None:
         # Se convierte las imagenes a formato de array
         img_array = img.pixel_array.astype(float)
 
+        # Si se desean obtener las máscaras se contabilizan el número de píxeles únicos de cada imagen.
         if filter_binary:
             assert len(np.unique(img_array)) == 2, f'{ori_path} excluded. Not binary Image'
         else:
             assert len(np.unique(img_array)) > 2, f'{ori_path} excluded. Binary Image.'
 
         # Se realiza un reescalado de la imagen para obtener los valores entre 0 y 255
-        rescaled_image = (np.maximum(img_array, 0) / img_array.max()) * 255
+        rescaled_image = (np.maximum(img_array, 0) / max(img_array)) * 255
 
         # Se convierte la imagen al ipode datos unsigned de 8 bytes
         final_image = np.uint8(rescaled_image)
@@ -96,6 +102,8 @@ def convert_dcm_imgs(ori_path: io, dest_path: io, filter_binary: bool) -> None:
 def convert_pgm_imgs(ori_path: io, dest_path: io) -> None:
     """
     Función encargada de leer imagenes en formato pgm y convertirlas al formato especificado por el usuario.
+    :param ori_path: ruta de origen de la imagen
+    :param dest_path: ruta de destino de la imgen
     """
     # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
     if os.path.splitext(dest_path)[1] not in ['.png', '.jpg']:

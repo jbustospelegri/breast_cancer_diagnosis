@@ -8,7 +8,7 @@ from typing import io
 from PIL import Image
 
 from preprocessing.functions import (
-    apply_clahe_transform, remove_artifacts, remove_noise, crop_borders, pad_image_into_square, resize_img, binarize,
+    apply_clahe_transform, remove_artifacts, remove_noise, crop_borders, pad_image_into_square, resize_img,
     normalize_breast, flip_breast, correct_axis
 )
 from utils.config import LOGGING_DATA_PATH, PREPROCESSING_FUNCS, PREPROCESSING_CONFIG
@@ -21,19 +21,26 @@ def full_image_pipeline(args) -> None:
     """
     Función utilizada para realizar el preprocesado de las mamografías. Este preprocesado consiste en:
         1 - Recortar los bordes de las imagenes.
-        2 - Realziar una normalización min-max para estandarizar las imagenes a 8 bits.
-        3 - Quitar anotaciones realziadas sobre las iamgenes.
-        4 - Relizar un flip horizontal para estandarizar la orientacion de los senos.
-        5 - Mejorar el contraste de las imagenes en blanco y negro  mediante CLAHE.
-        6 - Recortar las imagenes para que queden cuadradas.
-        7 - Normalización min-max para estandarizar el valor de los píxeles entre 0 y 255
-        8 - Resize de las imagenes a un tamaño de 300 x 300
+        2 - Eliminar el ruido
+        3 - Quitar anotaciones realizadas sobre las imagenes.
+        4 - Realizar una normalización min-max para estandarizar las imagenes a 8 bits.
+        5 - Aplicar una ecualización de las imagenes para mejorar el contrastre
+        6 - Relizar un flip horizontal para estandarizar la orientacion de los senos.
+        7 - Realizar el padding de las imagenes al aspect ratio deseado
+        8 - Resize de las imagenes
+    En caso de existir una máscara, se aplicarán las siguientes funciones de la zona de interes (funcionalidad para
+    segmentación de datos).
+        1 - Recortar los bordes de las imagenes.
+        2 - Relizar un flip horizontal para estandarizar la orientacion de los senos.
+        3 - Realizar el padding de las imagenes al aspect ratio deseado
+        4 - Resize de las imagenes
 
     :param args: listado de argumentos cuya posición debe ser:
         1 - path de la imagen sin procesar.
         2 - path de destino de la imagen procesada.
-        3 - extensión con la que se debe de almacenar la imagen
-        4 - directorio en el que se deben de almacenar los ejemplos.
+        3 - Booleano para almacenar los pasos intermedios para representarlos graficamente
+        4 - path de destino de la máscara procesada con la zona de interés
+        5 - path de origen de la máscara con la zona de interés de cada imagen
     """
 
     error_path: io = get_value_from_args_if_exists(args, 5, LOGGING_DATA_PATH, IndexError, KeyError)
@@ -85,7 +92,7 @@ def full_image_pipeline(args) -> None:
         images['REMOVE NOISE'] = remove_noise(
             img=images[list(images.keys())[-1]].copy(), **prep_dict.get('REMOVE_NOISE', {}))
 
-        # El siguiente paso consiste en eliminar los artefactos de la imagen. Solo aplica a imagenes completas
+        # El siguiente paso consiste en eliminar los artefactos de la imagen.
         images['REMOVE ARTIFACTS'], _, mask, img_mask = remove_artifacts(
             img=images[list(images.keys())[-1]].copy(), mask=img_mask, **prep_dict.get('REMOVE_ARTIFACTS', {})
         )
@@ -120,12 +127,11 @@ def full_image_pipeline(args) -> None:
             img_mask = cv2.flip(src=img_mask, flipCode=1)
 
         # Se aplica el ultimo crop de la parte izquierda
-        # Primero se realiza un crop de las imagenes
-        images['CROPPING LEFT'] = crop_borders(images[list(images.keys())[-1]].copy(), **prep_dict.get('CROPPING_2', {}))
-
+        images['CROPPING LEFT'] = crop_borders(images[list(images.keys())[-1]].copy(),
+                                               **prep_dict.get('CROPPING_2', {}))
         img_mask = crop_borders(img=img_mask,  **prep_dict.get('CROPPING_2', {}))
 
-        # # Se aplica el padding de las imagenes para convertirlas en imagenes cuadradas
+        # Se aplica el padding de las imagenes para convertirlas en imagenes con el aspect ratio deseado
         if prep_dict.get('RATIO_PAD', False):
             images['IMAGE RATIO PADDED'] = \
                 pad_image_into_square(img=images[list(images.keys())[-1]].copy(), **prep_dict.get('RATIO_PAD', {}))
@@ -163,21 +169,23 @@ def full_image_pipeline(args) -> None:
 
 def crop_image_pipeline(args) -> None:
     """
-    Función utilizada para realizar el preprocesado de las mamografías. Este preprocesado consiste en:
-        1 - Recortar los bordes de las imagenes.
-        2 - Realziar una normalización min-max para estandarizar las imagenes a 8 bits.
-        3 - Quitar anotaciones realziadas sobre las iamgenes.
-        4 - Relizar un flip horizontal para estandarizar la orientacion de los senos.
-        5 - Mejorar el contraste de las imagenes en blanco y negro  mediante CLAHE.
-        6 - Recortar las imagenes para que queden cuadradas.
-        7 - Normalización min-max para estandarizar el valor de los píxeles entre 0 y 255
-        8 - Resize de las imagenes a un tamaño de 300 x 300
-
+    Función utilizada para realizar el preprocesado de las zonas de interés de las mamografias. Este preprocesado
+    consiste en:
+        1 - Recortar los bordes de las imagenes completas para poder suprimir bordes de las zonas de interes
+        2 - Eliminar el ruido
+        3 - Quitar anotaciones realizadas sobre las imagenes completas para obtener la zona del seon
+        4 - Realizar los recortes de cada zona de interés a partir de la máscara del seno completo
+        5 - Aplicar una ecualización CLAHE para mejorar el contraste
     :param args: listado de argumentos cuya posición debe ser:
         1 - path de la imagen sin procesar.
         2 - path de destino de la imagen procesada.
-        3 - extensión con la que se debe de almacenar la imagen
-        4 - directorio en el que se deben de almacenar los ejemplos.
+        3 - path de origen de la máscara con la zona de itnerés
+        --parámetros opcionales--
+        4 - número de imagenes de background (zonas sin lesión)
+        5 - número de imagenes del roi
+        6 - overlap para realziar distintas imagenes de un roi
+        7 - margen adicional para recortar cada roi
+        8 - booleano para recuperar los pasos intermedios
     """
 
     error_path: io = get_value_from_args_if_exists(args, 8, LOGGING_DATA_PATH, IndexError, KeyError)
@@ -192,11 +200,11 @@ def crop_image_pipeline(args) -> None:
         extension: str = os.path.splitext(out_filepath)[1]
         roi_mask_path: io = args[2]
 
-        n_background_imgs: int = get_value_from_args_if_exists(args, 3, 0, IndexError, TypeError)
-        n_roi_imgs: int = get_value_from_args_if_exists(args, 4, 1, IndexError, TypeError)
-        overlap_roi: float = get_value_from_args_if_exists(args, 5, 1.0, IndexError, TypeError)
+        # n_background_imgs: int = get_value_from_args_if_exists(args, 3, 0, IndexError, TypeError)
+        # n_roi_imgs: int = get_value_from_args_if_exists(args, 4, 1, IndexError, TypeError)
+        # overlap_roi: float = get_value_from_args_if_exists(args, 5, 1.0, IndexError, TypeError)
         margin_roi: float = get_value_from_args_if_exists(args, 6, 1.0, IndexError, TypeError)
-        save_intermediate_steps: bool = get_value_from_args_if_exists(args, 7, False, IndexError, TypeError)
+        # save_intermediate_steps: bool = get_value_from_args_if_exists(args, 7, False, IndexError, TypeError)
 
         # Se valida que el formato de conversión sea el correcto y se valida que existe la imagen a transformar
         if not os.path.isfile(img_filepath):
@@ -226,7 +234,8 @@ def crop_image_pipeline(args) -> None:
 
         # Se obtienen las zonas de patologia de la mascara juntamente con las
         # El siguiente paso consiste en eliminar los artefactos de la imagen. Solo aplica a imagenes completas
-        _, _, breast_mask, mask = remove_artifacts(img_denoised, img_mask, False, **prep_dict.get('REMOVE_ARTIFACTS', {}))
+        _, _, breast_mask, mask = remove_artifacts(img_denoised, img_mask, False,
+                                                   **prep_dict.get('REMOVE_ARTIFACTS', {}))
 
         # Se obtienen los parches de las imagenes con patologías.
         roi_zones = []
@@ -245,8 +254,6 @@ def crop_image_pipeline(args) -> None:
 
                 # Se suprimen las zonas de la patología para posteriormente obtener la zona del background
                 cv2.rectangle(breast_mask, (x_min, y_min), (x_max, y_max), color=(0, 0, 0), thickness=-1)
-
-        # TODO: Se obtienen los parches de las zonas sin patología
 
         # Se procesan las zonas de interes recortadas
         for idx, (roi, roi_mask, tipo) in enumerate(zip(roi_zones, mask_zones, repeat('roi', len(roi_zones)))):
