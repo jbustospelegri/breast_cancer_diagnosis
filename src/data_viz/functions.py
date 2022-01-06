@@ -10,6 +10,16 @@ import numpy as np
 
 def create_countplot(data: DataFrame, file: io, x: str, hue: str = None, title: str = '', annotate: bool = True,
                      norm: bool = False):
+    """
+    Función utilizada para crear un countplot de seaborn
+    :param data: pandas dataframe con los datos a crear el countplot
+    :param file: filepath donde guardar la imagen
+    :param x: nombre de columna del data que será la X del countplot
+    :param hue: nombre de columna de data que servirá para segregar clases en el countplot
+    :param title: titulo de gráfico
+    :param annotate: booleano para anotar los valores de cada barra del countplot
+    :param norm: booleano para realizar una normalización ed los valores individuales de cada X en función de hue
+    """
 
     # Figura de matplotlib para almacenar el gráfico
     plt.figure(figsize=(15, 5))
@@ -46,36 +56,32 @@ def create_countplot(data: DataFrame, file: io, x: str, hue: str = None, title: 
 
 
 def merge_cells(table: plt.table, cells: List[tuple]):
-    '''
-    Merge N matplotlib.Table cells
+    """
+    función para unir las celdas de una tabla de matplotlib (https://stackoverflow.com/a/53819765/12684122)
 
-    Parameters
-    -----------
-    table: matplotlib.Table
-        the table
-    cells: list[set]
-        list of sets od the table coordinates
-        - example: [(0,1), (0,0), (0,2)]
+    :param table: tabla de matplotlib a unir las celdas
+    :param cells: lista con las celdas a unir
 
-    Notes
-    ------
-    https://stackoverflow.com/a/53819765/12684122
-    '''
+    """
+
+    # Se crea un array con las celdas a unir tanto verticales como horizontales
     cells_array = [np.asarray(c) for c in cells]
     h = np.array([cells_array[i + 1][0] - cells_array[i][0] for i in range(len(cells_array) - 1)])
     v = np.array([cells_array[i + 1][1] - cells_array[i][1] for i in range(len(cells_array) - 1)])
 
-    # if it's a horizontal merge, all values for `h` are 0
+    # Si se realiza un merge horizontal todos los valores de h serán 0
     if not np.any(h):
         # sort by horizontal coord
         cells = np.array(sorted(list(cells), key=lambda v: v[1]))
         edges = ['BTL'] + ['BT'] * (len(cells) - 2) + ['BTR']
+    # Si se realiza un merge en vertical todos los valores de v seran 0
     elif not np.any(v):
         cells = np.array(sorted(list(cells), key=lambda h: h[0]))
         edges = ['TRL'] + ['RL'] * (len(cells) - 2) + ['BRL']
     else:
         raise ValueError("Only horizontal and vertical merges allowed")
 
+    # Se iteran las celdas eliminando la visibilidad de los eejes
     for cell, e in zip(cells, edges):
         table[cell[0], cell[1]].visible_edges = e
 
