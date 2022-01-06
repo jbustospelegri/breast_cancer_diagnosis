@@ -86,7 +86,7 @@ if __name__ == '__main__':
                 bulk_data(path, **predictions.to_dict())
 
     if task_type == 'classification':
-        # Se crea el grandom forest
+        # Se crea el random forest
         print(f'{"-" * 75}\nGeneradando combinación secuencial de clasificadores.\n{"-" * 75}')
         ensambler = RandomForest(db=db.df)
         ensambler.train_model(
@@ -97,6 +97,7 @@ if __name__ == '__main__':
 
         print(f'{"-" * 50}\nProceso de entrenamiento finalizado\n{"-" * 50}')
 
+    # Visualización de los resultados
     print(f'{"="* 75}\nGeneradando visualización de resultados.\n{"="* 75}')
 
     print(f'{"-" * 75}\nRepresentando métricas del entrenamiento.\n{"-" * 75}')

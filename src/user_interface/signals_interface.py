@@ -6,6 +6,11 @@ from PyQt5.QtWidgets import QMessageBox
 
 
 class SignalError(QObject):
+    """
+        Clase con la señal de error producida por la interfaz gráfica. La señal de error devolverá al slot
+        un conjunto de atributos como el modulo donde se ha producido el error, si es necesario parar la aplicación
+        o si es necesario reactivar la ventana
+    """
 
     signal = pyqtSignal(str, str, object, bool, bool)
 
@@ -21,7 +26,9 @@ class SignalError(QObject):
 
 
 class SignalLogging(QObject):
-
+    """
+        Clase con la señal para generar el log de escritura
+    """
     signal = pyqtSignal(str)
 
     def __init__(self):
@@ -30,7 +37,11 @@ class SignalLogging(QObject):
     def log(self, log_msg):
         self.signal.emit(log_msg)
 
+
 class SignalCompleted(QObject):
+    """
+        Clase con la señal de finalización del procesado
+    """
 
     signal = pyqtSignal()
 
@@ -50,6 +61,9 @@ class SignalCompleted(QObject):
 
 
 class SignalProgressBar(QObject):
+    """
+        Clase que emite una señal para actualizar los valores de una barra de prograso y su correspondiente label.
+    """
     signal_update_progress_bar = pyqtSignal(int)
     signal_update_label_info = pyqtSignal(str)
 
@@ -66,7 +80,8 @@ class SignalProgressBar(QObject):
     def start_signal_stdout(self):
         redirect_stdout(self)
 
-    def reset_signal_stdout(self):
+    @staticmethod
+    def reset_signal_stdout():
         sys.stdout = sys.__stdout__
 
     def write(self, txt):

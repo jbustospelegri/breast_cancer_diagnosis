@@ -24,7 +24,7 @@ class UnetGeneralModel(GeneralModel):
         )
         self.backbone = backbone
 
-    def create_model(self):
+    def create_model(self, fc_top: str = None):
         self.model = self.baseline
 
     def set_trainable_layers(self, unfrozen_layers: str):

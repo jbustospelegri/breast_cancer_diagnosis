@@ -3,7 +3,7 @@ import numpy as np
 from typing import Callable, io, Union, Tuple
 from time import process_time
 
-from tensorflow.keras import Model, Sequential, optimizers, callbacks
+from tensorflow.keras import Sequential, optimizers, callbacks
 from tensorflow.keras.backend import count_params, eval
 from tensorflow.keras.callbacks import History
 from tensorflow.keras.optimizers import Adam
@@ -13,16 +13,23 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.applications import resnet50, densenet, vgg16, inception_v3
 from tensorflow.python.keras.preprocessing.image import DataFrameIterator
 from tensorflow.keras.layers import (
-    Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input, BatchNormalization, Flatten
+    Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input, Flatten
 )
 
 from segmentation_models import get_preprocessing
 
-from utils.functions import get_path, get_number_of_neurons
+from utils.functions import get_path
 from utils.config import CLASSIFICATION_LOSS
 
 
 class GeneralModel:
+    """
+
+        Modelo general para crear nuevas estructuras de red a partir de redes neuronales ya existentes. Adicionalmente
+        se incorporan metodos para realizar el ajuste fino de parámetros modificando el número de capas a entrentar.
+        Esta clase deberá ser heredada por el resto de clases
+
+    """
 
     __name__ = 'GeneralModel'
     model: Model = None
@@ -52,7 +59,8 @@ class GeneralModel:
         self.preprocess_func = preprocess_func
         self.create_model(top_fc)
 
-    def create_baseline(self):
+    @staticmethod
+    def create_baseline():
         """
         Función que permite crear una estructura básica compuesta por un conjunto de capas convolucionales. Este metodo
         será sobreescrito por las clases heredadas.
@@ -74,20 +82,26 @@ class GeneralModel:
     def create_model(self, fc_type: str = 'simple'):
         """
         Función utilizada para crear la estructura de un modelo. Esta, estará formada por la estructura básica devuelta
-        por self.baseline juntamente con dos capas FC de 512 neuronas con función de activación relu. La capa de salida
-        estará compuesta por una capa de salida FC con tantas neuronas como clases existan en el dataset y con función
-        de activación softmax
+        por self.baseline juntamente con las top layers definidas en la función.
+        La capa de salida estará compuesta por una capa de salida FC con tantas neuronas como clases existan en el
+        dataset y con función de activación softmax.
+
+        :param fc_type: acepta los parámetros simple o complex para diferenciar la estructura de las top-layers
+                        utilzadas.
         """
 
-        input = Input(shape=self.shape)
-        x = self.baseline(input, training=False)
+        # Entrada del modelo
+        input_ = Input(shape=self.shape)
 
-        #  Test con extract features y sigmoide
+        # Baseline
+        x = self.baseline(input_, training=False)
+
+        #  Test con extract features y sigmoide (estructura simple)
         if fc_type == 'simple':
             x = GlobalAveragePooling2D()(x)
             x = Dropout(0.2)(x)
 
-        # Test añadiendo capas fully connected
+        # Test añadiendo capas fully connected (estructura compleja)
         elif fc_type == 'complex':
             x = Flatten()(x)
             x = Dense(512, activation='relu')(x)
@@ -99,25 +113,37 @@ class GeneralModel:
         else:
             raise ValueError('Incorrect fc type param')
 
+        # Capa de salida de la red
         output = Dense(self.n, activation='softmax')(x)
 
+        # Se crea el modelo uniendo todas las capas
         self.model = Model(inputs=input, outputs=output)
 
     def set_trainable_layers(self, unfrozen_layers: str):
         """
-        Función utilizada para setear layers del modelo como entrenables. Este metodo será sobreescrito por las clases
-        heredadas
+        Función utilizada para setear layers del modelo como entrenables.
+
+        :param unfrozen_layers: string que indica los bloques de capas a descongelar juntamente con todos los bloques
+               anteriores en orden alfanumerico. Loas parámetros aceptados son las keys del parámetro self.LAYERS_DICT
         """
+
+        # Se setean todas las capas a trainable para despues ponerlas en estado no entrenable.
         self.baseline.trainable = True
 
+        # Si el modelo se entrena por completo, no se realiza ninguna acción
         if unfrozen_layers == 'ALL':
             pass
 
+        # Por el contrario se congelarán todas las capas paramétrizadas en self.LAYERS_DICT
         elif unfrozen_layers in self.LAYERS_DICT.keys():
+            # Se ordenan las keys de forma alganumerica
             list_keys = sorted(self.LAYERS_DICT.keys(), key=lambda x: int(x[0]))
+            # Se recuperan todas las capas presentes en los values del diccionario cuyas keys sean anteriores o iguales
+            # al valor de unfrozen_layers
             train_layers = \
                 [l for layers in list_keys[:list_keys.index(unfrozen_layers) + 1] for l in self.LAYERS_DICT[layers]]
 
+            # Se itera generada la lista para congelar los pesos de cada capa.
             for layer in self.baseline.layers:
                 if layer.name not in train_layers:
                     layer.trainable = False
@@ -132,9 +158,9 @@ class GeneralModel:
         :param train_data: dataframe iterator con los datos de train
         :param val_data: dataframe iterator con los datos de validación
         :param epochs: número de épocas con las que realizar el entrenamiento
-        :param batch_size: tamaño del batch
+        :param unfrozen_layers: key de self.LAYERS_DICT indicando las capas a congelar
         :param opt: algorítmo de optimización de gradiente descendente
-
+        :return tiempo de entrenamiento y el número de épocas utilizadas para entrenar el modelo
         """
 
         # Se configura si los layers serán entrenables o no
@@ -143,6 +169,7 @@ class GeneralModel:
         # Se compila el modelo
         self.model.compile(optimizer=opt, loss=self.loss, metrics=self.metrics)
 
+        # Enternamiento del modelo
         start = process_time()
         self.history = self.model.fit(
             train_data,
@@ -154,43 +181,71 @@ class GeneralModel:
         return process_time() - start, len(self.history.history['loss'])
 
     def register_metric(self, *args: Union[Callable, str]):
+        """
+        Función para registrar las métricas a representar durante el entrenamiento del modelo
+        :param args: lista con métricas a representar. Se acepta una función o bien un string de sklearn.models.metrics.
+        """
         for arg in args:
             self.metrics.append(arg)
 
     def register_callback(self, **kargs: callbacks):
+        """
+        Función para registrar los callbacks a ejecutar durante el entrenamiento del modelo.
+        :param kargs: Diccionario con un nombre de callback y una función
+        """
         self.callbakcs = {**self.callbakcs, **kargs}
 
-    def train_from_scratch(self, train_data, val_data, epochs: int, opt: optimizers = None):
+    def train_from_scratch(self, train_data: DataFrameIterator, val_data: DataFrameIterator, epochs: int,
+                           opt: optimizers = None) -> Tuple[float, int]:
         """
-            Función utilizada para entrenar completamente el modelo.
+        Función para entrenar completamente un modelo
+        :param train_data: dataframe iterator con los datos de train
+        :param val_data: dataframe iterator con los datos de validación
+        :param epochs: número de épocas con las que realizar el entrenamiento
+        :param opt: algorítmo de optimización de gradiente descendente
+        :return tiempo de entrenamiento y el número de épocas utilizadas para entrenar el modelo
         """
         t, e = self.start_train(train_data, val_data, epochs, opt, unfrozen_layers='ALL')
         return t, e
 
-    def extract_features(self, train_data, val_data, epochs: int, opt: optimizers = None):
+    def extract_features(self, train_data, val_data, epochs: int, opt: optimizers = None) -> Tuple[float, int]:
         """
         Función utilizada para aplicar un proceso de extract features de modo que se conjela la arquitectura definida en
-        self.baseline y se entrenan las últimas capas de la arquitectura
+        self.baseline y se entrenan las últimas capas de la arquitectura.
+        :param train_data: dataframe iterator con los datos de train
+        :param val_data: dataframe iterator con los datos de validación
+        :param epochs: número de épocas con las que realizar el entrenamiento
+        :param opt: algorítmo de optimización de gradiente descendente
+        :return tiempo de entrenamiento y el número de épocas utilizadas para entrenar el modelo
         """
         t, e = self.start_train(train_data, val_data, epochs, opt, unfrozen_layers='0FT')
         return t, e
 
-    def fine_tunning(self, train_data, val_data, epochs: int, opt: optimizers = None, unfrozen_layers: str = '1FT'):
+    def fine_tunning(self, train_data, val_data, epochs: int, opt: optimizers = None, unfrozen_layers: str = '1FT') \
+            -> Tuple[float, int]:
         """
         Función utilizada para aplicar un proceso de transfer learning de modo que se conjelan n - k capas. Las k capas
         entrenables en la arquitectura definida por self.baseline se determinarán a partir del método
-        set_trainable_layers
+        set_trainable_layers.
+        :param train_data: dataframe iterator con los datos de train
+        :param val_data: dataframe iterator con los datos de validación
+        :param epochs: número de épocas con las que realizar el entrenamiento
+        :param opt: algorítmo de optimización de gradiente descendente
+        :param unfrozen_layers: key de self.LAYERS_DICT indicando las capas a congelar
+        :return tiempo de entrenamiento y el número de épocas utilizadas para entrenar el modelo
         """
         t, e = self.start_train(train_data, val_data, epochs, opt, unfrozen_layers=unfrozen_layers)
         return t, e
 
     def save_weights(self, dirname: str, model_name: str):
         """
-        Función utilizada para almacenar el modelo entrenado
+        Función utilizada para almacenar los pesos del modelo entrenado
         :param dirname: directorio en el cual se almacenara el modelocv
         :param model_name: nombre del archivo para almacenar el modelo
         """
+        # Se congelan las capas de forma previa a almacenar el modelo.
         self.freeze_layers()
+        # Se almacenan los pesos
         self.model.save_weights(get_path(dirname, model_name))
 
     def load_weigths(self, weights: io):
@@ -204,17 +259,31 @@ class GeneralModel:
         return self.model.predict(*args, **kwargs)
 
     def get_trainable_layers(self) -> int:
+        """
+            Función para recuperar el número de capas entrenables en el baseline
+        """
         return len([l for l in self.baseline.layers if l.trainable])
 
     def get_trainable_params(self) -> int:
+        """
+            Función para recuperar el número de parámetros entrenados en el baseline
+        """
         return int(np.sum([
             count_params(p) for lay in self.baseline.layers for p in lay.trainable_weights if lay.trainable
         ]))
 
     def get_learning_rate(self) -> float:
+        """
+            Función para recuperar el learning rate del modelo
+        """
         return eval(self.model.optimizer.lr)
 
     def freeze_layers(self):
+        """
+            Función para congelar todas las capas de un modelo
+        """
+        # Se iteran las capas del modelo para congelarlas. En caso de que una capa sea un modelo, se iterarán sus capas
+        # para congelarlas.
         for i in self.model.layers:
             i.trainable = False
             if isinstance(i, Model):
@@ -223,7 +292,10 @@ class GeneralModel:
 
 
 class VGG16Model(GeneralModel):
-
+    """
+        Arquitectura VGG16 en la cual se definen las capas a congelar y los tamaños de size máximos a utilizar
+        según el número de parámetros congelados.
+    """
     __name__ = 'VGG16'
     LAYERS_DICT = {
         '0FT': [],
@@ -237,7 +309,7 @@ class VGG16Model(GeneralModel):
         '1FT': 88,
         '2FT': 80,
         '3FT': 72,
-        '4FT': 62,
+        '4FT': 54,
         'ALL': 24
     }
 
@@ -247,12 +319,20 @@ class VGG16Model(GeneralModel):
             preprocess_func=vgg16.preprocess_input
         )
 
-    def get_preprocessing_func(self):
+    @staticmethod
+    def get_preprocessing_func() -> Callable:
+        """
+        Función que retorna la función de preprocesado própia de VGG16
+        :return: Función de preprocesado de la arquitectura de red
+        """
         return get_preprocessing('vgg16')
 
 
 class ResNet50Model(GeneralModel):
-
+    """
+        Arquitectura Resnet50 en la cual se definen las capas a congelar y los tamaños de size máximos a utilizar
+        según el número de parámetros congelados.
+    """
     __name__ = 'ResNet50'
     LAYERS_DICT = {
         '0FT': [],
@@ -306,12 +386,20 @@ class ResNet50Model(GeneralModel):
             preprocess_func=resnet50.preprocess_input
         )
 
-    def get_preprocessing_func(self):
+    @staticmethod
+    def get_preprocessing_func() -> Callable:
+        """
+        Función que retorna la función de preprocesado própia de resnet50
+        :return: Función de preprocesado de la arquitectura de red
+        """
         return get_preprocessing('resnet50')
 
 
 class InceptionV3Model(GeneralModel):
-
+    """
+        Arquitectura InceptionV3 en la cual se definen las capas a congelar y los tamaños de size máximos a utilizar
+        según el número de parámetros congelados.
+    """
     __name__ = 'InceptionV3'
     LAYERS_DICT = {
         '0FT': [],
@@ -355,12 +443,20 @@ class InceptionV3Model(GeneralModel):
             preprocess_func=inception_v3.preprocess_input, top_fc=top_fc
         )
 
-    def get_preprocessing_func(self):
+    @staticmethod
+    def get_preprocessing_func() -> Callable:
+        """
+        Función que retorna la función de preprocesado própia de InceptionV3
+        :return: Función de preprocesado de la arquitectura de red
+        """
         return get_preprocessing('inceptionv3')
 
 
 class DenseNetModel(GeneralModel):
-
+    """
+        Arquitectura Densenet121 en la cual se definen las capas a congelar y los tamaños de size máximos a utilizar
+        según el número de parámetros congelados.
+    """
     __name__ = 'DenseNet'
     LAYERS_DICT = {
         '0FT': [],
@@ -445,5 +541,10 @@ class DenseNetModel(GeneralModel):
             preprocess_func=densenet.preprocess_input, top_fc=top_fc
         )
 
-    def get_preprocessing_func(self):
+    @staticmethod
+    def get_preprocessing_func() -> Callable:
+        """
+        Función que retorna la función de preprocesado própia de densenet121
+        :return: Función de preprocesado de la arquitectura de red
+        """
         return get_preprocessing('densenet121')
