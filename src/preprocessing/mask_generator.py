@@ -200,7 +200,6 @@ def get_test_mask(args) -> None:
         if not 0 <= x_cord <= shape[1]:
             raise ValueError(f'{x_cord} is outside available pixels in image')
 
-
         if not 0 <= y_cord <= shape[0]:
             raise ValueError(f'{x_cord} is outside available pixels in image')
 

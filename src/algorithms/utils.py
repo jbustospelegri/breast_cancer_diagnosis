@@ -12,7 +12,7 @@ from tensorflow.keras import models
 from tensorflow.keras.preprocessing.image import Iterator
 from tensorflow.keras import Model
 from tensorflow.keras.backend import argmax
-from tensorflow.keras.callbacks import CSVLogger, EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.callbacks import CSVLogger, EarlyStopping
 from tensorflow.keras.optimizers import Adam
 
 from utils.functions import get_path, bulk_data
@@ -70,6 +70,7 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
     :param m: Red neuronal (objeto de la clase General Model) que contendrá cada algoritmo de dl
     :param db: Objeto BreastCancerDataset con las observaciones de los conjuntos de entrenamiento y validacion
     :param q: Queue para transmitir comunicar el resultado al thread principal.
+    :param fc: string indicando el tipo de estructura a utulizar como top layers de cada arquitectura
     :param c: objeto Model files que contiene información sobre ls rutas de guardado de cada modelo
     :param task_type: admite los valores 'classification' o 'segmentation' para escoger el tipo de tarea a realizar
     :param weight_init: nombre o path de los pesos con los que inicializar el entrenamiento de un modelo.
@@ -170,8 +171,8 @@ def training_pipe(m: Model, db: BreastCancerDataset, q: Queue, c: conf.MODEL_FIL
                     get_predictions(keras_model=cnn, data=train, add_columns={'TRAIN_VAL': 'train'}),
                     get_predictions(keras_model=cnn, data=val, add_columns={'TRAIN_VAL': 'val'})
                 ],
-                ignore_index=True
-        ))
+                ignore_index=True)
+        )
         print(f'{"=" * 75}\nPredicciones finalizadas.\n{"=" * 75}')
     else:
         q.put(True)

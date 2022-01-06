@@ -77,7 +77,8 @@ class GeneralDataBase:
         # recortada (CROP)
         df.loc[:, 'IMG_TYPE'] = self.IMG_TYPE
 
-    def add_extra_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+    @staticmethod
+    def add_extra_columns(df: pd.DataFrame) -> pd.DataFrame:
         """
         Función que será sobreescrita por cada clase hija con el objetivo de añadir aquellas columnas que sean
         necesarias.
@@ -371,7 +372,8 @@ class SegmentationDataset:
     def __len__(self):
         return len(self.df)
 
-    def _filter_valid_filepaths(self, df: pd.DataFrame, x_col: str):
+    @staticmethod
+    def _filter_valid_filepaths(df: pd.DataFrame, x_col: str):
         """
         Se filtran únicamente los paths validos
 
@@ -443,9 +445,9 @@ class ClassificationDataset:
         if self.class_mode == 'binary' or self.class_mode == 'sparse':
             self.df.loc[:, self.y_col] = self.df[self.y_col].map(self.class_indices).astype(np.float32)
         elif self.class_mode == 'categorical':
-            self.df.loc[:, self.y_col] = \
-                pd.get_dummies(self.df, columns=[self.y_col], dtype=np.float32, prefix='dummy_') \
-                    [[f'dummy__{c}' for c in self.class_list]].apply(lambda x: list(x), axis=1)
+            self.df.loc[:, self.y_col] = pd.get_dummies(
+                self.df, columns=[self.y_col], dtype=np.float32, prefix='dummy_'
+            )[[f'dummy__{c}' for c in self.class_list]].apply(lambda x: list(x), axis=1)
 
     def __getitem__(self, i):
         """
@@ -470,7 +472,8 @@ class ClassificationDataset:
     def __len__(self):
         return len(self.df)
 
-    def _filter_valid_filepaths(self, df, x_col):
+    @staticmethod
+    def _filter_valid_filepaths(df, x_col):
         """
         Se filtran únicamente los paths validos
 

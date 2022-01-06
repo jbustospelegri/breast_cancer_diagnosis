@@ -3,7 +3,7 @@ import numpy as np
 from typing import Callable, io, Union, Tuple
 from time import process_time
 
-from tensorflow.keras import Model, Sequential, optimizers, callbacks
+from tensorflow.keras import Sequential, optimizers, callbacks
 from tensorflow.keras.backend import count_params, eval
 from tensorflow.keras.callbacks import History
 from tensorflow.keras.optimizers import Adam
@@ -13,12 +13,12 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.applications import resnet50, densenet, vgg16, inception_v3
 from tensorflow.python.keras.preprocessing.image import DataFrameIterator
 from tensorflow.keras.layers import (
-    Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input, BatchNormalization, Flatten
+    Conv2D, Dropout, MaxPooling2D, Dense, GlobalAveragePooling2D, Input, Flatten
 )
 
 from segmentation_models import get_preprocessing
 
-from utils.functions import get_path, get_number_of_neurons
+from utils.functions import get_path
 from utils.config import CLASSIFICATION_LOSS
 
 
@@ -59,7 +59,8 @@ class GeneralModel:
         self.preprocess_func = preprocess_func
         self.create_model(top_fc)
 
-    def create_baseline(self):
+    @staticmethod
+    def create_baseline():
         """
         Función que permite crear una estructura básica compuesta por un conjunto de capas convolucionales. Este metodo
         será sobreescrito por las clases heredadas.
@@ -90,10 +91,10 @@ class GeneralModel:
         """
 
         # Entrada del modelo
-        input = Input(shape=self.shape)
+        input_ = Input(shape=self.shape)
 
         # Baseline
-        x = self.baseline(input, training=False)
+        x = self.baseline(input_, training=False)
 
         #  Test con extract features y sigmoide (estructura simple)
         if fc_type == 'simple':

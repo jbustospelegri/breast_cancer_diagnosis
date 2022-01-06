@@ -1,6 +1,5 @@
 import os
 import traceback
-import h5py
 
 from threading import Thread
 from typing import io
@@ -19,7 +18,7 @@ from user_interface.utils import (
     center_widget_into_screen, LineStyled, populate_grid_layout, fix_application_width, fix_application_size
 )
 from utils.functions import get_path, log_error
-from utils.config import LOGGING_DATA_PATH, APPLICATION_NAME, GUI_HTML_PATH
+from utils.config import APPLICATION_NAME, GUI_HTML_PATH
 
 
 class ApplicationWindow(QMainWindow):

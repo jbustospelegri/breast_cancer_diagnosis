@@ -239,6 +239,29 @@ DEPLOYMENT_MODELS = get_path(MODEL_DATA_PATH, 'DEPLOYMENT')
 
 class ModelConstants:
 
+    model_root_dir: io = None
+    model_db_desc_csv: io = None
+    model_db_processing_info_file: io = None
+    model_store_dir: io = None
+    model_store_cnn_dir: io = None
+    model_store_ensembler_dir: io = None
+    model_log_dir: io = None
+    model_summary_dir: io = None
+    model_summary_train_csv: io = None
+    model_predictions_dir: io = None
+    model_predictions_cnn_dir = None
+    model_predictions_ensembler_dir = None
+    model_data_viz_dir: io = None
+    model_viz_preprocesing_dir: io = None
+    model_viz_eda_dir: io = None
+    model_viz_train_dir: io = None
+    model_viz_data_augm_dir: io = None
+    model_viz_results_dir: io = None
+    model_viz_results_model_history_dir: io = None
+    model_viz_results_confusion_matrix_dir: io = None
+    model_viz_results_auc_curves_dir: io = None
+    model_viz_results_metrics_dir: io = None
+
     def set_model_name(self, name: str) -> None:
         self.model_root_dir: io = get_path(MODEL_DATA_PATH, name)
 

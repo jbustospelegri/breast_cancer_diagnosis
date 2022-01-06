@@ -31,7 +31,7 @@ def create_countplot(data: DataFrame, file: io, x: str, hue: str = None, title: 
     # variable objetivo.
     if annotate:
         ax_ = list(ax.patches)
-        ax_.sort(key=lambda x: x.get_x())
+        ax_.sort(key=lambda annot: annot.get_x())
         for p, (l, _) in zip(ax_, product(ax.xaxis.get_ticklabels(), [*ax.get_legend_handles_labels()[1],
                                                                       *ax.xaxis.get_ticklabels()][:data[x].nunique()])):
             txt = '{a:.0f} ({b:.2f} %)'.format(
@@ -72,11 +72,11 @@ def merge_cells(table: plt.table, cells: List[tuple]):
     # Si se realiza un merge horizontal todos los valores de h serán 0
     if not np.any(h):
         # sort by horizontal coord
-        cells = np.array(sorted(list(cells), key=lambda v: v[1]))
+        cells = np.array(sorted(list(cells), key=lambda vert: vert[1]))
         edges = ['BTL'] + ['BT'] * (len(cells) - 2) + ['BTR']
     # Si se realiza un merge en vertical todos los valores de v seran 0
     elif not np.any(v):
-        cells = np.array(sorted(list(cells), key=lambda h: h[0]))
+        cells = np.array(sorted(list(cells), key=lambda hor: hor[0]))
         edges = ['TRL'] + ['RL'] * (len(cells) - 2) + ['BRL']
     else:
         raise ValueError("Only horizontal and vertical merges allowed")

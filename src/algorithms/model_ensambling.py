@@ -87,8 +87,8 @@ class RandomForest:
             l = []
             for file in search_files(get_path(cnn_predictions_dir, weight, frozen_layers, create=False), ext='csv'):
                 l.append(
-                    pd.read_csv(file, sep=';')[['PROCESSED_IMG', 'PREDICTION']]. \
-                        assign(WEIGHTS=weight, FT=frozen_layers, CNN=get_filename(file))
+                    pd.read_csv(file, sep=';')[['PROCESSED_IMG', 'PREDICTION']].assign(
+                        WEIGHTS=weight, FT=frozen_layers, CNN=get_filename(file))
                 )
 
             merge_list.append(
@@ -99,7 +99,7 @@ class RandomForest:
 
         # Se escoge el mejor modelo en función de las metricas AUC de validacion
         cnn_selection = all_data.groupby(['CNN', 'FT', 'WEIGHTS', 'TRAIN_VAL'], as_index=False).apply(
-            lambda x: pd.Series({'AUC': roc_auc_score(x.LABEL, x.PREDICTION)})
+            lambda df_: pd.Series({'AUC': roc_auc_score(df_.LABEL, df_.PREDICTION)})
         )
 
         selected_cnns = cnn_selection[cnn_selection.TRAIN_VAL == 'val'].sort_values('AUC', ascending=False). \
@@ -116,9 +116,9 @@ class RandomForest:
                 all_data[(all_data.CNN == row.CNN) & (all_data.FT == row.FT) & (all_data.WEIGHTS == row.WEIGHTS)]
             )
 
-        final_df = pd.concat(final_list, ignore_index=True). \
-            set_index(['PROCESSED_IMG', 'LABEL', 'IMG_LABEL', 'TRAIN_VAL', *ENSEMBLER_COLS[ENSEMBLER_CONFIG], 'CNN']) \
-            ['PREDICTION'].unstack().reset_index()
+        final_df = pd.concat(final_list, ignore_index=True).set_index([
+            'PROCESSED_IMG', 'LABEL', 'IMG_LABEL', 'TRAIN_VAL', *ENSEMBLER_COLS[ENSEMBLER_CONFIG], 'CNN'
+        ])['PREDICTION'].unstack().reset_index()
 
         # generación del conjunto de datos de train para random forest.
         data.dropna(how='any', inplace=True)
