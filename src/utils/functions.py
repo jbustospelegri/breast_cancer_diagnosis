@@ -13,14 +13,30 @@ import pandas as pd
 
 
 def get_filename(x: io) -> str:
+    """
+    Función para obtener el nombre de un archivo
+    :param x: filepath del archivo
+    :return nombre del archivo
+    """
     return os.path.basename(os.path.splitext(x)[0])
 
 
 def get_dirname(x: io) -> str:
+    """
+    Función para obtener el nombre del directorio que contiene un archivo
+    :param x: filepath del archivo
+    :return: nombre del directorio
+    """
     return os.path.dirname(os.path.splitext(x)[0])
 
 
 def get_path(*args: Union[io, str], create: bool = True) -> io:
+    """
+    Función para crear un path siendo robusto al OS
+    :param args: nombre de los directorios que formarán el path
+    :param create: booleano para crear el directorio en caso que no exista.
+    :return filepath final en función del OS.
+    """
     path = os.path.join(*args)
     if create:
         create_dir(get_dirname(path))
@@ -28,10 +44,21 @@ def get_path(*args: Union[io, str], create: bool = True) -> io:
 
 
 def create_dir(path: io):
+    """
+    Función para crear un directorio y todos sus padres en caso de no existir
+    :param path: directorio a crear
+    """
     Path(path).mkdir(parents=True, exist_ok=True)
 
 
 def search_files(file: io, ext: str, in_subdirs: bool = True) -> iter:
+    """
+    Función para buscar todos los archivos contenidos en un directorio que presenten la extension mostrada
+    :param file: directorio sobre el cual realiar la busqueda
+    :param ext: extensión del archivo
+    :param in_subdirs: boleano para buscar en el directorio hijo o en los subdirectorios
+    :return: lista con los archivos del directorio file que tienen la extension ext
+    """
     if in_subdirs:
         return glob(os.path.join(file, '**', f'*.{ext}'), recursive=True)
     else:
@@ -50,6 +77,9 @@ def save_img(img: np.ndarray, save_example_dirpath: io, name: str):
 
 
 def detect_func_err(func):
+    """
+    Decorador para detectar en qué función se procude un error
+    """
     def _exec(*args, **kwargs):
         try:
             result = func(*args, **kwargs)
@@ -70,17 +100,38 @@ def closest_power2(x):
 
 
 def get_number_of_neurons(previous_shape: list) -> int:
+    """
+    Función para obtener el número de neuronas óptimo para una capa neuronal a partir del valor más próximo a la raiz
+    cuadrada del número de neuronas de la capa previa
+    :param previous_shape: número de neuronas en la capa prévia
+    :return: número de neuronas óptimo
+    """
     num_params = np.prod(list(filter(lambda x: x is not None, previous_shape)))
     return closest_power2(int(np.sqrt(num_params)) - 1)
 
 
 def bulk_data(file: io, mode: str = 'w', **kwargs) -> None:
+    """
+    Función para escribir en un archivo los kwargs especificados.
+    :param file: nombre del archivo a escribir
+    :param mode: modo de esctiura del archivo (W: escritura o A: append)
+    :param kwargs: los keys serán las columnas del fichero y los values los valores de las columnas a escribir
+    """
     pd.DataFrame.from_dict(kwargs, orient='index').T.\
         to_csv(file, sep=';', decimal=',', header=not os.path.isfile(file) or mode == 'w', mode=mode, encoding='utf-8',
                index=False)
 
 
-def get_value_from_args_if_exists(args: list, pos: int, default: Any, *exceptions):
+def get_value_from_args_if_exists(args: list, pos: int, default: Any, *exceptions) -> Any:
+    """
+    Función para obtener un parámetro de un conjunto de argumentos devolviendo un valor por defecto si se producen
+    las excepciones especificadas
+    :param args: lista de argumentos a buscar
+    :param pos: posición del argumento
+    :param default: valor por defecto a devolver
+    :param exceptions: excepciones a tratar
+    :return: valor de la posición correspondiente en la lista de parámetros
+    """
     try:
         return args[pos]
     except tuple(exceptions):
@@ -170,16 +221,31 @@ def log_error(module, file_path, **kwargs_msg):
         logger.removeHandler(hdlr)
 
 
-def load_point(point_string):
+def load_point(point_string: str) -> tuple:
+    """
+    Dado un string con las tuplas (x, y) se recuperan los valores de x y de y
+    :param point_string: srting con las tuplas
+    :return: tupla con las coordenadas y e x convertidas a float
+    """
     x, y = tuple([float(num) for num in point_string.strip('()').split(',')])
     return y, x
 
 
 def get_contours(img: np.ndarray) -> list:
+    """
+    Se recuperan los contornos de una máscara dada
+    :param img: imagen
+    :return: contornos de la imagen
+    """
     return cv2.findContours(image=img, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_NONE)[0]
 
 
 def excel_column_name(n: int) -> str:
+    """
+    Función para convertir un número en su respectiva letra de columna para excel
+    :param n: número de la columna
+    :return: letra de la columna
+    """
     name = ''
     while n > 0:
         n, r = divmod(n-1, 26)
