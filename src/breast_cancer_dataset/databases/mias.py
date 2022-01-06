@@ -15,7 +15,6 @@ from utils.functions import get_path
 
 
 class DatasetMIAS(GeneralDataBase):
-
     """
         Clase cuyo objetivo consiste en preprocesar los datos de la base de datos MIAS
     """
@@ -94,16 +93,14 @@ class DatasetMIAS(GeneralDataBase):
         :param func: función para generar las máscaras
         :param args: parámetros a introducir en la función 'func' de los argumentos.
         """
-        args = [
-            (x.CONVERTED_MASK, x.X_CORD, x.Y_CORD, x.RAD) for _, x in
-            self.df_desc[~self.df_desc[['X_CORD', 'Y_CORD', 'RAD']].isna().any(axis=1)].
-                groupby('CONVERTED_MASK', as_index=False).agg({'X_CORD': list, 'Y_CORD': list, 'RAD': list}).iterrows()
-        ]
+        args = [(x.CONVERTED_MASK, x.X_CORD, x.Y_CORD, x.RAD) for _, x in
+                self.df_desc[~self.df_desc[['X_CORD', 'Y_CORD', 'RAD']].isna().any(axis=1)].groupby('CONVERTED_MASK',
+                                                                                                    as_index=False).agg(
+                    {'X_CORD': list, 'Y_CORD': list, 'RAD': list}).iterrows()]
         super(DatasetMIAS, self).get_image_mask(func=func, args=args)
 
 
 class DatasetMIASCrop(DatasetMIAS):
-
     """
         Clase cuyo objetivo consiste en preprocesar los datos de la base de datos MIAS y generar imagenes
         con las regiones de interes del dataset.

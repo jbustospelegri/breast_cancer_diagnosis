@@ -88,31 +88,41 @@ class GeneralDataBase:
 
     def get_raw_files(self, df: pd.DataFrame, get_id_func: callable = lambda x: get_filename(x)) -> pd.DataFrame:
         """
-        Función genérica para recuperar
+        Función genérica para recuperar las rutas dónde se almacenan las imágenes de cada set de datos
+        :param df: pandas dataframe con la  'FILE_NAME' utilizada para unir los datos originales con el path de
+                  almacenado de cada imagen.
+        :param get_id_func: callable utilizado para crear un identificador único que permita unir la ruta de cada imagen
+                            con la columna FILE_NAME de def.
 
-        :return: Pandas dataframe con las columnas especificadas en la descripción
+        :return: Pandas dataframe con la columna RAW_IMG especificando la ruta de almacenado de cada imagen
         """
-        # Se recuperan los paths de las imagenes almacenadas con el formato específico (por defecto dcm) en la carpeta
-        # de origen (por defecto INBREAST_DB_PATH)
+
+        # Se recuperan los paths de las imagenes almacenadas en cada dataset (self.ori_dir) con el formato específico
+        # de cada base de datos (self.ori_extension)
         db_files_df = pd.DataFrame(data=search_files(self.ori_dir, self.ori_extension), columns=['RAW_IMG'])
 
-        # Se procesa la columna ori path para poder lincar cada path con los datos del excel. Para ello, se separa
-        # los nombres de cara archivo a partir del símbolo _ y se obtiene la primera posición.
+        # Se procesa la columna ori path para poder unir cada path con los datos del excel.
         db_files_df.loc[:, 'FILE_NAME'] = db_files_df.RAW_IMG.apply(get_id_func).astype(str)
 
-        # Se crea la columna RAW_IMG con el path de la imagen original
+        # Se une la información del dataset original con las rutas almacenadas
         df_def = pd.merge(left=df, right=db_files_df, on='FILE_NAME', how='left')
 
         return df_def
 
     def add_img_files(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Función para añadir los paths de las imágenes que serán convertidas y procesadas
+        :param df: pandas dataframe al que se añadiran las columnas
+        :return: dataframe con las columas PROCESSED_IMG (ruta destino imagen procesada); CONVERTED_IMG (ruta destino
+                 imagen convertida a formato png)
+        """
 
         # Se crea la clumna PROCESSED_IMG en la que se volcarán las imagenes preprocesadas
         df.loc[:, 'PROCESSED_IMG'] = df.apply(
             lambda x: get_path(self.procesed_dir, x.IMG_TYPE, f'{x.ID}.{self.dest_extension}'), axis=1
         )
 
-        # Se crea la clumna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
+        # Se crea la columna CONVERTED_IMG en la que se volcarán las imagenes convertidas de formato
         df.loc[:, 'CONVERTED_IMG'] = df.apply(
             lambda x: get_path(self.conversion_dir, 'FULL', f'{x.FILE_NAME}.{self.dest_extension}'), axis=1
         )
@@ -120,14 +130,25 @@ class GeneralDataBase:
         return df
 
     def add_mask_files(self, df: pd.DataFrame):
+        """
+        Función para añadir los paths de las mascaras que serán convertidas y procesadas
+        :param df: pandas dataframe al que se añadiran las columnas
+        :return: dataframe con las columas CONVERTED_MASK (ruta destino a mascara convertida) y PROCESSED_MASK
+                 (ruta destino de la mascara procesada)
+        """
+        # Se crea la columna CONVERTED_MASK en la que se volcarán las mascaras convertidas de formato
         df.loc[:, 'CONVERTED_MASK'] = df.apply(
             lambda x: get_path(self.conversion_dir, f'MASK', f'{x.ID}.png'), axis=1
         )
+        # Se crea la columna PROCESSED_MASK en la que se volcarán las mascaras procesadas
         df.loc[:, 'PROCESSED_MASK'] = df.apply(
             lambda x: get_path(self.procesed_dir, f'MASK', f'{x.FILE_NAME}.png'), axis=1
         )
 
     def clean_dataframe(self):
+        """
+        Función para limpiar la base de datos de duplicados y patologias ambiguas.
+        """
 
         # Se descartarán aquellas imagenes completas que presenten más de una tipología. (por ejemplo, el seno presenta
         # una zona benigna y otra maligna).
@@ -138,24 +159,33 @@ class GeneralDataBase:
             inplace=True
         )
 
+        # Se descartan id's duplicados
         print(f'\tExcluding {len(self.df_desc[self.df_desc.ID.duplicated()])} samples duplicated pathologys')
         self.df_desc.drop(index=self.df_desc[self.df_desc.ID.duplicated()].index, inplace=True)
 
     def get_image_mask(self, func: callable = None, args: List = None):
+        """
+        Función para procesar las máscaras de cada instancia mediante el uso de paralelismos
+        :param func: función de preprocesado de las mascasas
+        :param args: argumentos de la función de preprocesado
+        """
 
         print(f'{"-" * 75}\n\tGetting masks: {self.df_desc.CONVERTED_MASK.nunique()} existing files.')
-        # Se crea un pool de multihilos para realizar la tarea de conversión de forma paralelizada.
+        # Se crea un pool de multihilos para realizar la tarea de forma paralelizada.
         with ThreadPool(processes=cpu_count() - 2) as pool:
             results = tqdm(pool.imap(func, args), total=len(args), desc='getting mask files')
             tuple(results)
-        # Se recuperan las imagenes modificadas y se crea un dataframe
+
+        # Se recupera información del número de mascaras procesadas
         completed = list(search_files(
             file=f'{self.conversion_dir}{os.sep}**{os.sep}MASK', ext='png', in_subdirs=False))
         print(f"\tGenerated {len(completed)} masks.\n{'-' * 75}")
 
     def convert_images(self, func: callable = convert_img, args: List = None) -> None:
         """
-        Función para convertir las imagenes del formato de origen al formato de destino.
+        Función para convertir las imagenes de cada instancia mediante el uso de paralelismos
+        :param func: función de conversión de las imagenes
+        :param args: argumentos de la función de conversion
         """
 
         print(f'{"-" * 75}\n\tStarting conversion: {self.df_desc.CONVERTED_IMG.nunique()} {self.ori_extension} files.')
@@ -169,43 +199,54 @@ class GeneralDataBase:
             results = tqdm(pool.imap(func, args), total=len(args), desc='converting images')
             tuple(results)
 
-        # Se recuperan las imagenes modificadas y se crea un dataframe
+        # Se recuperan las imagenes modificadas para informar al usuario
         completed = list(search_files(
             file=f'{self.conversion_dir}{os.sep}**{os.sep}FULL', ext=self.dest_extension, in_subdirs=False))
         print(f"\tConverted {len(completed)} images to {self.dest_extension} format.\n{'-' * 75}")
 
     def preproces_images(self, args: list = None, func: callable = full_image_pipeline) -> None:
         """
-        Función utilizada para realizar el preprocesado de las imagenes completas.
-
+        Función para procesar las imagenes de cada instancia mediante el uso de paralelismos
+        :param func: función de preprocesado de las imagenes
+        :param args: argumentos de la función de preprocesado
         """
         print(f'{"-" * 75}\n\tStarting preprocessing of {self.df_desc.PROCESSED_IMG.nunique()} images')
 
+        # Se crea el iterador con los argumentos necesarios para realizar la función a través de un multiproceso.
         if args is None:
             args = list(set([
                 (x.CONVERTED_IMG, x.PROCESSED_IMG, False, x.PROCESSED_MASK, x.CONVERTED_MASK) for _, x in
                 self.df_desc.iterrows()
             ]))
 
+        # Se crea un pool de multihilos para realizar la tarea de procesado de forma paralelizada.
         with ThreadPool(processes=cpu_count() - 2) as pool:
             results = tqdm(pool.imap(func, args), total=len(args), desc='preprocessing full images')
             tuple(results)
 
-        # Se recuperan las imagenes modificadas y se crea un dataframe
+        # Se recuperan las imagenes procesadas para informar al usuario
         completed = list(search_files(
             file=f'{self.procesed_dir}{os.sep}**{os.sep}{self.IMG_TYPE}', ext=self.dest_extension, in_subdirs=False))
         print(f'\tProcessed {len(completed)} images.\n{"-" * 75}')
 
     def get_roi_imgs(self):
-        # Se debe de modificar el dataframe en función de los crops obtenidos
+        """
+
+        Función para unir el set de datos final con la ruta de los rois de cada imagen creando un identificador unico
+
+        """
+        # Se recuperan los rois generados
         croped_imgs = pd.DataFrame(
             data=search_files(get_path(self.procesed_dir, self.IMG_TYPE), ext=self.dest_extension, in_subdirs=False),
             columns=['FILE']
         )
+        # Para cada roi se recupera el nombre de archivo original, el número de recorte generado y si se trata de
+        # un roi de background o un roi de lesión.
         croped_imgs.loc[:, 'FILE_NAME'] = croped_imgs.FILE.apply(lambda x: "_".join(get_filename(x).split('_')[1:-1]))
         croped_imgs.loc[:, 'N_CROP'] = croped_imgs.FILE.apply(lambda x: get_filename(x).split('_')[-1])
         croped_imgs.loc[:, 'LABEL_BACKGROUND_CROP'] = croped_imgs.FILE.apply(lambda x: get_filename(x).split('_')[0])
 
+        # Se une la información original con cada roi
         self.df_desc = pd.merge(left=self.df_desc, right=croped_imgs, on=['FILE_NAME'], how='left')
 
         # Se suprimen los casos que no contienen ningún recorte
@@ -224,17 +265,29 @@ class GeneralDataBase:
         )
 
     def delete_observations(self):
+        """
+        Función para eliminar imagenes una vez ser termine el pipeline de procesado.
+        Se eliminarán aquellas imagenes cuyo procesado haya fallado juntamente con aquellas imagenes cuya máscara
+        haya fallado el procesado.
+        :return:
+        """
+
+        # Se eliminan los id's con imagenes no procesadas
         proc_imgs = list(search_files(get_path(self.procesed_dir, 'FULL'), ext=self.dest_extension, in_subdirs=False))
         print(f'\tFailed processing of {len(self.df_desc[~self.df_desc.PROCESSED_IMG.isin(proc_imgs)])} images\n'
               f'{"-" * 75}')
         self.df_desc.drop(index=self.df_desc[~self.df_desc.PROCESSED_IMG.isin(proc_imgs)].index, inplace=True)
 
+        # Se eliminan los id's con mascaras no procesadas
         proc_mask = list(search_files(get_path(self.procesed_dir, 'MASK'), ext=self.dest_extension, in_subdirs=False))
         print(f'\tFailed processing of {len(self.df_desc[~self.df_desc.PROCESSED_MASK.isin(proc_mask)])} masks\n'
               f'{"-" * 75}')
         self.df_desc.drop(index=self.df_desc[~self.df_desc.PROCESSED_MASK.isin(proc_mask)].index, inplace=True)
 
     def start_pipeline(self):
+        """
+            PIPELINE PARA LA CREACION DE CADA DATASET
+        """
 
         # Funciones para obtener el dataframe de los ficheros planos
         df = self.get_df_from_info_files()
@@ -243,7 +296,7 @@ class GeneralDataBase:
         print(f'\tExcluding {len(df[df.IMG_LABEL.isnull()].index.drop_duplicates())} samples without pathologies.')
         df.drop(index=df[df.IMG_LABEL.isnull()].index, inplace=True)
 
-        # Se suprimen los casos cuya patología no sea massas
+        # Se suprimen los casos cuya patología no sea masas
         print(f'\tExcluding {len(df[df.ABNORMALITY_TYPE != "MASS"].index.drop_duplicates())} non mass pathologies.')
         df.drop(index=df[df.ABNORMALITY_TYPE != 'MASS'].index, inplace=True)
 
@@ -260,7 +313,6 @@ class GeneralDataBase:
         self.add_mask_files(df_def)
 
         # Se añaden las columnas con el destino de las imagenes
-        # Se preprocesan la columnas del dataframe
         self.df_desc = self.add_img_files(df_def)
 
         # Se limpia el dataframe de posibles duplicidades
@@ -282,6 +334,11 @@ class GeneralDataBase:
 
 class SegmentationDataset:
 
+    """
+        Clase para generar un iterador que aplique las mismas transformaciones de data augmentation a las imagenes
+        y a las máscaras
+    """
+
     def __init__(self, df: pd.DataFrame, img_col: str, mask_col: str, augmentation: Compose = None):
 
         assert img_col in df.columns, f'{img_col} not in df'
@@ -292,7 +349,13 @@ class SegmentationDataset:
         self.mask_col = mask_col
         self.augmentation = augmentation
 
-    def __getitem__(self, i):
+    def __getitem__(self, i: int):
+
+        """
+        Función get item. Se leeran las imagenes y las máscaras para aplicarles la función de data augmentation
+        :param i: número de índice de la imagen
+        :return: tupla con la imagen y la mascara transforamdas
+        """
 
         # read data
         image = cv2.cvtColor(cv2.imread(self.df.iloc[i][self.img_col]), cv2.COLOR_BGR2RGB)
@@ -308,15 +371,13 @@ class SegmentationDataset:
     def __len__(self):
         return len(self.df)
 
-    def _filter_valid_filepaths(self, df, x_col):
-        """Keep only dataframe rows with valid filenames
+    def _filter_valid_filepaths(self, df: pd.DataFrame, x_col: str):
+        """
+        Se filtran únicamente los paths validos
 
-        # Arguments
-            df: Pandas dataframe containing filenames in a column
-            x_col: string, column in `df` that contains the filenames or filepaths
-
-        # Returns
-            absolute paths to image files
+        :param df: Pandas dataframe con los filepaths en una columna
+        :param x_col: columna del dataframe que contiene los filepaths
+        :return: paths absolutos de las imagenes eliminando los paths invalidos o inexistentes
         """
 
         mask = df[x_col].apply(lambda x: os.path.isfile(x))
@@ -331,7 +392,12 @@ class SegmentationDataset:
 
 
 class ClassificationDataset:
+    """
 
+        Clase para generar un iterador que aplique transformaciones de data augmentation realizadas mediante la libreria
+        albumentations
+
+    """
     def __init__(self, df: pd.DataFrame, x_col: str, y_col: str = None, augmentation: Compose = None,
                  class_mode: str = 'categorical', classes: list = None):
 
@@ -371,6 +437,9 @@ class ClassificationDataset:
             self.class_mode = None
 
     def get_class(self):
+        """
+        Función para generar las etiquetas de clase en función del tipo indicado por el usuario.
+        """
         if self.class_mode == 'binary' or self.class_mode == 'sparse':
             self.df.loc[:, self.y_col] = self.df[self.y_col].map(self.class_indices).astype(np.float32)
         elif self.class_mode == 'categorical':
@@ -379,6 +448,11 @@ class ClassificationDataset:
                     [[f'dummy__{c}' for c in self.class_list]].apply(lambda x: list(x), axis=1)
 
     def __getitem__(self, i):
+        """
+        Función get item. Se leeran las imagenes para aplicarles la función de data augmentation
+        :param i: número de índice de la imagen
+        :return: timagen transformada juntamente con su etiqueta de clase en caso de existir
+        """
 
         # read data
         image = cv2.cvtColor(cv2.imread(self.df.iloc[i][self.x_col]), cv2.COLOR_BGR2RGB)
@@ -397,14 +471,12 @@ class ClassificationDataset:
         return len(self.df)
 
     def _filter_valid_filepaths(self, df, x_col):
-        """Keep only dataframe rows with valid filenames
+        """
+        Se filtran únicamente los paths validos
 
-        # Arguments
-            df: Pandas dataframe containing filenames in a column
-            x_col: string, column in `df` that contains the filenames or filepaths
-
-        # Returns
-            absolute paths to image files
+        :param df: Pandas dataframe con los filepaths en una columna
+        :param x_col: columna del dataframe que contiene los filepaths
+        :return: paths absolutos de las imagenes eliminando los paths invalidos o inexistentes
         """
 
         mask = df[x_col].apply(lambda x: os.path.isfile(x))

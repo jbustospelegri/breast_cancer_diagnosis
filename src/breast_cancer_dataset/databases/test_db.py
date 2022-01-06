@@ -71,7 +71,7 @@ class DatasetTest:
         incorrect = df[df[['X_CORD', 'Y_CORD', 'RAD']].isna().any(axis=1)]
         if len(incorrect) > 0:
             self.signal_log.log(
-                f'Incorrect data found!\nDeleted {len(incorrect)} incorrect values found in X_CORD, Y_CORD and RAD.' + \
+                f'Incorrect data found!\nDeleted {len(incorrect)} incorrect values found in X_CORD, Y_CORD and RAD.' +
                 'Deleted files are:\n\t- File:' + "\n\t- File:".join(incorrect.ID.values.tolist())
             )
         df.drop(index=incorrect.index, inplace=True)
@@ -80,7 +80,7 @@ class DatasetTest:
         incorrect = df[~ df.FILE_PATH.apply(lambda x: os.path.isfile(x))]
         if len(incorrect) > 0:
             self.signal_log.log(
-                f'Incorrect data found!\n{len(incorrect)} FILE_PATHS does not exists.' + \
+                f'Incorrect data found!\n{len(incorrect)} FILE_PATHS does not exists.' +
                 'Deleted files are:\n\t- File:' + "\n\t- File:".join(incorrect.ID.values.tolist())
             )
         df.drop(index=incorrect.index, inplace=True)

@@ -109,7 +109,7 @@ class DatasetINBreastCrop(DatasetINBreast):
         """
         Función utilizada para realizar el preprocesado de las imagenes recortadas.
 
-        :param: func: función utilizada para generar los rois del set de datos
+        :param func: función utilizada para generar los rois del set de datos
         :param args: lista de argumentos a introducir en la función 'func'.
         """
 

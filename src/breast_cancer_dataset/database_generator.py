@@ -91,8 +91,6 @@ class BreastCancerDataset:
 
         Función que permite recuperar un dataframe iterator para entrenamiento y para validación.
 
-        :param directory: booleano que permite almacenar las imagenes generadas por el ImageDataGenerator en la carpeta
-                          Data/03_OUTPUT/DATA AUGMENTATION.
         :param batch_size: tamaño de batch con el que se crearán los iteradores.
         :param size: tamaño de la imagen que servirá de input para los iteradores. Si la imagen tiene un tamaño distinto
                      se aplicará un resize aplicando la tecnica de interpolación lanzcos. Por defecto es 224, 224.
@@ -158,8 +156,6 @@ class BreastCancerDataset:
 
         Función que permite recuperar un dataframe iterator para entrenamiento y para validación.
 
-        :param directory: booleano que permite almacenar las imagenes generadas por el ImageDataGenerator en la carpeta
-                          Data/03_OUTPUT/DATA AUGMENTATION.
         :param batch_size: tamaño de batch con el que se crearán los iteradores.
         :param size: tamaño de la imagen que servirá de input para los iteradores. Si la imagen tiene un tamaño distinto
                      se aplicará un resize aplicando la tecnica de interpolación lanzcos. Por defecto es 224, 224.
@@ -238,7 +234,9 @@ class BreastCancerDataset:
         datos pertenece cada observación.
 
         :param train_prop: proporción del total de observaciones del dataset con los que se creará el conjunto de train
-        :param stratify: booleano que determina si la división debe ser estratificada o no.
+        :param strat_cols: lista de columnas pertenecientes al pandas dataframe para realizar el estratficado de
+                           observaciones al realizar el split en train y validacion.
+        :param test_id: lista de valores para la columna DATASET que pertenecerán a la partición de test
         """
 
         if test_id is None:
